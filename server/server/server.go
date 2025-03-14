@@ -20,7 +20,6 @@ type Server struct {
 	register       chan *Client
 	unregister     chan *Client
 	moveRequests   chan MoveRequest
-	validatedMoves chan ValidatedMove
 	subscriptions  chan SubscriptionRequest
 	
 	// HTTP server components
@@ -37,8 +36,16 @@ type ZoneMap struct {
 
 // NewZoneMap creates a new zone map
 func NewZoneMap() *ZoneMap {
-	return &ZoneMap{
+	zm := &ZoneMap{}
+	
+	// Initialize each map in the 2D array
+	for i := range ZONE_COUNT {
+		for j := range ZONE_COUNT {
+			zm.clientsByZone[i][j] = make(map[*Client]struct{})
+		}
 	}
+	
+	return zm
 }
 
 // AddClient adds a client to the specified zones
@@ -47,10 +54,12 @@ func (zm *ZoneMap) AddClient(client *Client, zones map[ZoneCoord]struct{}) {
 	defer zm.mu.Unlock()
 
 	for zone, _ := range client.currentZones {
+		log.Printf("Removing client from zone: %v", zone)
 		delete(zm.clientsByZone[zone.X][zone.Y], client)
 	}
 
 	for zone, _ := range zones {
+		log.Printf("Adding client to zone: %v", zone)
 		zm.clientsByZone[zone.X][zone.Y][client] = struct{}{}
 	}
 }
@@ -153,6 +162,7 @@ func NewServer() *Server {
 
 // Run starts all server processes
 func (s *Server) Run() {
+	
 	// Start the specialized processing goroutines
 	go s.processMoves()
 	go s.handleSubscriptions()
@@ -172,12 +182,16 @@ func (s *Server) Run() {
 // processMoves handles move validation and application
 func (s *Server) processMoves() {
 	for moveReq := range s.moveRequests {
+		log.Printf("Processing move request")
 		// Validate the move
 		moveResult := s.board.ValidateAndApplyMove(moveReq.Move)
+		log.Printf("Move request result: %v", moveResult)
 		if !moveResult.Valid {
+			log.Printf("Move request invalid")
 			moveReq.Client.SendError("Invalid move")
 			continue
 		}
+		log.Printf("Move request validated")
 		movedPiece := moveResult.MovedPiece
 		capturedPiece := moveResult.CapturedPiece
 
@@ -231,6 +245,8 @@ func (s *Server) handleSubscriptions() {
 		
 		// Calculate which zones the client should be subscribed to
 		zones := GetRelevantZones(sub.Client.position)
+
+		log.Printf("Client subscribed to zones: %v", zones)
 		
 		// Update the zone map
 		s.zoneMap.AddClient(sub.Client, zones)
@@ -258,14 +274,12 @@ func (s *Server) registerClient(client *Client) {
 // unregisterClient removes a client from the server
 func (s *Server) unregisterClient(client *Client) {
 	s.clientsMu.Lock()
-	if _, ok := s.clients[client]; ok {
-		delete(s.clients, client)
-		close(client.send)
-	}
+	delete(s.clients, client)
 	s.clientsMu.Unlock()
-	
 	// Remove from zone mapping
 	s.zoneMap.RemoveClient(client)
+
+	client.Close()
 	
 	log.Printf("Client disconnected, total: %d", len(s.clients))
 }
@@ -291,17 +305,26 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request, staticDir str
 		s.ServeWs(w, r)
 		return
 	}
+	log.Printf("Serving static file: %s", r.URL.Path)
 	
 	// Serve static files
 	http.FileServer(http.Dir(staticDir)).ServeHTTP(w, r)
 }
 
 // InitializeBoards sets up a number of random boards for testing
-func (s *Server) InitializeBoards(count int) {
-	// Initialize some random boards for testing
-	for i := range count {
-		boardX := uint16(i % 100)
-		boardY := uint16(i / 100)
-		s.board.ResetBoardSection(boardX, boardY, false, false)
-	}
+// func (s *Server) InitializeBoards(count int) {
+// 	// Initialize some random boards for testing
+// 	for i := range count {
+// 		boardX := uint16(i % 100)
+// 		boardY := uint16(i / 100)
+// 		s.board.ResetBoardSection(boardX, boardY, false, false)
+// 	}
+// }
+
+func (s *Server) InitializeBoard() {
+	s.board.ResetBoardSection(62, 62, false, false)
+}
+
+func (s *Server) GetPiece(x, y uint16) *Piece {
+	return s.board.GetPiece(x, y)
 }

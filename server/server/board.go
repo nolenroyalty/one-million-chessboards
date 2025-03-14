@@ -1,6 +1,7 @@
 package server
 
 import (
+	"log"
 	"sync"
 )
 
@@ -96,18 +97,40 @@ type MoveResult struct {
 	CapturedPiece *Piece
 }
 
-func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
-	b.mu.Lock()
-	defer b.mu.Unlock()
 
-	// Check if the move is valid
-	if !IsValidMove(b, move) {
+func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
+	log.Printf("Validating and applying move: %v", move)
+	if !BoundsCheck(move) {
+		log.Printf("Move is out of bounds")
 		return MoveResult{Valid: false, MovedPiece: nil, CapturedPiece: nil}
 	}
 
-	// Apply the move and get any captured piece
+	b.mu.Lock()
+	log.Printf("Board locked")
+	defer b.mu.Unlock()
+
 	movedPiece := b.pieces[move.FromY][move.FromX]
+	if movedPiece == nil {
+		log.Printf("No piece at from position")
+		return MoveResult{Valid: false, MovedPiece: nil, CapturedPiece: nil}
+	}
+	
+	if movedPiece.ID != move.PieceID {
+		log.Printf("Piece ID does not match")
+		return MoveResult{Valid: false, MovedPiece: nil, CapturedPiece: nil}
+	}
+	
+	// Check if the move is valid
+	if !SatisfiesBasicMoveRules(b, move) {
+		log.Printf("Move is invalid")
+		return MoveResult{Valid: false, MovedPiece: nil, CapturedPiece: nil}
+	}
+	log.Printf("Move is valid")
+	// Apply the move and get any captured piece
+	log.Printf("Moved piece: %v", movedPiece)
 	capturedPiece := b._ApplyMove(move)
+	log.Printf("Captured piece: %v", capturedPiece)
+	log.Printf("returning!")
 	
 	// Return a result indicating a valid move and any captured piece
 	return MoveResult{Valid: true, MovedPiece: movedPiece, CapturedPiece: capturedPiece}

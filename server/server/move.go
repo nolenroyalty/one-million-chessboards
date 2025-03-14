@@ -21,30 +21,17 @@ type ValidatedMove struct {
 	Client *Client
 }
 
-// IsValidMove checks if a move is valid
-// For now, we just do basic bounds checking
-func IsValidMove(board *Board, move Move) bool {
-	// Check bounds
+func BoundsCheck(move Move) bool {
 	if move.FromX >= BOARD_SIZE || move.FromY >= BOARD_SIZE ||
 		move.ToX >= BOARD_SIZE || move.ToY >= BOARD_SIZE {
 		return false
 	}
+	return true
+}
 
-	if (move.FromX < 0 || move.FromY < 0 || move.ToX < 0 || move.ToY < 0) {
-		return false
-	}
-	
-	// Check if there's a piece at the from position
-	piece := board.GetPiece(move.FromX, move.FromY)
-	if piece == nil {
-		return false
-	}
-	
-	// Check if piece ID matches
-	if piece.ID != move.PieceID {
-		return false
-	}
-	
+// IsValidMove checks if a move is valid
+// For now, we just do basic bounds checking
+func SatisfiesBasicMoveRules(board *Board, move Move) bool {
 	// For now, all moves are allowed
 	return true
 }

@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	PeriodicUpdateInterval = time.Second * 20
+	PeriodicUpdateInterval = time.Second * 1
 )
 
 // Client represents a connected websocket client
@@ -25,6 +25,8 @@ type Client struct {
 	captureBuffer    []PieceCapture
 	bufferMu         sync.Mutex
 	done             chan struct{}
+	closeMu          sync.Mutex
+	isClosed         bool
 }
 
 // SubscriptionRequest represents a client request to subscribe to a position
@@ -44,6 +46,9 @@ func NewClient(conn *websocket.Conn, server *Server) *Client {
 		moveBuffer:       make([]PieceMove, 0, 400),
 		captureBuffer:    make([]PieceCapture, 0, 100),
 		done:             make(chan struct{}),
+		isClosed:         false,
+		bufferMu:         sync.Mutex{},
+		closeMu:          sync.Mutex{},
 		lastSnapshotTime: time.Now().Add(-30 * time.Second), // Allow immediate snapshot
 	}
 }
@@ -113,12 +118,16 @@ func (c *Client) handleMessage(message []byte) {
 		toX, _ := msg["toX"].(float64)
 		toY, _ := msg["toY"].(float64)
 
+		log.Printf("Received move: %v", msg)
+
 		// Basic bounds checking
 		if !CoordInBounds(fromX) || !CoordInBounds(fromY) ||
 			!CoordInBounds(toX) || !CoordInBounds(toY) {
 			c.SendError("Invalid coordinates")
 			return
 		}
+
+		log.Printf("Submitting move request")
 
 		// Submit the move request
 		c.server.moveRequests <- MoveRequest{
@@ -174,7 +183,8 @@ func (c *Client) WritePump() {
 			}
 
 			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-			if err := c.conn.WriteMessage(websocket.BinaryMessage, message); err != nil {
+			// CR nroyalty: change this to binary
+			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
 				return
 			}
 		case <-c.done:
@@ -191,10 +201,14 @@ func (c *Client) SendPeriodicUpdates() {
 		select {
 		case <-ticker.C:
 			if len(c.currentZones) > 0 {
+				log.Printf("Sending periodic update")
 				snapshot := c.server.board.GetStateForPosition(c.position)
 				c.SendStateSnapshot(snapshot)
+			} else {
+				log.Printf("No zones to update")
 			}
 		case <-c.done:
+			log.Printf("Stopping periodic updates")
 			return
 		}
 	}
@@ -319,6 +333,8 @@ func (c *Client) SendStateSnapshot(snapshot StateSnapshot) {
 
 	// Send through the channel
 	select {
+	case <-c.done:
+		return
 	case c.send <- data:
 		// Sent successfully
 	default:
@@ -353,6 +369,8 @@ func (c *Client) SendMoveUpdates(moves []PieceMove, captures []PieceCapture) {
 
 	// Send through the channel
 	select {
+	case <-c.done:
+		return
 	case c.send <- data:
 		// Sent successfully
 	default:
@@ -374,6 +392,8 @@ func (c *Client) SendError(errorMessage string) {
 		Code:    1, // Generic error code
 	}
 
+	log.Printf("Sending error: %v", message)
+
 	// Marshal to JSON
 	data, err := json.Marshal(message)
 	if err != nil {
@@ -383,6 +403,8 @@ func (c *Client) SendError(errorMessage string) {
 
 	// Send through the channel
 	select {
+	case <-c.done:
+		return
 	case c.send <- data:
 		// Sent successfully
 	default:
@@ -404,6 +426,14 @@ func (c *Client) canRequestSnapshot() bool {
 
 // Close closes the client connection
 func (c *Client) Close() {
+	c.closeMu.Lock()
+	defer c.closeMu.Unlock()
+
+	if c.isClosed {
+		return
+	}
+
 	close(c.done)
 	c.conn.Close()
+	c.isClosed = true
 }

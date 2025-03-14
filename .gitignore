@@ -25,3 +25,5 @@ go.work.sum
 .env
 
 *.exe
+
+server/static*
