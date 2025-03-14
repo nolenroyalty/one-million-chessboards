@@ -1,0 +1,94 @@
+syntax = "proto3";
+package proto;
+
+option go_package = "github.com/nolenroyalty/one-million-chessboards/internal/proto";
+
+// Piece representation
+message Piece {
+  uint64 id = 1;         // Unique identifier for the piece
+  uint16 x = 2;          // X position (0-79 for our smaller prototype)
+  uint16 y = 3;          // Y position (0-79 for our smaller prototype)
+  enum Type {
+    PAWN = 0;
+    KNIGHT = 1;
+    BISHOP = 2;
+    ROOK = 3;
+    QUEEN = 4;
+    KING = 5;
+  }
+  Type type = 4;         // Piece type
+  bool is_white = 5;     // Color (true for white, false for black)
+  
+  enum MoveState {
+    UNMOVED = 0;         // Never moved
+    MOVED = 1;           // Has moved
+    DOUBLE_MOVED = 2;    // Just made a two-square move (for en passant)
+  }
+  MoveState move_state = 6;  // Movement state for special rules
+}
+
+// Client-to-Server Messages
+message ClientMessage {
+  oneof message {
+    MovePiece move_piece = 1;
+    RequestSnapshot request_snapshot = 2;
+    ResetBoard reset_board = 3;
+  }
+  uint32 sequence_id = 99;  // For request/response correlation
+}
+
+message MovePiece {
+  uint64 piece_id = 1;   // ID of the piece to move
+  uint16 from_x = 2;     // Starting X position
+  uint16 from_y = 3;     // Starting Y position
+  uint16 to_x = 4;       // Target X position
+  uint16 to_y = 5;       // Target Y position
+}
+
+message RequestSnapshot {
+  // Empty for now, just request the entire state
+}
+
+message ResetBoard {
+  uint16 board_x = 1;    // X coordinate of board to reset (0-9 for our prototype)
+  uint16 board_y = 2;    // Y coordinate of board to reset (0-9 for our prototype)
+}
+
+// Server-to-Client Messages
+message ServerMessage {
+  oneof message {
+    StateSnapshot state_snapshot = 1;
+    MoveResult move_result = 2;
+    Error error = 3;
+  }
+  uint64 server_time = 99;  // Timestamp for all messages
+}
+
+// Complete state snapshot (for our prototype)
+message StateSnapshot {
+  repeated Piece pieces = 1;    // All pieces on the board
+}
+
+message MoveResult {
+  bool success = 1;
+  MovePiece move = 2;
+  repeated PieceCapture captures = 3;
+}
+
+message PieceCapture {
+  uint64 captured_piece_id = 1; // ID of the captured piece
+  uint16 x = 2;                 // Position where capture occurred
+  uint16 y = 3;
+  Piece.Type captured_type = 4; // Type of the captured piece
+  bool was_white = 5;           // Color of the captured piece
+}
+
+message Error {
+  string message = 1;
+  enum ErrorCode {
+    UNKNOWN = 0;
+    INVALID_MOVE = 1;
+    SERVER_ERROR = 2;
+  }
+  ErrorCode code = 2;
+}

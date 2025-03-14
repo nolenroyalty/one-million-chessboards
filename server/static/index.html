@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>One Million Chessboards</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        #container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        #canvas-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #game-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            touch-action: none;
+        }
+        
+        #controls {
+            width: 300px;
+            background-color: #f0f0f0;
+            padding: 20px;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+        
+        h1 {
+            margin-top: 0;
+        }
+        
+        .control-group {
+            margin-bottom: 20px;
+        }
+        
+        button {
+            margin: 5px;
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+        
+        #status {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #e0e0e0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="canvas-container">
+            <canvas id="game-canvas" width="1000" height="1000"></canvas>
+        </div>
+        
+        <div id="controls">
+            <h1>One Million Chessboards</h1>
+            
+            <div class="control-group">
+                <h3>Navigation</h3>
+                <button id="zoom-in">Zoom In</button>
+                <button id="zoom-out">Zoom Out</button>
+                <button id="reset-view">Reset View</button>
+            </div>
+            
+            <div class="control-group">
+                <h3>Board Controls</h3>
+                <button id="reset-board">Reset Current Board</button>
+            </div>
+            
+            <div class="control-group">
+                <h3>Connection</h3>
+                <button id="connect">Connect</button>
+                <button id="disconnect">Disconnect</button>
+            </div>
+            
+            <div id="status">
+                Status: Disconnected
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://unpkg.com/@panzoom/panzoom@4.6.0/dist/panzoom.min.js"></script>
+    <script src="/client.js"></script>
+</body>
+</html>
