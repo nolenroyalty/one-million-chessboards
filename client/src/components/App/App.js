@@ -2,7 +2,7 @@ import React from "react";
 import styled from "styled-components";
 import Board from "../Board/Board";
 import Pieces from "../../pieces";
-
+import { createMoveRequest } from "../../utils";
 const Main = styled.main`
   display: flex;
   flex-direction: column;
@@ -18,6 +18,14 @@ function App() {
   const pieceHandler = React.useRef(new Pieces());
   const [pieces, setPieces] = React.useState(new Map());
   const sent = React.useRef(false);
+
+  const submitMove = React.useCallback(
+    ({ piece, toX, toY }) => {
+      const move = createMoveRequest(piece, toX, toY);
+      websocket.send(JSON.stringify(move));
+    },
+    [websocket]
+  );
 
   React.useEffect(() => {
     pieceHandler.current.subscribe({
@@ -47,14 +55,7 @@ function App() {
       if (!sent.current) {
         sent.current = true;
         const piece = data.pieces[0];
-        const move = {
-          type: "move",
-          pieceId: piece.id,
-          fromX: piece.x,
-          fromY: piece.y,
-          toX: piece.x + 1,
-          toY: piece.y + 1,
-        };
+        const move = createMoveRequest(piece, piece.x + 1, piece.y + 1);
         ws.send(JSON.stringify(move));
       }
     };
@@ -84,7 +85,7 @@ function App() {
   return (
     <Main>
       hello world
-      <Board coords={coords} pieces={pieces} />
+      <Board coords={coords} pieces={pieces} submitMove={submitMove} />
     </Main>
   );
 }

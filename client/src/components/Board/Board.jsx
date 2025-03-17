@@ -1,6 +1,6 @@
 import React from "react";
 import styled from "styled-components";
-
+import { imageForPiece, getMoveableSquares, keyToCoords } from "../../utils";
 const BoardContainer = styled.div`
   display: flex;
   flex-direction: column;
@@ -20,7 +20,7 @@ const Inner = styled.div`
   width: ${WIDTH * PIXELS_PER_SQUARE + INNER_PADDING * 2}px;
   height: ${HEIGHT * PIXELS_PER_SQUARE + INNER_PADDING * 2}px;
   position: relative;
-  border: ${INNER_PADDING}px solid slateblue;
+  border: ${INNER_PADDING}px solid slategrey;
 `;
 
 const Canvas = styled.canvas`
@@ -31,31 +31,37 @@ const Canvas = styled.canvas`
 const PieceImg = styled.img`
   width: ${PIXELS_PER_SQUARE}px;
   height: ${PIXELS_PER_SQUARE}px;
+`;
+
+const PieceButtonWrapper = styled.button`
+  all: unset;
+  cursor: pointer;
+  pointer-events: auto;
+  width: ${PIXELS_PER_SQUARE}px;
+  height: ${PIXELS_PER_SQUARE}px;
   position: absolute;
   top: 0;
   left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transform: translate(var(--x), var(--y));
   transition: transform 0.5s ease-in-out;
 `;
 
-function imageForPiece(piece) {
-  const isWhite = piece.isWhite;
-  let name;
-  if (piece.type === 0) {
-    name = "pawn";
-  } else if (piece.type === 1) {
-    name = "knight";
-  } else if (piece.type === 2) {
-    name = "bishop";
-  } else if (piece.type === 3) {
-    name = "rook";
-  } else if (piece.type === 4) {
-    name = "queen";
-  } else if (piece.type === 5) {
-    name = "king";
-  }
-  return `/pieces/${isWhite ? "white" : "black"}/${name}.png`;
-}
+const MoveButton = styled.button`
+  all: unset;
+  cursor: pointer;
+  pointer-events: auto;
+  width: ${PIXELS_PER_SQUARE}px;
+  height: ${PIXELS_PER_SQUARE}px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translate(var(--x), var(--y));
+  background-color: slateblue;
+  opacity: 0.6;
+`;
 
 function getStartingAndEndingCoords({ coords, width, height }) {
   if (width % 2 === 0 || height % 2 === 0) {
@@ -86,21 +92,65 @@ function screenRelativeCoords({ x, y, startingX, startingY }) {
   };
 }
 
-const Piece = React.memo(({ id, x, y, src }) => {
-  return (
-    <PieceImg
-      id={id}
-      key={id}
-      src={src}
-      style={{
-        "--x": `${x * PIXELS_PER_SQUARE}px`,
-        "--y": `${y * PIXELS_PER_SQUARE}px`,
-      }}
-    />
-  );
-});
+function MoveButtons({
+  moveableSquares,
+  coords,
+  width,
+  height,
+  selectedPiece,
+  moveAndClear,
+}) {
+  const { startingX, startingY } = getStartingAndEndingCoords({
+    coords,
+    width,
+    height,
+  });
+  return Array.from(moveableSquares.values()).map((key) => {
+    const [x, y] = keyToCoords(key);
+    const { x: screenX, y: screenY } = screenRelativeCoords({
+      x,
+      y,
+      startingX,
+      startingY,
+    });
+    return (
+      <MoveButton
+        key={key}
+        style={{
+          "--x": `${screenX * PIXELS_PER_SQUARE}px`,
+          "--y": `${screenY * PIXELS_PER_SQUARE}px`,
+        }}
+        onClick={() => {
+          console.log(JSON.stringify(selectedPiece));
+          moveAndClear({ piece: selectedPiece, toX: x, toY: y });
+        }}
+      />
+    );
+  });
+}
 
-function AllPieces({ pieces, coords, width, height }) {
+const Piece = React.memo(
+  ({ id, x, y, src, onClick, dataId, pieceX, pieceY }) => {
+    return (
+      <PieceButtonWrapper
+        id={id}
+        key={id}
+        data-id={dataId}
+        data-piece-x={pieceX}
+        data-piece-y={pieceY}
+        style={{
+          "--x": `${x * PIXELS_PER_SQUARE}px`,
+          "--y": `${y * PIXELS_PER_SQUARE}px`,
+        }}
+        onClick={onClick}
+      >
+        <PieceImg src={src} />
+      </PieceButtonWrapper>
+    );
+  }
+);
+
+function AllPieces({ pieces, coords, width, height, handlePieceClick }) {
   const { startingX, startingY, endingX, endingY } = getStartingAndEndingCoords(
     {
       coords,
@@ -126,18 +176,68 @@ function AllPieces({ pieces, coords, width, height }) {
     return (
       <Piece
         key={piece.id}
-        data-id={piece.id}
+        dataId={piece.id}
         src={imageForPiece(piece)}
+        pieceX={piece.x}
+        pieceY={piece.y}
         x={x}
         y={y}
+        onClick={() => {
+          console.log("CLICK");
+          handlePieceClick(piece);
+        }}
       />
     );
   });
 }
 
-function Board({ coords, pieces }) {
+function Board({ coords, pieces, submitMove }) {
   const canvasRef = React.useRef(null);
+  const [selectedPiece, setSelectedPiece] = React.useState(null);
+  const [moveableSquares, setMoveableSquares] = React.useState(new Set());
+
+  const moveAndClear = React.useCallback(
+    ({ piece, toX, toY }) => {
+      submitMove({ piece, toX, toY });
+      setSelectedPiece(null);
+      setMoveableSquares(new Set());
+    },
+    [submitMove]
+  );
+
+  const handlePieceClick = React.useCallback(
+    (piece) => {
+      setSelectedPiece(piece);
+      const moveableSquares = getMoveableSquares(piece, pieces);
+      console.log(
+        "MOVEABLE SQUARES",
+        JSON.stringify(Array.from(moveableSquares.values()))
+      );
+      setMoveableSquares(moveableSquares);
+    },
+    [pieces]
+  );
+
+  const clearMoveableSquares = React.useCallback(() => {
+    setSelectedPiece(null);
+    setMoveableSquares(new Set());
+  }, []);
+
+  React.useEffect(() => {
+    // clear piece when escape is pressed
+    const handleEscape = (e) => {
+      if (e.key === "Escape") {
+        clearMoveableSquares();
+      }
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [clearMoveableSquares]);
+
   console.log("RENDER BOARD");
+  // this should be in a requestAnimationFrame loop...
   React.useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
@@ -149,7 +249,11 @@ function Board({ coords, pieces }) {
       });
     for (let x = startingX; x <= endingX; x++) {
       for (let y = startingY; y <= endingY; y++) {
-        const color = getSquareColor(x, y);
+        let color = getSquareColor(x, y);
+        // if (moveableSquares.has(pieceKey(x, y))) {
+        //   console.log(`match: ${x}, ${y}`);
+        //   color = "slateblue";
+        // }
         const { x: screenX, y: screenY } = screenRelativeCoords({
           x,
           y,
@@ -167,7 +271,6 @@ function Board({ coords, pieces }) {
           // leftmost square, draw tiny line on the left side
           ctx.save();
           ctx.fillStyle = BOARD_BORDER_COLOR;
-          ctx.globalAlpha = 0.8;
           ctx.fillRect(
             screenX * PIXELS_PER_SQUARE - BOARD_BORDER_HALF_WIDTH,
             screenY * PIXELS_PER_SQUARE,
@@ -180,7 +283,6 @@ function Board({ coords, pieces }) {
           // topmost square, draw tiny line on the top side
           ctx.save();
           ctx.fillStyle = BOARD_BORDER_COLOR;
-          ctx.globalAlpha = 0.8;
           ctx.fillRect(
             screenX * PIXELS_PER_SQUARE,
             screenY * PIXELS_PER_SQUARE - BOARD_BORDER_HALF_WIDTH,
@@ -191,7 +293,7 @@ function Board({ coords, pieces }) {
         }
       }
     }
-  }, [coords]);
+  }, [coords, selectedPiece, moveableSquares]);
 
   return (
     <BoardContainer>
@@ -200,12 +302,24 @@ function Board({ coords, pieces }) {
           width={WIDTH * PIXELS_PER_SQUARE}
           height={HEIGHT * PIXELS_PER_SQUARE}
           ref={canvasRef}
+          onMouseDown={(e) => {
+            console.log("MOUSE DOWN", e.target.dataset);
+          }}
         ></Canvas>
         <AllPieces
           pieces={pieces}
           coords={coords}
+          handlePieceClick={handlePieceClick}
           width={WIDTH}
           height={HEIGHT}
+        />
+        <MoveButtons
+          moveableSquares={moveableSquares}
+          coords={coords}
+          width={WIDTH}
+          height={HEIGHT}
+          moveAndClear={moveAndClear}
+          selectedPiece={selectedPiece}
         />
       </Inner>
     </BoardContainer>
