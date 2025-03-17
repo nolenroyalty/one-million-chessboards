@@ -38,29 +38,30 @@ func SatisfiesBasicMoveRules(board *Board, move Move) bool {
 
 // PieceMove represents a move update to send to clients
 type PieceMove struct {
-	PieceID   uint64
-	FromX     uint16
-	FromY     uint16
-	ToX       uint16
-	ToY       uint16
-	PieceType PieceType
-	IsWhite   bool
-	MoveState MoveState
+	PieceID   uint64 `json:"pieceId"`
+	FromX     uint16 `json:"fromX"`
+	FromY     uint16 `json:"fromY"`
+	ToX       uint16 `json:"toX"`
+	ToY       uint16 `json:"toY"`
+	PieceType PieceType `json:"pieceType"`
+	IsWhite   bool      `json:"isWhite"`
+	MoveState MoveState `json:"moveState"`
+	SeqNum    uint64    `json:"seqNum"`
 }
 
 // PieceCapture represents a capture update to send to clients
 type PieceCapture struct {
-	CapturedPieceID  uint64
-	X                uint16
-	Y                uint16
-	CapturedType     PieceType
-	WasWhite         bool
-	CapturingPieceID uint64
+	CapturedPieceID  uint64 `json:"capturedPieceId"`
+	X                uint16 `json:"x"`
+	Y                uint16 `json:"y"`
+	CapturedType     PieceType `json:"capturedType"`
+	WasWhite         bool      `json:"wasWhite"`
+	CapturingPieceID uint64    `json:"capturingPieceId"`
+	SeqNum           uint64    `json:"seqNum"`
 }
 
 // MoveUpdates contains batched move updates to send to clients
 type MoveUpdates struct {
 	Moves    []PieceMove
 	Captures []PieceCapture
-	Timestamp uint64
 }

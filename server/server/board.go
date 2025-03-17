@@ -2,14 +2,14 @@ package server
 
 import (
 	"log"
-	"sync"
+	"sync/atomic"
 )
 
 // Board represents the entire game state
 type Board struct {
-	pieces   [BOARD_SIZE][BOARD_SIZE]*Piece
+	pieces   [BOARD_SIZE][BOARD_SIZE]atomic.Pointer[Piece]
 	nextID   uint64
-	mu       sync.RWMutex
+	seqNum   atomic.Uint64
 	stats    GameStats
 }
 
@@ -26,34 +26,68 @@ type GameStats struct {
 func NewBoard() *Board {
 	return &Board{
 		nextID: 1,
+		seqNum: atomic.Uint64{},
+		stats: GameStats{
+			TotalMoves: 0,
+			WhitePiecesCaptured: 0,
+			BlackPiecesCaptured: 0,
+			WhiteKingsCaptured: 0,
+			BlackKingsCaptured: 0,
+		},
 	}
 }
 
-// GetPiece returns the piece at the given coordinates (thread-safe)
+// GetPiece returns the piece at the given coordinates
 func (b *Board) GetPiece(x, y uint16) *Piece {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
 	
 	if x >= BOARD_SIZE || y >= BOARD_SIZE {
 		return nil
 	}
-	
-	return b.pieces[y][x]
-}
 
-// ApplyMove applies a move to the board, returning the captured piece if any
-func (b *Board) _ApplyMove(move Move) *Piece {
-	
-	// Get the piece to move
-	piece := b.pieces[move.FromY][move.FromX]
+	piece := b.pieces[y][x].Load()
 	if piece == nil {
 		return nil
 	}
+	return piece
+}
+
+// ApplyMove applies a move to the board, returning the captured piece if any
+func (b *Board) _ApplyMove(piece *Piece, move Move) *Piece {
 	
-	// Check if there's a piece to capture
-	var capturedPiece *Piece
-	if b.pieces[move.ToY][move.ToX] != nil {
-		capturedPiece = b.pieces[move.ToY][move.ToX]
+	// Get the piece to move
+	if piece == nil {
+		return nil
+	}
+
+	needsNewPiece := false;
+	if piece.MoveState == Unmoved {
+		needsNewPiece = true
+	}
+
+	// We can't safely mutate the piece here (we're relying on atomic pointers
+	// and mutating their values isn't safe). Avoid an allocation unless we 
+	// need one.
+	if needsNewPiece {
+		piece = NewPiece(piece.ID, piece.Type, piece.IsWhite)
+		if piece.Type == Pawn {
+			dy := int32(move.ToY) - int32(move.FromY)
+			if dy == 2 || dy == -2 {
+				piece.MoveState = DoubleMoved
+			} else {
+				piece.MoveState = Moved
+			}
+		} else {
+			piece.MoveState = Moved
+		}
+	}
+	
+	// Do the store before the swap so that if we have a race, we don't have
+	// a duplicate piece on the board. This does mean that we potentially
+	// have a race where a piece disappears from the board, but I think that's
+	// fine since we'll send the move information to the client.
+	b.pieces[move.FromY][move.FromX].Store(nil)
+	var capturedPiece *Piece = b.pieces[move.ToY][move.ToX].Swap(piece)
+	if capturedPiece != nil {
 		
 		// Update capture statistics
 		if capturedPiece.IsWhite {
@@ -69,21 +103,6 @@ func (b *Board) _ApplyMove(move Move) *Piece {
 		}
 	}
 	
-	// Move the piece
-	b.pieces[move.ToY][move.ToX] = piece
-	b.pieces[move.FromY][move.FromX] = nil
-	
-	// Update move state
-	if piece.MoveState == Unmoved {
-		if piece.Type == Pawn && (move.ToY > move.FromY+1 || move.ToY+1 < move.FromY) {
-			piece.MoveState = DoubleMoved
-		} else {
-			piece.MoveState = Moved
-		}
-	} else {
-		piece.MoveState = Moved
-	}
-	
 	// Increment move counter
 	b.stats.TotalMoves++
 	
@@ -95,6 +114,7 @@ type MoveResult struct {
 	Valid         bool
 	MovedPiece    *Piece
 	CapturedPiece *Piece
+	SeqNum        uint64
 }
 
 
@@ -105,11 +125,7 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 		return MoveResult{Valid: false, MovedPiece: nil, CapturedPiece: nil}
 	}
 
-	b.mu.Lock()
-	log.Printf("Board locked")
-	defer b.mu.Unlock()
-
-	movedPiece := b.pieces[move.FromY][move.FromX]
+	movedPiece := b.pieces[move.FromY][move.FromX].Load()
 	if movedPiece == nil {
 		log.Printf("No piece at from position")
 		return MoveResult{Valid: false, MovedPiece: nil, CapturedPiece: nil}
@@ -127,19 +143,19 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 	}
 	log.Printf("Move is valid")
 	// Apply the move and get any captured piece
+	capturedPiece := b._ApplyMove(movedPiece, move)
+	b.seqNum.Add(1)
+	seqNum := b.seqNum.Load()
 	log.Printf("Moved piece: %v", movedPiece)
-	capturedPiece := b._ApplyMove(move)
 	log.Printf("Captured piece: %v", capturedPiece)
 	log.Printf("returning!")
 	
 	// Return a result indicating a valid move and any captured piece
-	return MoveResult{Valid: true, MovedPiece: movedPiece, CapturedPiece: capturedPiece}
+	return MoveResult{Valid: true, MovedPiece: movedPiece, CapturedPiece: capturedPiece, SeqNum: seqNum}
 }
 
 // ResetBoardSection initializes a standard 8x8 chess board at the given position
 func (b *Board) ResetBoardSection(boardX, boardY uint16, whiteOnly, blackOnly bool) []*PieceState {
-	b.mu.Lock()
-	defer b.mu.Unlock()
 	
 	// Calculate base coordinates
 	baseX := boardX * 8
@@ -149,21 +165,22 @@ func (b *Board) ResetBoardSection(boardX, boardY uint16, whiteOnly, blackOnly bo
 	newPieces := make([]*PieceState, 0, 32)
 	
 	// Clear existing pieces in this section
-	for y := uint16(0); y < 8; y++ {
-		for x := uint16(0); x < 8; x++ {
-			worldX := baseX + x
-			worldY := baseY + y
+	// think about how to do this later when we care...
+	// for y := uint16(0); y < 8; y++ {
+	// 	for x := uint16(0); x < 8; x++ {
+	// 		worldX := baseX + x
+	// 		worldY := baseY + y
 			
-			existingPiece := b.pieces[worldY][worldX]
-			if existingPiece != nil {
-				// Skip pieces that shouldn't be reset based on color flags
-				if (whiteOnly && !existingPiece.IsWhite) || (blackOnly && existingPiece.IsWhite) {
-					continue
-				}
-				b.pieces[worldY][worldX] = nil
-			}
-		}
-	}
+	// 		existingPiece := b.pieces[worldY][worldX]
+	// 		if existingPiece != nil {
+	// 			// Skip pieces that shouldn't be reset based on color flags
+	// 			if (whiteOnly && !existingPiece.IsWhite) || (blackOnly && existingPiece.IsWhite) {
+	// 				continue
+	// 			}
+	// 			b.pieces[worldY][worldX] = nil
+	// 		}
+	// 	}
+	// }
 	
 	// Place new pieces if we're not excluding their color
 	if !blackOnly {
@@ -194,7 +211,7 @@ func (b *Board) setupPiecesForColor(baseX, baseY uint16, isWhite bool, newPieces
 	// Place pawns
 	for x := uint16(0); x < 8; x++ {
 		piece := b.createPiece(Pawn, isWhite)
-		b.pieces[pawnRow][baseX+x] = piece
+		b.pieces[pawnRow][baseX+x].Store(piece)
 		*newPieces = append(*newPieces, &PieceState{
 			Piece: piece,
 			X:     baseX + x,
@@ -206,7 +223,7 @@ func (b *Board) setupPiecesForColor(baseX, baseY uint16, isWhite bool, newPieces
 	pieceTypes := []PieceType{Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook}
 	for x := uint16(0); x < 8; x++ {
 		piece := b.createPiece(pieceTypes[x], isWhite)
-		b.pieces[pieceRow][baseX+x] = piece
+		b.pieces[pieceRow][baseX+x].Store(piece)
 		*newPieces = append(*newPieces, &PieceState{
 			Piece: piece,
 			X:     baseX + x,
@@ -224,16 +241,12 @@ func (b *Board) createPiece(pieceType PieceType, isWhite bool) *Piece {
 
 // GetStats returns a copy of the current game statistics
 func (b *Board) GetStats() GameStats {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
 	return b.stats
 }
 
 // GetStateForPosition returns all pieces in a window around the given position
 func (b *Board) GetStateForPosition(pos Position) StateSnapshot {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-	
+	startingSeqNum := b.seqNum.Load()
 	minX := uint16(0)
 	minY := uint16(0)
 	maxX := uint16(BOARD_SIZE - 1)
@@ -258,9 +271,10 @@ func (b *Board) GetStateForPosition(pos Position) StateSnapshot {
 	
 	for y := minY; y <= maxY; y++ {
 		for x := minX; x <= maxX; x++ {
-			if b.pieces[y][x] != nil {
+			piece := b.pieces[y][x].Load()
+			if piece != nil {
 				pieces = append(pieces, &PieceState{
-					Piece: b.pieces[y][x],
+					Piece: piece,
 					X:     x,
 					Y:     y,
 				})
@@ -274,16 +288,12 @@ func (b *Board) GetStateForPosition(pos Position) StateSnapshot {
 		AreaMinY:  minY,
 		AreaMaxX:  maxX,
 		AreaMaxY:  maxY,
-		Timestamp: getCurrentTimestamp(),
+		StartingSeqNum: startingSeqNum,
+		EndingSeqNum: b.seqNum.Load(),
 	}
 }
 
 
-
-// getCurrentTimestamp returns the current server timestamp
-func getCurrentTimestamp() uint64 {
-	return uint64(0) // Placeholder, will be implemented later
-}
 
 // PieceState combines a piece with its position
 type PieceState struct {
@@ -305,5 +315,6 @@ type StateSnapshot struct {
 	AreaMinY  uint16
 	AreaMaxX  uint16
 	AreaMaxY  uint16
-	Timestamp uint64
+	StartingSeqNum uint64
+	EndingSeqNum uint64
 }

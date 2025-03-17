@@ -204,6 +204,7 @@ func (s *Server) processMoves() {
 			PieceType: movedPiece.Type,
 			IsWhite:   movedPiece.IsWhite,
 			MoveState: movedPiece.MoveState,
+			SeqNum:    moveResult.SeqNum,
 		}
 
 		affectedZones := s.zoneMap.GetAffectedZones(moveReq.Move)
@@ -218,6 +219,7 @@ func (s *Server) processMoves() {
 				CapturedType:    capturedPiece.Type,
 				WasWhite:        capturedPiece.IsWhite,
 				CapturingPieceID: movedPiece.ID,
+				SeqNum:           moveResult.SeqNum,
 			}
 		}
 		
@@ -322,9 +324,15 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request, staticDir str
 // }
 
 func (s *Server) InitializeBoard() {
-	s.board.ResetBoardSection(62, 62, false, false)
+	startX := uint16(61)
+	startY := uint16(61)
+	for dx := range 3 {
+		for dy := range 3 {
+			s.board.ResetBoardSection(startX + uint16(dx), startY + uint16(dy), false, false)
+		}
+	}
 }
 
-func (s *Server) GetPiece(x, y uint16) *Piece {
+func (s *Server) Testing_GetPiece(x, y uint16) *Piece {
 	return s.board.GetPiece(x, y)
 }

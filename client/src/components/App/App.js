@@ -1,5 +1,7 @@
 import React from "react";
 import styled from "styled-components";
+import Board from "../Board/Board";
+import Pieces from "../../pieces";
 
 const Main = styled.main`
   display: flex;
@@ -13,14 +15,33 @@ const Main = styled.main`
 function App() {
   const [websocket, setWebsocket] = React.useState(null);
   const [coords, setCoords] = React.useState({ x: 500, y: 500 });
+  const pieceHandler = React.useRef(new Pieces());
+  const [pieces, setPieces] = React.useState(new Map());
   const sent = React.useRef(false);
+
+  React.useEffect(() => {
+    pieceHandler.current.subscribe({
+      id: "app",
+      callback: (data) => {
+        setPieces(new Map(data.pieces));
+      },
+    });
+
+    return () => {
+      pieceHandler.current.unsubscribe({
+        id: "app",
+      });
+    };
+  }, [setPieces]);
 
   React.useEffect(() => {
     const ws = new WebSocket("ws://localhost:8080/ws");
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.pieces) {
-        console.log(`piece 0: ${JSON.stringify(data.pieces[0])}`);
+        pieceHandler.current.handleSnapshot({ snapshot: data });
+      } else if (data.moves) {
+        pieceHandler.current.handleMoves({ moves: data.moves });
       }
       console.log(data);
       if (!sent.current) {
@@ -60,7 +81,12 @@ function App() {
     }
   }, [websocket, coords]);
 
-  return <Main>hello world</Main>;
+  return (
+    <Main>
+      hello world
+      <Board coords={coords} pieces={pieces} />
+    </Main>
+  );
 }
 
 export default App;

@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	PeriodicUpdateInterval = time.Second * 1
+	PeriodicUpdateInterval = time.Second * 30
 )
 
 // Client represents a connected websocket client
@@ -298,7 +298,8 @@ func (c *Client) SendStateSnapshot(snapshot StateSnapshot) {
 		AreaMinY  uint16      `json:"areaMinY"`
 		AreaMaxX  uint16      `json:"areaMaxX"`
 		AreaMaxY  uint16      `json:"areaMaxY"`
-		Timestamp uint64      `json:"timestamp"`
+		StartingSeqNum uint64 `json:"startingSeqNum"`
+		EndingSeqNum uint64 `json:"endingSeqNum"`
 	}
 
 	// Convert pieces to the message format
@@ -321,7 +322,8 @@ func (c *Client) SendStateSnapshot(snapshot StateSnapshot) {
 		AreaMinY:  snapshot.AreaMinY,
 		AreaMaxX:  snapshot.AreaMaxX,
 		AreaMaxY:  snapshot.AreaMaxY,
-		Timestamp: snapshot.Timestamp,
+		StartingSeqNum: snapshot.StartingSeqNum,
+		EndingSeqNum: snapshot.EndingSeqNum,
 	}
 
 	// Marshal to JSON
@@ -350,14 +352,12 @@ func (c *Client) SendMoveUpdates(moves []PieceMove, captures []PieceCapture) {
 		Type      string         `json:"type"`
 		Moves     []PieceMove    `json:"moves"`
 		Captures  []PieceCapture `json:"captures"`
-		Timestamp uint64         `json:"timestamp"`
 	}
 
 	message := MoveUpdateMessage{
 		Type:      "moveUpdates",
 		Moves:     moves,
 		Captures:  captures,
-		Timestamp: getCurrentTimestamp(),
 	}
 
 	// Marshal to JSON

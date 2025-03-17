@@ -20,7 +20,7 @@ func main() {
 	// Create the server
 	s := server.NewServer()
 	s.InitializeBoard()
-	piece := s.GetPiece(500, 496)
+	piece := s.Testing_GetPiece(500, 496)
 	log.Printf("Piece at (500, 496): %v", piece)
 	
 	// Start the server in a goroutine
