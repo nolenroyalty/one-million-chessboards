@@ -85,7 +85,12 @@ function App() {
   return (
     <Main>
       hello world
-      <Board coords={coords} pieces={pieces} submitMove={submitMove} />
+      <Board
+        coords={coords}
+        pieces={pieces}
+        submitMove={submitMove}
+        setCoords={setCoords}
+      />
     </Main>
   );
 }

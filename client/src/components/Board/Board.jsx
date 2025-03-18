@@ -1,6 +1,8 @@
 import React from "react";
 import styled from "styled-components";
 import { imageForPiece, getMoveableSquares, keyToCoords } from "../../utils";
+import Panzoom from "@panzoom/panzoom";
+
 const BoardContainer = styled.div`
   display: flex;
   flex-direction: column;
@@ -46,7 +48,7 @@ const PieceButtonWrapper = styled.button`
   align-items: center;
   justify-content: center;
   transform: translate(var(--x), var(--y));
-  transition: transform 0.5s ease-in-out;
+  /* transition: transform 0.5s ease-in-out; */
 `;
 
 const MoveButton = styled.button`
@@ -183,7 +185,6 @@ function AllPieces({ pieces, coords, width, height, handlePieceClick }) {
         x={x}
         y={y}
         onClick={() => {
-          console.log("CLICK");
           handlePieceClick(piece);
         }}
       />
@@ -191,10 +192,11 @@ function AllPieces({ pieces, coords, width, height, handlePieceClick }) {
   });
 }
 
-function Board({ coords, pieces, submitMove }) {
+function Board({ coords, pieces, submitMove, setCoords }) {
   const canvasRef = React.useRef(null);
   const [selectedPiece, setSelectedPiece] = React.useState(null);
   const [moveableSquares, setMoveableSquares] = React.useState(new Set());
+  const innerRef = React.useRef(null);
 
   const moveAndClear = React.useCallback(
     ({ piece, toX, toY }) => {
@@ -236,7 +238,81 @@ function Board({ coords, pieces, submitMove }) {
     };
   }, [clearMoveableSquares]);
 
-  console.log("RENDER BOARD");
+  const lastPanzoom = React.useRef({ lastX: 0, lastY: 0, accX: 0, accY: 0 });
+  React.useEffect(() => {
+    console.log("INNER REF", innerRef.current);
+    const panzoom = Panzoom(innerRef.current, {
+      setTransform: (e, { scale, x, y }) => {
+        console.log("SET TRANSFORM", e, scale, x, y);
+      },
+      disablePan: false,
+      disableZoom: false,
+    });
+
+    innerRef.current.addEventListener("panzoomstart", (e) => {
+      console.log("PANZOOM START", e.detail);
+      lastPanzoom.current = {
+        ...lastPanzoom.current,
+        lastX: e.detail.x,
+        lastY: e.detail.y,
+        accX: 0,
+        accY: 0,
+      };
+    });
+
+    innerRef.current.addEventListener("panzoompan", (e) => {
+      console.log("PANZOOM PAN", e.detail);
+      const panzoomDX = e.detail.x - lastPanzoom.current.lastX;
+      const panzoomDY = e.detail.y - lastPanzoom.current.lastY;
+      console.log("PANZOOM DX", panzoomDX, "DY", panzoomDY);
+      lastPanzoom.current.accX += panzoomDX;
+      lastPanzoom.current.accY += panzoomDY;
+
+      let dx = 0;
+      let dy = 0;
+      const step = 32;
+      const dStep = 2;
+
+      while (lastPanzoom.current.accX > step) {
+        dx -= dStep;
+        lastPanzoom.current.accX -= step;
+      }
+      while (lastPanzoom.current.accX < -step) {
+        dx += dStep;
+        lastPanzoom.current.accX += step;
+      }
+      while (lastPanzoom.current.accY > step) {
+        dy -= dStep;
+        lastPanzoom.current.accY -= step;
+      }
+      while (lastPanzoom.current.accY < -step) {
+        dy += dStep;
+        lastPanzoom.current.accY += step;
+      }
+      if (dx !== 0 || dy !== 0) {
+        // CR nroyalty: make sure not to pan off the edge!!!
+        setCoords((coords) => ({
+          x: coords.x + dx,
+          y: coords.y + dy,
+        }));
+      }
+
+      lastPanzoom.current = {
+        ...lastPanzoom.current,
+        lastX: e.detail.x,
+        lastY: e.detail.y,
+      };
+    });
+
+    innerRef.current.addEventListener("panzoomzoom", (e) => {
+      console.log("ZOOM", e.detail.scale);
+    });
+
+    return () => {
+      panzoom.destroy();
+    };
+  }, [setCoords]);
+
   // this should be in a requestAnimationFrame loop...
   React.useEffect(() => {
     const canvas = canvasRef.current;
@@ -297,14 +373,11 @@ function Board({ coords, pieces, submitMove }) {
 
   return (
     <BoardContainer>
-      <Inner>
+      <Inner ref={innerRef}>
         <Canvas
           width={WIDTH * PIXELS_PER_SQUARE}
           height={HEIGHT * PIXELS_PER_SQUARE}
           ref={canvasRef}
-          onMouseDown={(e) => {
-            console.log("MOUSE DOWN", e.target.dataset);
-          }}
         ></Canvas>
         <AllPieces
           pieces={pieces}
