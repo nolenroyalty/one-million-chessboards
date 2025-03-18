@@ -185,7 +185,6 @@ func (s *Server) processMoves() {
 		log.Printf("Processing move request")
 		// Validate the move
 		moveResult := s.board.ValidateAndApplyMove(moveReq.Move)
-		log.Printf("Move request result: %v", moveResult)
 		if !moveResult.Valid {
 			log.Printf("Move request invalid")
 			moveReq.Client.SendError("Invalid move")

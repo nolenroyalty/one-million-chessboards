@@ -1,3 +1,5 @@
+const MAX_MOVE_DISTANCE = 50;
+
 export function pieceKey(x, y) {
   return `${x}-${y}`;
 }
@@ -36,6 +38,14 @@ export function imageForPiece(piece) {
   return `/pieces/${isWhite ? "white" : "black"}/${name}.png`;
 }
 
+function spawnsTwoBoards({ fromX, fromY, toX, toY }) {
+  const fromBoardX = Math.floor(fromX / 8);
+  const fromBoardY = Math.floor(fromY / 8);
+  const toBoardX = Math.floor(toX / 8);
+  const toBoardY = Math.floor(toY / 8);
+  return fromBoardX !== toBoardX || fromBoardY !== toBoardY;
+}
+
 function capturable({ pieces, weAreWhite, fromX, fromY, toX, toY }) {
   if (!pieces.has(pieceKey(toX, toY))) {
     return false;
@@ -44,26 +54,51 @@ function capturable({ pieces, weAreWhite, fromX, fromY, toX, toY }) {
   if (piece.isWhite === weAreWhite) {
     return false;
   }
-  const fromBoardX = Math.floor(fromX / 8);
-  const fromBoardY = Math.floor(fromY / 8);
-  const toBoardX = Math.floor(toX / 8);
-  const toBoardY = Math.floor(toY / 8);
-  return fromBoardX === toBoardX && fromBoardY === toBoardY;
+  if (spawnsTwoBoards({ fromX, fromY, toX, toY })) {
+    return false;
+  }
+  return true;
 }
 
-// doesn't handle en passant
+function empty({ pieces, x, y }) {
+  return !pieces.has(pieceKey(x, y));
+}
+
+function enPassantable({ pieces, weAreWhite, fromX, fromY, toX, toY, dy }) {
+  if (!pieces.has(pieceKey(toX, toY))) {
+    return false;
+  }
+  const piece = pieces.get(pieceKey(toX, toY));
+  if (piece.isWhite === weAreWhite) {
+    return false;
+  }
+  if (TYPE_TO_NAME[piece.type] !== "pawn") {
+    return false;
+  }
+  if (piece.moveState !== 2) {
+    return false;
+  }
+  if (spawnsTwoBoards({ fromX, fromY, toX, toY })) {
+    return false;
+  }
+  if (pieces.has(pieceKey(toX, toY + dy))) {
+    return false;
+  }
+  return true;
+}
+
+// only partially handles en passant
+// needs to specify that we're doing a capture for it (?)
 function addMoveableSquaresForPawn({ piece, pieces, squares }) {
   const isWhite = piece.isWhite;
   const x = piece.x;
   const y = piece.y;
   const dy = isWhite ? -1 : 1;
-  const oneUp = pieceKey(x, y + dy);
-  const twoUp = pieceKey(x, y + 2 * dy);
-  if (!pieces.has(oneUp)) {
+  if (empty({ pieces, x, y: y + dy })) {
     squares.push([x, y + dy]);
-  }
-  if (!pieces.has(twoUp) && piece.moveState === 0) {
-    squares.push([x, y + 2 * dy]);
+    if (empty({ pieces, x, y: y + 2 * dy }) && piece.moveState === 0) {
+      squares.push([x, y + 2 * dy]);
+    }
   }
   for (const dx of [-1, 1]) {
     if (
@@ -77,6 +112,151 @@ function addMoveableSquaresForPawn({ piece, pieces, squares }) {
       })
     ) {
       squares.push([x + dx, y + dy]);
+    }
+    if (
+      enPassantable({
+        pieces,
+        weAreWhite: isWhite,
+        fromX: x,
+        fromY: y,
+        toX: x + dx,
+        toY: y,
+        dy,
+      })
+    ) {
+      squares.push([x + dx, y + dy]);
+    }
+  }
+}
+
+function addMoveableSquaresForKnight({ piece, pieces, squares }) {
+  const x = piece.x;
+  const y = piece.y;
+  const candidates = [
+    [-1, 2],
+    [1, 2],
+    [2, -1],
+    [2, 1],
+    [1, -2],
+    [-1, -2],
+    [-2, -1],
+    [-2, 1],
+  ];
+  for (const [dx, dy] of candidates) {
+    const toX = x + dx;
+    const toY = y + dy;
+    if (
+      capturable({
+        pieces,
+        weAreWhite: piece.isWhite,
+        fromX: x,
+        fromY: y,
+        toX,
+        toY,
+      })
+    ) {
+      squares.push([toX, toY]);
+    }
+    if (empty({ pieces, x: toX, y: toY })) {
+      squares.push([toX, toY]);
+    }
+  }
+}
+
+function addMoveableSquaresForBishop({ piece, pieces, squares }) {
+  const x = piece.x;
+  const y = piece.y;
+  for (const dx of [-1, 1]) {
+    for (const dy of [-1, 1]) {
+      let i = 1;
+      while (i < MAX_MOVE_DISTANCE) {
+        const toX = x + i * dx;
+        const toY = y + i * dy;
+        const isEmpty = empty({ pieces, x: toX, y: toY });
+        const isCapturable = capturable({
+          pieces,
+          weAreWhite: piece.isWhite,
+          fromX: x,
+          fromY: y,
+          toX,
+          toY,
+        });
+        if (isCapturable) {
+          squares.push([toX, toY]);
+          break;
+        }
+        if (isEmpty) {
+          squares.push([toX, toY]);
+        } else {
+          break;
+        }
+        i++;
+      }
+    }
+  }
+}
+
+function addMoveableSquaresForRook({ piece, pieces, squares }) {
+  const x = piece.x;
+  const y = piece.y;
+  for (const [dx, dy] of [
+    [-1, 0],
+    [1, 0],
+    [0, -1],
+    [0, 1],
+  ]) {
+    let i = 1;
+    while (i < MAX_MOVE_DISTANCE) {
+      const toX = x + i * dx;
+      const toY = y + i * dy;
+      const isEmpty = empty({ pieces, x: toX, y: toY });
+      const isCapturable = capturable({
+        pieces,
+        weAreWhite: piece.isWhite,
+        fromX: x,
+        fromY: y,
+        toX,
+        toY,
+      });
+      if (isCapturable) {
+        squares.push([toX, toY]);
+        break;
+      }
+      if (isEmpty) {
+        squares.push([toX, toY]);
+      } else {
+        break;
+      }
+      i++;
+    }
+  }
+}
+
+// doesn't handle castling
+function addMoveableSquaresForKing({ piece, pieces, squares }) {
+  const x = piece.x;
+  const y = piece.y;
+  for (const dx of [-1, 0, 1]) {
+    for (const dy of [-1, 0, 1]) {
+      if (dx === 0 && dy === 0) {
+        continue;
+      }
+      const toX = x + dx;
+      const toY = y + dy;
+      const isCapturable = capturable({
+        pieces,
+        weAreWhite: piece.isWhite,
+        fromX: x,
+        fromY: y,
+        toX,
+        toY,
+      });
+      if (isCapturable) {
+        squares.push([toX, toY]);
+      }
+      if (empty({ pieces, x: toX, y: toY })) {
+        squares.push([toX, toY]);
+      }
     }
   }
 }
@@ -93,6 +273,22 @@ export function getMoveableSquares(piece, pieces) {
   switch (name) {
     case "pawn":
       addMoveableSquaresForPawn({ piece, pieces, squares });
+      break;
+    case "knight":
+      addMoveableSquaresForKnight({ piece, pieces, squares });
+      break;
+    case "bishop":
+      addMoveableSquaresForBishop({ piece, pieces, squares });
+      break;
+    case "rook":
+      addMoveableSquaresForRook({ piece, pieces, squares });
+      break;
+    case "queen":
+      addMoveableSquaresForBishop({ piece, pieces, squares });
+      addMoveableSquaresForRook({ piece, pieces, squares });
+      break;
+    case "king":
+      addMoveableSquaresForKing({ piece, pieces, squares });
       break;
     default:
       break;

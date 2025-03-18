@@ -66,7 +66,7 @@ func (b *Board) _ApplyMove(piece *Piece, move Move) ApplyMoveResult {
 	}
 
 	needsNewPiece := false;
-	if piece.MoveState == Unmoved {
+	if piece.MoveState == Unmoved || piece.MoveState == DoubleMoved {
 		needsNewPiece = true
 	}
 
@@ -74,28 +74,18 @@ func (b *Board) _ApplyMove(piece *Piece, move Move) ApplyMoveResult {
 	// and mutating their values isn't safe). Avoid an allocation unless we 
 	// need one.
 	if needsNewPiece {
-		log.Printf("NEEDS NEW PIECE")
 		piece = NewPiece(piece.ID, piece.Type, piece.IsWhite)
 		if piece.Type == Pawn {
-			log.Printf("PAWN")
 			dy := int32(move.ToY) - int32(move.FromY)
 			if dy == 2 || dy == -2 {
-				log.Printf("DOUBLE MOVED")
 				piece.MoveState = DoubleMoved
 			} else {
-				log.Printf("MOVED")
 				piece.MoveState = Moved
 			}
 		} else {
-			log.Printf("NOT PAWN")
 			piece.MoveState = Moved
 		}
-		log.Printf("NEW PIECE: %v", piece)
-	} else {
-		log.Printf("NO NEW PIECE")
 	}
-
-	log.Printf("PIECE AFTER NEW PIECE CHECK: %v", piece)
 	
 	// Do the store before the swap so that if we have a race, we don't have
 	// a duplicate piece on the board. This does mean that we potentially
