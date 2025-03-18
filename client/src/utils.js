@@ -65,29 +65,19 @@ function addMoveableSquaresForPawn({ piece, pieces, squares }) {
   if (!pieces.has(twoUp) && piece.moveState === 0) {
     squares.push([x, y + 2 * dy]);
   }
-  if (
-    capturable({
-      pieces,
-      weAreWhite: isWhite,
-      fromX: x,
-      fromY: y,
-      toX: x + 1,
-      toY: y + dy,
-    })
-  ) {
-    squares.push([x - 1, y + dy]);
-  }
-  if (
-    capturable({
-      pieces,
-      weAreWhite: isWhite,
-      fromX: x,
-      fromY: y,
-      toX: x + 1,
-      toY: y + dy,
-    })
-  ) {
-    squares.push([x + 1, y + dy]);
+  for (const dx of [-1, 1]) {
+    if (
+      capturable({
+        pieces,
+        weAreWhite: isWhite,
+        fromX: x,
+        fromY: y,
+        toX: x + dx,
+        toY: y + dy,
+      })
+    ) {
+      squares.push([x + dx, y + dy]);
+    }
   }
 }
 

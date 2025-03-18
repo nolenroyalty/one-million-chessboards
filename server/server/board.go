@@ -51,12 +51,18 @@ func (b *Board) GetPiece(x, y uint16) *Piece {
 	return piece
 }
 
+type ApplyMoveResult struct {
+	CapturedPiece *Piece
+	MovedPiece *Piece
+	NoMove bool
+}
+
 // ApplyMove applies a move to the board, returning the captured piece if any
-func (b *Board) _ApplyMove(piece *Piece, move Move) *Piece {
+func (b *Board) _ApplyMove(piece *Piece, move Move) ApplyMoveResult {
 	
 	// Get the piece to move
 	if piece == nil {
-		return nil
+		return ApplyMoveResult{NoMove: true}
 	}
 
 	needsNewPiece := false;
@@ -68,18 +74,28 @@ func (b *Board) _ApplyMove(piece *Piece, move Move) *Piece {
 	// and mutating their values isn't safe). Avoid an allocation unless we 
 	// need one.
 	if needsNewPiece {
+		log.Printf("NEEDS NEW PIECE")
 		piece = NewPiece(piece.ID, piece.Type, piece.IsWhite)
 		if piece.Type == Pawn {
+			log.Printf("PAWN")
 			dy := int32(move.ToY) - int32(move.FromY)
 			if dy == 2 || dy == -2 {
+				log.Printf("DOUBLE MOVED")
 				piece.MoveState = DoubleMoved
 			} else {
+				log.Printf("MOVED")
 				piece.MoveState = Moved
 			}
 		} else {
+			log.Printf("NOT PAWN")
 			piece.MoveState = Moved
 		}
+		log.Printf("NEW PIECE: %v", piece)
+	} else {
+		log.Printf("NO NEW PIECE")
 	}
+
+	log.Printf("PIECE AFTER NEW PIECE CHECK: %v", piece)
 	
 	// Do the store before the swap so that if we have a race, we don't have
 	// a duplicate piece on the board. This does mean that we potentially
@@ -106,7 +122,7 @@ func (b *Board) _ApplyMove(piece *Piece, move Move) *Piece {
 	// Increment move counter
 	b.stats.TotalMoves++
 	
-	return capturedPiece
+	return ApplyMoveResult{CapturedPiece: capturedPiece, MovedPiece: piece, NoMove: false}
 }
 
 // MoveResult represents the outcome of a move validation
@@ -141,17 +157,21 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 		log.Printf("Move is invalid")
 		return MoveResult{Valid: false, MovedPiece: nil, CapturedPiece: nil}
 	}
-	log.Printf("Move is valid")
 	// Apply the move and get any captured piece
-	capturedPiece := b._ApplyMove(movedPiece, move)
+	result := b._ApplyMove(movedPiece, move)
+	if result.NoMove {
+		log.Printf("No move")
+		return MoveResult{Valid: false, MovedPiece: nil, CapturedPiece: nil}
+	}
+	log.Printf("Made move")
 	b.seqNum.Add(1)
 	seqNum := b.seqNum.Load()
-	log.Printf("Moved piece: %v", movedPiece)
-	log.Printf("Captured piece: %v", capturedPiece)
+	log.Printf("Moved piece: %v", result.MovedPiece)
+	log.Printf("Captured piece: %v", result.CapturedPiece)
 	log.Printf("returning!")
 	
 	// Return a result indicating a valid move and any captured piece
-	return MoveResult{Valid: true, MovedPiece: movedPiece, CapturedPiece: capturedPiece, SeqNum: seqNum}
+	return MoveResult{Valid: true, MovedPiece: result.MovedPiece, CapturedPiece: result.CapturedPiece, SeqNum: seqNum}
 }
 
 // ResetBoardSection initializes a standard 8x8 chess board at the given position
