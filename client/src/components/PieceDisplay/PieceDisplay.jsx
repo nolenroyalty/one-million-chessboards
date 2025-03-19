@@ -16,8 +16,8 @@ const PieceImg = styled.img`
 
 const PieceButtonWrapper = styled.button`
   all: unset;
-  cursor: pointer;
-  pointer-events: auto;
+  cursor: var(--cursor);
+  pointer-events: var(--pointer-events);
   width: var(--size);
   height: var(--size);
   position: absolute;
@@ -26,10 +26,12 @@ const PieceButtonWrapper = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
+  opacity: var(--opacity);
+  transition: opacity 0.3s ease-in-out;
 `;
 
 const Piece = React.forwardRef(
-  ({ id, x, y, src, onClick, dataId, pieceX, pieceY, size }, ref) => {
+  ({ id, x, y, src, onClick, dataId, pieceX, pieceY, size, hidden }, ref) => {
     return (
       <PieceButtonWrapper
         id={id}
@@ -43,6 +45,9 @@ const Piece = React.forwardRef(
         style={{
           "--size": `${size}px`,
           transform: `translate(${x * size}px, ${y * size}px)`,
+          "--opacity": hidden ? 0 : 1,
+          "--pointer-events": hidden ? "none" : "auto",
+          "--cursor": hidden ? "none" : "pointer",
         }}
         onClick={onClick}
         ref={ref}
@@ -61,6 +66,7 @@ function PieceDisplay({
   height,
   handlePieceClick,
   pixelsPerSquare,
+  hidden,
 }) {
   console.log("RENDER PIECE DISPLAY");
   const { startingX, startingY, endingX, endingY } = getStartingAndEndingCoords(
@@ -71,10 +77,12 @@ function PieceDisplay({
     }
   );
   const [pieces, setPieces] = React.useState(
-    new Map(pieceHandler.current.pieces)
+    new Map(pieceHandler.current.getPieces())
   );
   const piecesRefsMap = React.useRef(new Map());
-  const recentMoveByPieceIdRef = React.useRef(new Map());
+  const recentMoveByPieceIdRef = React.useRef(
+    pieceHandler.current.getMoveMapByPieceId()
+  );
   const lastAnimatedCoords = React.useRef(new Map());
   const [, forceRender] = React.useReducer((x) => x + 1, 0);
 
@@ -245,8 +253,11 @@ function PieceDisplay({
         x={x}
         y={y}
         size={pixelsPerSquare}
+        hidden={hidden}
         onClick={() => {
-          handlePieceClick(piece);
+          if (!hidden) {
+            handlePieceClick(piece);
+          }
         }}
       />
     );

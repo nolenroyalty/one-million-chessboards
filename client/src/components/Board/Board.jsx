@@ -31,11 +31,103 @@ const PanzoomBox = styled.div`
   inset: 0;
 `;
 
-function Board({ coords, pieces, submitMove, setCoords, pieceHandler }) {
+function PiecesAndMaybeMoves({
+  coords,
+  handlePieceClick,
+  width,
+  height,
+  pixelsPerSquare,
+  pieceHandler,
+  moveableSquares,
+  moveAndClear,
+  selectedPiece,
+  hidden,
+}) {
+  return (
+    <>
+      <PieceDisplay
+        coords={coords}
+        handlePieceClick={handlePieceClick}
+        width={width}
+        height={height}
+        pixelsPerSquare={pixelsPerSquare}
+        pieceHandler={pieceHandler}
+        hidden={hidden}
+      />
+      <PieceMoveButtons
+        moveableSquares={moveableSquares}
+        coords={coords}
+        width={width}
+        height={height}
+        moveAndClear={moveAndClear}
+        selectedPiece={selectedPiece}
+        size={pixelsPerSquare}
+        hidden={hidden}
+      />
+    </>
+  );
+}
+
+const LargeBoardWrapper = styled.div`
+  position: absolute;
+  inset: 0;
+  background-color: #2bb0557e;
+  opacity: var(--opacity);
+  transition: opacity 0.3s ease-in-out;
+`;
+
+function TestLargeBoard({ hidden }) {
+  return (
+    <LargeBoardWrapper
+      style={{ "--opacity": hidden ? 0 : 1 }}
+    ></LargeBoardWrapper>
+  );
+}
+
+function Board({ coords, submitMove, setCoords, pieceHandler }) {
   const [selectedPiece, setSelectedPiece] = React.useState(null);
   const [moveableSquares, setMoveableSquares] = React.useState(new Set());
-  const innerRef = React.useRef(null);
   const panzoomBoxRef = React.useRef(null);
+  const boardContainerRef = React.useRef(null);
+
+  const [showLargeBoard, setShowLargeBoard] = React.useState(false);
+  const [smallHidden, setSmallHidden] = React.useState(false);
+  const [largeHidden, setLargeHidden] = React.useState(true);
+  const [smallMounted, setSmallMounted] = React.useState(true);
+  const [largeMounted, setLargeMounted] = React.useState(false);
+
+  const toggleLargeBoard = React.useCallback(() => {
+    setShowLargeBoard((showLargeBoard) => !showLargeBoard);
+  }, []);
+
+  React.useEffect(() => {
+    if (showLargeBoard) {
+      if (!largeMounted) {
+        setLargeMounted(true);
+      }
+      setSmallHidden(true);
+      setLargeHidden(false);
+
+      const timer = setTimeout(() => {
+        setSmallMounted(false);
+      }, 300);
+
+      return () => clearTimeout(timer);
+    } else {
+      if (!smallMounted) {
+        setSmallMounted(true);
+      }
+      setSmallHidden(false);
+      setLargeHidden(true);
+
+      const timer = setTimeout(() => {
+        setLargeMounted(false);
+      }, 300);
+
+      return () => clearTimeout(timer);
+    }
+  }, [showLargeBoard, largeMounted, smallMounted]);
+
   const moveAndClear = React.useCallback(
     ({ piece, toX, toY }) => {
       submitMove({ piece, toX, toY });
@@ -72,15 +164,33 @@ function Board({ coords, pieces, submitMove, setCoords, pieceHandler }) {
     };
   }, [clearMoveableSquares]);
 
+  React.useEffect(() => {
+    const elt = boardContainerRef.current;
+    const handleWheel = (e) => {
+      const doScroll = e.ctrlKey || e.metaKey;
+      if (doScroll && e.deltaY > 0 && !showLargeBoard) {
+        setShowLargeBoard(true);
+      } else if (doScroll && e.deltaY < 0 && showLargeBoard) {
+        setShowLargeBoard(false);
+      }
+      if (doScroll) {
+        e.preventDefault();
+      }
+    };
+    elt.addEventListener("wheel", handleWheel, { passive: false });
+    return () => elt.removeEventListener("wheel", handleWheel);
+  }, [showLargeBoard]);
+
   const lastPanzoom = React.useRef({ lastX: 0, lastY: 0, accX: 0, accY: 0 });
   React.useEffect(() => {
+    const elt = panzoomBoxRef.current;
     const panzoom = Panzoom(panzoomBoxRef.current, {
       setTransform: (e, { scale, x, y }) => {},
       disablePan: false,
       disableZoom: false,
     });
 
-    panzoomBoxRef.current.addEventListener("panzoomstart", (e) => {
+    const handlePanzoomStart = (e) => {
       console.log("panzoomstart");
       clearMoveableSquares();
       lastPanzoom.current = {
@@ -93,13 +203,15 @@ function Board({ coords, pieces, submitMove, setCoords, pieceHandler }) {
         firstYMove: true,
         lastPanTime: null,
       };
-    });
+    };
+    elt.addEventListener("panzoomstart", handlePanzoomStart);
 
-    panzoomBoxRef.current.addEventListener("panzoomend", (e) => {
+    const handlePanzoomEnd = (e) => {
       console.log("panzoomend");
-    });
+    };
+    elt.addEventListener("panzoomend", handlePanzoomEnd);
 
-    panzoomBoxRef.current.addEventListener("panzoompan", (e) => {
+    const handlePanzoomPan = (e) => {
       const panzoomDX = e.detail.x - lastPanzoom.current.lastX;
       const panzoomDY = e.detail.y - lastPanzoom.current.lastY;
       lastPanzoom.current.accX += panzoomDX;
@@ -155,9 +267,13 @@ function Board({ coords, pieces, submitMove, setCoords, pieceHandler }) {
         lastX: e.detail.x,
         lastY: e.detail.y,
       };
-    });
+    };
+    elt.addEventListener("panzoompan", handlePanzoomPan);
 
-    panzoomBoxRef.current.addEventListener("panzoomzoom", (e) => {});
+    const handlePanzoomZoom = (e) => {
+      console.log("panzoomzoom", e);
+    };
+    elt.addEventListener("panzoomzoom", handlePanzoomZoom);
 
     function handleKeyDown(e) {
       if (e.key === "ArrowUp") {
@@ -192,39 +308,45 @@ function Board({ coords, pieces, submitMove, setCoords, pieceHandler }) {
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => {
+      console.warn("REMOUNTING PANZOOM");
       panzoom.destroy();
       window.removeEventListener("keydown", handleKeyDown);
+      elt.removeEventListener("panzoomstart", handlePanzoomStart);
+      elt.removeEventListener("panzoomend", handlePanzoomEnd);
+      elt.removeEventListener("panzoompan", handlePanzoomPan);
+      elt.removeEventListener("panzoomzoom", handlePanzoomZoom);
     };
-  }, [setCoords, clearMoveableSquares]);
+  }, [setCoords, clearMoveableSquares, toggleLargeBoard]);
 
   return (
-    <BoardContainer>
+    <BoardContainer ref={boardContainerRef}>
       <Inner>
-        <BoardCanvas
-          coords={coords}
-          width={WIDTH}
-          height={HEIGHT}
-          pixelsPerSquare={PIXELS_PER_SQUARE}
-          moveableSquares={moveableSquares}
-        />
+        {smallMounted && (
+          <BoardCanvas
+            coords={coords}
+            width={WIDTH}
+            height={HEIGHT}
+            pixelsPerSquare={PIXELS_PER_SQUARE}
+            moveableSquares={moveableSquares}
+            hidden={smallHidden}
+          />
+        )}
+        {largeMounted && <TestLargeBoard hidden={largeHidden} />}
         <PanzoomBox ref={panzoomBoxRef} />
-        <PieceDisplay
-          coords={coords}
-          handlePieceClick={handlePieceClick}
-          width={WIDTH}
-          height={HEIGHT}
-          pixelsPerSquare={PIXELS_PER_SQUARE}
-          pieceHandler={pieceHandler}
-        />
-        <PieceMoveButtons
-          moveableSquares={moveableSquares}
-          coords={coords}
-          width={WIDTH}
-          height={HEIGHT}
-          moveAndClear={moveAndClear}
-          selectedPiece={selectedPiece}
-          size={PIXELS_PER_SQUARE}
-        />
+        {smallMounted && (
+          <PiecesAndMaybeMoves
+            coords={coords}
+            handlePieceClick={handlePieceClick}
+            width={WIDTH}
+            height={HEIGHT}
+            pixelsPerSquare={PIXELS_PER_SQUARE}
+            pieceHandler={pieceHandler}
+            moveableSquares={moveableSquares}
+            moveAndClear={moveAndClear}
+            selectedPiece={selectedPiece}
+            hidden={smallHidden}
+          />
+        )}
       </Inner>
     </BoardContainer>
   );

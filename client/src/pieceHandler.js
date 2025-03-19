@@ -18,6 +18,22 @@ class PieceHandler {
     this.subscribers.push({ id, callback });
   }
 
+  getMoves() {
+    return this.moves;
+  }
+
+  getMoveMapByPieceId() {
+    const ret = new Map();
+    this.moves.forEach((move) => {
+      ret.set(move.pieceId, move);
+    });
+    return ret;
+  }
+
+  getPieces() {
+    return this.pieces;
+  }
+
   getMoveableSquares(piece) {
     return getMoveableSquares(piece, this.pieces);
   }
