@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -68,14 +69,16 @@ func (c *Client) ReadPump() {
 	}()
 
 	c.conn.SetReadLimit(8192) // 8KB max message size
-	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	c.conn.SetReadDeadline(time.Now().Add(120 * time.Second))
 	c.conn.SetPongHandler(func(string) error {
-		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		log.Printf("Received pong")
+		c.conn.SetReadDeadline(time.Now().Add(120 * time.Second))
 		return nil
 	})
 
 	for {
 		_, message, err := c.conn.ReadMessage()
+		c.conn.SetReadDeadline(time.Now().Add(120 * time.Second))
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err) {
 				log.Printf("client disconnected: %v", err)
@@ -83,11 +86,10 @@ func (c *Client) ReadPump() {
 			break
 		}
 
-		// Parse the message
-		// For simplicity, we'll defer this to a dedicated method
 		c.handleMessage(message)
 	}
 }
+
 
 func CoordInBounds(coord float64) bool {
 	return coord >= 0 && uint16(coord) < BOARD_SIZE
@@ -164,6 +166,27 @@ func (c *Client) handleMessage(message []byte) {
 			snapshot := c.server.board.GetStateForPosition(c.position)
 			c.SendStateSnapshot(snapshot)
 		}
+
+	case "app-ping":
+		log.Printf("Received app ping")
+		type AppPong struct {
+			Type string `json:"type"`
+			Time int64 `json:"time"`
+		}
+		appPong := AppPong{
+			Type: "app-pong",
+			Time: time.Now().UnixNano(),
+		}
+		data, err := json.Marshal(appPong)
+		if err != nil {
+			log.Printf("Error marshaling app pong: %v", err)
+			return
+		}
+		select {
+		case c.send <- data:
+		case <-c.done:
+			return
+		}
 	}
 }
 
@@ -173,11 +196,15 @@ func (c *Client) WritePump() {
 		c.conn.Close()
 	}()
 
+	pingTicker := time.NewTicker(time.Second * 10)
+	defer pingTicker.Stop()
+
 	for {
 		select {
 		case message, ok := <-c.send:
 			if !ok {
 				// Channel closed, server shutdown
+				log.Printf("!!Channel closed, server shutdown!!")
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
@@ -187,6 +214,10 @@ func (c *Client) WritePump() {
 			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
 				return
 			}
+		case <-pingTicker.C:
+			log.Printf("Sending ping")
+			pingData := []byte(fmt.Sprintf("ping-%d", time.Now().UnixNano()))
+			c.conn.WriteMessage(websocket.PingMessage, pingData)
 		case <-c.done:
 			return
 		}
