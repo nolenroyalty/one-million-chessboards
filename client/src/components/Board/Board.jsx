@@ -1,14 +1,9 @@
 import React from "react";
 import styled from "styled-components";
-import {
-  keyToCoords,
-  getStartingAndEndingCoords,
-  getScreenRelativeCoords,
-} from "../../utils";
 import Panzoom from "@panzoom/panzoom";
 import BoardCanvas from "../BoardCanvas/BoardCanvas";
 import PieceDisplay from "../PieceDisplay/PieceDisplay";
-
+import PieceMoveButtons from "../PieceMoveButtons/PieceMoveButtons";
 const BoardContainer = styled.div`
   display: flex;
   flex-direction: column;
@@ -35,61 +30,6 @@ const PanzoomBox = styled.div`
   position: absolute;
   inset: 0;
 `;
-
-const MoveButton = styled.button`
-  all: unset;
-  cursor: pointer;
-  pointer-events: auto;
-  width: ${PIXELS_PER_SQUARE}px;
-  height: ${PIXELS_PER_SQUARE}px;
-  position: absolute;
-  top: 0;
-  left: 0;
-  transform: translate(var(--x), var(--y));
-  background-color: transparent;
-`;
-
-function MoveButtons({
-  moveableSquares,
-  coords,
-  width,
-  height,
-  selectedPiece,
-  moveAndClear,
-}) {
-  const { startingX, startingY } = getStartingAndEndingCoords({
-    coords,
-    width,
-    height,
-  });
-  return Array.from(moveableSquares.values()).map((key) => {
-    const [x, y] = keyToCoords(key);
-    const { x: screenX, y: screenY } = getScreenRelativeCoords({
-      x,
-      y,
-      startingX,
-      startingY,
-    });
-    return (
-      <MoveButton
-        key={key}
-        style={{
-          "--x": `${screenX * PIXELS_PER_SQUARE}px`,
-          "--y": `${screenY * PIXELS_PER_SQUARE}px`,
-        }}
-        onClick={(e) => {
-          console.log("clicked");
-          e.stopPropagation();
-          moveAndClear({ piece: selectedPiece, toX: x, toY: y });
-        }}
-        onPointerDown={(e) => {
-          console.log("pointer down");
-          e.stopPropagation();
-        }}
-      />
-    );
-  });
-}
 
 function Board({ coords, pieces, submitMove, setCoords, pieceHandler }) {
   const [selectedPiece, setSelectedPiece] = React.useState(null);
@@ -276,13 +216,14 @@ function Board({ coords, pieces, submitMove, setCoords, pieceHandler }) {
           pixelsPerSquare={PIXELS_PER_SQUARE}
           pieceHandler={pieceHandler}
         />
-        <MoveButtons
+        <PieceMoveButtons
           moveableSquares={moveableSquares}
           coords={coords}
           width={WIDTH}
           height={HEIGHT}
           moveAndClear={moveAndClear}
           selectedPiece={selectedPiece}
+          size={PIXELS_PER_SQUARE}
         />
       </Inner>
     </BoardContainer>
