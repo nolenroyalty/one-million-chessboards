@@ -119,18 +119,9 @@ function PieceDisplay({
     }
   );
 
-  const piecesById = React.useCallback((pieces) => {
-    const piecesById = new Map();
-    for (const piece of pieces) {
-      piecesById.set(piece.id, piece);
-    }
-    return piecesById;
-  }, []);
-
   const [piecesAndCaptures, setPiecesAndCaptures] = React.useState({
-    pieces: piecesById(pieceHandler.current.getPieces()),
-    captures: pieceHandler.current.getCaptures(),
-    recentPieces: new Map(),
+    pieces: new Map(pieceHandler.current.getPieces()),
+    captures: new Set(pieceHandler.current.getCaptures()),
   });
   const piecesRefsMap = React.useRef(new Map());
   const recentMoveByPieceIdRef = React.useRef(
@@ -175,9 +166,11 @@ function PieceDisplay({
               return capture.receivedAt > now - filterTime;
             }
           );
-          return { pieces: newPieces, captures: newCaptures };
+          return {
+            pieces: newPieces,
+            captures: new Set(newCaptures),
+          };
         });
-        console.log("called set pieces");
       },
     });
     return () => {
@@ -261,9 +254,10 @@ function PieceDisplay({
     };
   }, [pixelsPerSquare, startingX, startingY, isNotVisible, getAnimatedCoords]);
 
+  // CR nroyalty: captures are not displayed because they cause flickering...
   return (
     <>
-      {piecesAndCaptures.captures.map((capture) => {
+      {/* {Array.from(piecesAndCaptures.captures).map((capture) => {
         if (isNotVisible({ x: capture.x, y: capture.y })) {
           return null;
         }
@@ -288,7 +282,7 @@ function PieceDisplay({
             size={pixelsPerSquare}
           />
         );
-      })}
+      })} */}
       {Array.from(piecesAndCaptures.pieces.values()).map((piece) => {
         const now = performance.now();
         let maybeAnimatedX = piece.x;
