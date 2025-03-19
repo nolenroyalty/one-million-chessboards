@@ -8,6 +8,7 @@ import {
 import Panzoom from "@panzoom/panzoom";
 import BoardCanvas from "../BoardCanvas/BoardCanvas";
 import PieceDisplay from "../PieceDisplay/PieceDisplay";
+
 const BoardContainer = styled.div`
   display: flex;
   flex-direction: column;
@@ -28,6 +29,11 @@ const Inner = styled.div`
   position: relative;
   border: ${INNER_PADDING}px solid slategrey;
   overflow: hidden;
+`;
+
+const PanzoomBox = styled.div`
+  position: absolute;
+  inset: 0;
 `;
 
 const MoveButton = styled.button`
@@ -71,9 +77,14 @@ function MoveButtons({
           "--x": `${screenX * PIXELS_PER_SQUARE}px`,
           "--y": `${screenY * PIXELS_PER_SQUARE}px`,
         }}
-        onClick={() => {
-          console.log(JSON.stringify(selectedPiece));
+        onClick={(e) => {
+          console.log("clicked");
+          e.stopPropagation();
           moveAndClear({ piece: selectedPiece, toX: x, toY: y });
+        }}
+        onPointerDown={(e) => {
+          console.log("pointer down");
+          e.stopPropagation();
         }}
       />
     );
@@ -84,7 +95,7 @@ function Board({ coords, pieces, submitMove, setCoords, pieceHandler }) {
   const [selectedPiece, setSelectedPiece] = React.useState(null);
   const [moveableSquares, setMoveableSquares] = React.useState(new Set());
   const innerRef = React.useRef(null);
-
+  const panzoomBoxRef = React.useRef(null);
   const moveAndClear = React.useCallback(
     ({ piece, toX, toY }) => {
       submitMove({ piece, toX, toY });
@@ -123,14 +134,15 @@ function Board({ coords, pieces, submitMove, setCoords, pieceHandler }) {
 
   const lastPanzoom = React.useRef({ lastX: 0, lastY: 0, accX: 0, accY: 0 });
   React.useEffect(() => {
-    const panzoom = Panzoom(innerRef.current, {
+    const panzoom = Panzoom(panzoomBoxRef.current, {
       setTransform: (e, { scale, x, y }) => {},
       disablePan: false,
       disableZoom: false,
     });
 
-    innerRef.current.addEventListener("panzoomstart", (e) => {
+    panzoomBoxRef.current.addEventListener("panzoomstart", (e) => {
       console.log("panzoomstart");
+      clearMoveableSquares();
       lastPanzoom.current = {
         ...lastPanzoom.current,
         lastX: e.detail.x,
@@ -143,11 +155,11 @@ function Board({ coords, pieces, submitMove, setCoords, pieceHandler }) {
       };
     });
 
-    innerRef.current.addEventListener("panzoomend", (e) => {
+    panzoomBoxRef.current.addEventListener("panzoomend", (e) => {
       console.log("panzoomend");
     });
 
-    innerRef.current.addEventListener("panzoompan", (e) => {
+    panzoomBoxRef.current.addEventListener("panzoompan", (e) => {
       const panzoomDX = e.detail.x - lastPanzoom.current.lastX;
       const panzoomDY = e.detail.y - lastPanzoom.current.lastY;
       lastPanzoom.current.accX += panzoomDX;
@@ -205,7 +217,7 @@ function Board({ coords, pieces, submitMove, setCoords, pieceHandler }) {
       };
     });
 
-    innerRef.current.addEventListener("panzoomzoom", (e) => {});
+    panzoomBoxRef.current.addEventListener("panzoomzoom", (e) => {});
 
     function handleKeyDown(e) {
       if (e.key === "ArrowUp") {
@@ -243,11 +255,11 @@ function Board({ coords, pieces, submitMove, setCoords, pieceHandler }) {
       panzoom.destroy();
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [setCoords]);
+  }, [setCoords, clearMoveableSquares]);
 
   return (
     <BoardContainer>
-      <Inner ref={innerRef}>
+      <Inner>
         <BoardCanvas
           coords={coords}
           width={WIDTH}
@@ -255,6 +267,7 @@ function Board({ coords, pieces, submitMove, setCoords, pieceHandler }) {
           pixelsPerSquare={PIXELS_PER_SQUARE}
           moveableSquares={moveableSquares}
         />
+        <PanzoomBox ref={panzoomBoxRef} />
         <PieceDisplay
           coords={coords}
           handlePieceClick={handlePieceClick}

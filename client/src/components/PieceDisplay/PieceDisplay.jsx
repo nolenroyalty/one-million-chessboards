@@ -37,6 +37,9 @@ const Piece = React.forwardRef(
         data-id={dataId}
         data-piece-x={pieceX}
         data-piece-y={pieceY}
+        // it's important that we use an inline style here because it lets
+        // us override that style from our animation handler and then automatically
+        // remove that overridden style when we re-render the piece
         style={{
           "--size": `${size}px`,
           transform: `translate(${x * size}px, ${y * size}px)`,
@@ -120,7 +123,7 @@ function PieceDisplay({
     return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
   };
 
-  const getAnimatedCoords = ({ pieceId, now }) => {
+  const getAnimatedCoords = React.useCallback(({ pieceId, now }) => {
     const recentMove = recentMoveByPieceIdRef.current.get(pieceId);
     if (recentMove) {
       const { fromX, fromY, toX, toY, receivedAt } = recentMove;
@@ -134,7 +137,7 @@ function PieceDisplay({
       return { x, y, finished: false };
     }
     return null;
-  };
+  }, []);
 
   const savePieceRef = (pieceId, ref) => {
     if (ref) {
@@ -208,7 +211,7 @@ function PieceDisplay({
     return () => {
       cancelAnimationFrame(frameId);
     };
-  }, [pixelsPerSquare, startingX, startingY, isNotVisible]);
+  }, [pixelsPerSquare, startingX, startingY, isNotVisible, getAnimatedCoords]);
 
   return Array.from(pieces.values()).map((piece) => {
     const now = performance.now();
