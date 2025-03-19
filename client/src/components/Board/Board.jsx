@@ -1,7 +1,6 @@
 import React from "react";
 import styled from "styled-components";
 import {
-  imageForPiece,
   getMoveableSquares,
   keyToCoords,
   getStartingAndEndingCoords,
@@ -9,7 +8,7 @@ import {
 } from "../../utils";
 import Panzoom from "@panzoom/panzoom";
 import BoardCanvas from "../BoardCanvas/BoardCanvas";
-
+import PieceDisplay from "../PieceDisplay/PieceDisplay";
 const BoardContainer = styled.div`
   display: flex;
   flex-direction: column;
@@ -31,27 +30,6 @@ const Inner = styled.div`
   border: ${INNER_PADDING}px solid slategrey;
 `;
 
-const PieceImg = styled.img`
-  width: ${PIXELS_PER_SQUARE}px;
-  height: ${PIXELS_PER_SQUARE}px;
-`;
-
-const PieceButtonWrapper = styled.button`
-  all: unset;
-  cursor: pointer;
-  pointer-events: auto;
-  width: ${PIXELS_PER_SQUARE}px;
-  height: ${PIXELS_PER_SQUARE}px;
-  position: absolute;
-  top: 0;
-  left: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transform: translate(var(--x), var(--y));
-  /* transition: transform 0.5s ease-in-out; */
-`;
-
 const MoveButton = styled.button`
   all: unset;
   cursor: pointer;
@@ -63,8 +41,6 @@ const MoveButton = styled.button`
   left: 0;
   transform: translate(var(--x), var(--y));
   background-color: transparent;
-  /* background-color: slateblue; */
-  /* opacity: 0.6; */
 `;
 
 function MoveButtons({
@@ -104,68 +80,7 @@ function MoveButtons({
   });
 }
 
-const Piece = React.memo(
-  ({ id, x, y, src, onClick, dataId, pieceX, pieceY }) => {
-    return (
-      <PieceButtonWrapper
-        id={id}
-        key={id}
-        data-id={dataId}
-        data-piece-x={pieceX}
-        data-piece-y={pieceY}
-        style={{
-          "--x": `${x * PIXELS_PER_SQUARE}px`,
-          "--y": `${y * PIXELS_PER_SQUARE}px`,
-        }}
-        onClick={onClick}
-      >
-        <PieceImg src={src} />
-      </PieceButtonWrapper>
-    );
-  }
-);
-
-function AllPieces({ pieces, coords, width, height, handlePieceClick }) {
-  const { startingX, startingY, endingX, endingY } = getStartingAndEndingCoords(
-    {
-      coords,
-      width,
-      height,
-    }
-  );
-  return Array.from(pieces.values()).map((piece) => {
-    if (
-      piece.x < startingX ||
-      piece.x > endingX ||
-      piece.y < startingY ||
-      piece.y > endingY
-    ) {
-      return null;
-    }
-    const { x, y } = getScreenRelativeCoords({
-      x: piece.x,
-      y: piece.y,
-      startingX,
-      startingY,
-    });
-    return (
-      <Piece
-        key={piece.id}
-        dataId={piece.id}
-        src={imageForPiece(piece)}
-        pieceX={piece.x}
-        pieceY={piece.y}
-        x={x}
-        y={y}
-        onClick={() => {
-          handlePieceClick(piece);
-        }}
-      />
-    );
-  });
-}
-
-function Board({ coords, pieces, submitMove, setCoords }) {
+function Board({ coords, pieces, submitMove, setCoords, pieceHandler }) {
   const [selectedPiece, setSelectedPiece] = React.useState(null);
   const [moveableSquares, setMoveableSquares] = React.useState(new Set());
   const innerRef = React.useRef(null);
@@ -182,10 +97,10 @@ function Board({ coords, pieces, submitMove, setCoords }) {
   const handlePieceClick = React.useCallback(
     (piece) => {
       setSelectedPiece(piece);
-      const moveableSquares = getMoveableSquares(piece, pieces);
+      const moveableSquares = pieceHandler.current.getMoveableSquares(piece);
       setMoveableSquares(moveableSquares);
     },
-    [pieces]
+    [pieceHandler]
   );
 
   const clearMoveableSquares = React.useCallback(() => {
@@ -340,12 +255,13 @@ function Board({ coords, pieces, submitMove, setCoords }) {
           pixelsPerSquare={PIXELS_PER_SQUARE}
           moveableSquares={moveableSquares}
         />
-        <AllPieces
-          pieces={pieces}
+        <PieceDisplay
           coords={coords}
           handlePieceClick={handlePieceClick}
           width={WIDTH}
           height={HEIGHT}
+          pixelsPerSquare={PIXELS_PER_SQUARE}
+          pieceHandler={pieceHandler}
         />
         <MoveButtons
           moveableSquares={moveableSquares}

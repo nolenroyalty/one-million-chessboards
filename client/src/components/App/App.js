@@ -1,8 +1,9 @@
 import React from "react";
 import styled from "styled-components";
 import Board from "../Board/Board";
-import Pieces from "../../pieces";
+import PieceHandler from "../../pieceHandler.js";
 import { createMoveRequest } from "../../utils";
+
 const Main = styled.main`
   display: flex;
   flex-direction: column;
@@ -15,8 +16,7 @@ const Main = styled.main`
 function App() {
   const [websocket, setWebsocket] = React.useState(null);
   const [coords, setCoords] = React.useState({ x: 500, y: 500 });
-  const pieceHandler = React.useRef(new Pieces());
-  const [pieces, setPieces] = React.useState(new Map());
+  const pieceHandler = React.useRef(new PieceHandler());
 
   const submitMove = React.useCallback(
     ({ piece, toX, toY }) => {
@@ -29,21 +29,6 @@ function App() {
     },
     [websocket]
   );
-
-  React.useEffect(() => {
-    pieceHandler.current.subscribe({
-      id: "app",
-      callback: (data) => {
-        setPieces(new Map(data.pieces));
-      },
-    });
-
-    return () => {
-      pieceHandler.current.unsubscribe({
-        id: "app",
-      });
-    };
-  }, [setPieces]);
 
   const failedReconnections = React.useRef(0);
   React.useEffect(() => {
@@ -143,9 +128,9 @@ function App() {
       hello world
       <Board
         coords={coords}
-        pieces={pieces}
         submitMove={submitMove}
         setCoords={setCoords}
+        pieceHandler={pieceHandler}
       />
     </Main>
   );

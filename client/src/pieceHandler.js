@@ -1,6 +1,6 @@
-import { pieceKey } from "./utils";
+import { pieceKey, getMoveableSquares } from "./utils";
 
-class Pieces {
+class PieceHandler {
   constructor() {
     this.pieces = new Map();
     this.subscribers = [];
@@ -18,11 +18,17 @@ class Pieces {
     this.subscribers.push({ id, callback });
   }
 
-  broadcast() {
+  getMoveableSquares(piece) {
+    return getMoveableSquares(piece, this.pieces);
+  }
+
+  broadcast({ recentMoves, recentCaptures }) {
     this.subscribers.forEach(({ callback }) =>
       callback({
         pieces: this.pieces,
         moves: this.moves,
+        recentMoves,
+        recentCaptures,
       })
     );
   }
@@ -72,7 +78,6 @@ class Pieces {
     const { pieces, startingSeqnum, endingSeqnum } = this._piecesOfSnapshot({
       snapshot,
     });
-    console.log("PIECE COUNT", pieces.size);
     const moves = this.filterMoves({
       moves: this.moves,
       afterSeqnum: startingSeqnum,
@@ -83,7 +88,11 @@ class Pieces {
     this.pieces = pieces;
     this.moves = moves;
     this.snapshotSeqnum = { from: startingSeqnum, to: endingSeqnum };
-    this.broadcast();
+    this.broadcast({ recentMoves: [], recentCaptures: [] });
+  }
+
+  addMoveTimestamp(move) {
+    move.receivedAt = performance.now();
   }
 
   handleMoves({ moves, captures }) {
@@ -93,12 +102,12 @@ class Pieces {
         move,
       });
       if (!skip) {
+        this.addMoveTimestamp(move);
         this.moves.push(move);
       }
     });
-    console.log("captures", JSON.stringify(captures));
-    this.broadcast();
+    this.broadcast({ recentMoves: moves, recentCaptures: captures });
   }
 }
 
-export default Pieces;
+export default PieceHandler;
