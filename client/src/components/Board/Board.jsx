@@ -1,7 +1,6 @@
 import React from "react";
 import styled from "styled-components";
 import {
-  getMoveableSquares,
   keyToCoords,
   getStartingAndEndingCoords,
   getScreenRelativeCoords,
@@ -28,6 +27,7 @@ const Inner = styled.div`
   height: ${HEIGHT * PIXELS_PER_SQUARE + INNER_PADDING * 2}px;
   position: relative;
   border: ${INNER_PADDING}px solid slategrey;
+  overflow: hidden;
 `;
 
 const MoveButton = styled.button`
