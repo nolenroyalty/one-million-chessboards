@@ -12,6 +12,28 @@ export function getPiece(pieces, x, y) {
   return pieces.get(pieceKey(x, y));
 }
 
+export function getStartingAndEndingCoords({ coords, width, height }) {
+  if (width % 2 === 0 || height % 2 === 0) {
+    throw new Error(
+      `We're lazy so width and height must be odd. width: ${width}, height: ${height}`
+    );
+  }
+  const halfWidth = Math.floor(width / 2);
+  const halfHeight = Math.floor(height / 2);
+  const startingX = coords.x - halfWidth;
+  const startingY = coords.y - halfHeight;
+  const endingX = coords.x + halfWidth;
+  const endingY = coords.y + halfHeight;
+  return { startingX, startingY, endingX, endingY };
+}
+
+export function getScreenRelativeCoords({ x, y, startingX, startingY }) {
+  return {
+    x: x - startingX,
+    y: y - startingY,
+  };
+}
+
 export function createMoveRequest(piece, toX, toY) {
   return {
     type: "move",

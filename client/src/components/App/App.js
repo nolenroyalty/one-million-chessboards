@@ -17,12 +17,15 @@ function App() {
   const [coords, setCoords] = React.useState({ x: 500, y: 500 });
   const pieceHandler = React.useRef(new Pieces());
   const [pieces, setPieces] = React.useState(new Map());
-  const sent = React.useRef(false);
 
   const submitMove = React.useCallback(
     ({ piece, toX, toY }) => {
       const move = createMoveRequest(piece, toX, toY);
-      websocket.send(JSON.stringify(move));
+      if (websocket) {
+        websocket.send(JSON.stringify(move));
+      } else {
+        console.log(`Cannot send move because we are not connected: ${move}`);
+      }
     },
     [websocket]
   );
@@ -42,35 +45,88 @@ function App() {
     };
   }, [setPieces]);
 
+  const failedReconnections = React.useRef(0);
   React.useEffect(() => {
-    const ws = new WebSocket("ws://localhost:8080/ws");
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.pieces) {
-        pieceHandler.current.handleSnapshot({ snapshot: data });
-      } else if (data.moves) {
-        pieceHandler.current.handleMoves({ moves: data.moves });
-      }
-      console.log(data);
-      if (!sent.current) {
-        sent.current = true;
-        const piece = data.pieces[0];
-        const move = createMoveRequest(piece, piece.x + 1, piece.y + 1);
-        ws.send(JSON.stringify(move));
-      }
-    };
+    let reconnectTimeout = null;
+    let connected = false;
+    let pongInterval = null;
 
-    ws.onopen = () => {
-      console.log("Connected to server");
-      setWebsocket(ws);
-    };
+    function connect() {
+      const ws = new WebSocket("ws://localhost:8080/ws");
 
-    ws.onclose = () => {
-      console.log("Disconnected from server");
+      ws.addEventListener("message", (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === "stateSnapshot") {
+          pieceHandler.current.handleSnapshot({ snapshot: data });
+        } else if (data.type === "moveUpdates") {
+          pieceHandler.current.handleMoves({
+            moves: data.moves,
+            captures: data.captures,
+          });
+        }
+      });
+
+      ws.addEventListener("open", () => {
+        console.log("Connected to server");
+        setWebsocket(ws);
+        connected = true;
+        failedReconnections.current = 0;
+
+        pongInterval = setInterval(() => {
+          ws.send(JSON.stringify({ type: "app-ping" }));
+        }, 10000);
+      });
+
+      ws.addEventListener("error", (event) => {
+        console.log("websocket error", event);
+      });
+
+      ws.addEventListener("close", () => {
+        console.log("Disconnected from server");
+        clearInterval(pongInterval);
+        setWebsocket(null);
+        connected = false;
+        failedReconnections.current++;
+        if (failedReconnections.current === 1) {
+          connect();
+          return;
+        }
+        failedReconnections.current = Math.min(5, failedReconnections.current);
+        let pow = 2 ** failedReconnections.current;
+        const maxSleepTime = 25000;
+        let sleepTime = pow * 1000;
+        const jitter = 1 + (Math.random() * 0.2 - 0.1);
+        sleepTime = Math.min(sleepTime * jitter, maxSleepTime);
+        console.log(`Attempting to reconnect in ${sleepTime}ms`);
+        reconnectTimeout = setTimeout(() => {
+          console.log("Attempting to reconnect");
+          connect();
+        }, sleepTime);
+      });
+    }
+    connect();
+
+    document.addEventListener("visibilitychange", () => {
+      console.log("visibilitychange", document.visibilityState);
+      if (document.visibilityState === "visible" && !connected) {
+        console.log("Reconnecting because we are visible");
+        clearTimeout(reconnectTimeout);
+        connect();
+      }
+    });
+
+    return () => {
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+      if (pongInterval) {
+        clearInterval(pongInterval);
+      }
     };
   }, []);
 
   React.useEffect(() => {
+    // CR nroyalty: debounce this...
     if (websocket) {
       websocket.send(
         JSON.stringify({

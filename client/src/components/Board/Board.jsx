@@ -1,7 +1,14 @@
 import React from "react";
 import styled from "styled-components";
-import { imageForPiece, getMoveableSquares, keyToCoords } from "../../utils";
+import {
+  imageForPiece,
+  getMoveableSquares,
+  keyToCoords,
+  getStartingAndEndingCoords,
+  getScreenRelativeCoords,
+} from "../../utils";
 import Panzoom from "@panzoom/panzoom";
+import BoardCanvas from "../BoardCanvas/BoardCanvas";
 
 const BoardContainer = styled.div`
   display: flex;
@@ -14,20 +21,14 @@ const WIDTH = 23;
 const HEIGHT = 23;
 
 const PIXELS_PER_SQUARE = 24;
-const BOARD_BORDER_HALF_WIDTH = 2;
+
 const INNER_PADDING = 4;
-const BOARD_BORDER_COLOR = "black";
 
 const Inner = styled.div`
   width: ${WIDTH * PIXELS_PER_SQUARE + INNER_PADDING * 2}px;
   height: ${HEIGHT * PIXELS_PER_SQUARE + INNER_PADDING * 2}px;
   position: relative;
   border: ${INNER_PADDING}px solid slategrey;
-`;
-
-const Canvas = styled.canvas`
-  width: ${WIDTH * PIXELS_PER_SQUARE}px;
-  height: ${HEIGHT * PIXELS_PER_SQUARE}px;
 `;
 
 const PieceImg = styled.img`
@@ -65,35 +66,6 @@ const MoveButton = styled.button`
   opacity: 0.6;
 `;
 
-function getStartingAndEndingCoords({ coords, width, height }) {
-  if (width % 2 === 0 || height % 2 === 0) {
-    throw new Error(
-      `We're lazy so width and height must be odd. width: ${width}, height: ${height}`
-    );
-  }
-  const halfWidth = Math.floor(width / 2);
-  const halfHeight = Math.floor(height / 2);
-  const startingX = coords.x - halfWidth;
-  const startingY = coords.y - halfHeight;
-  const endingX = coords.x + halfWidth;
-  const endingY = coords.y + halfHeight;
-  return { startingX, startingY, endingX, endingY };
-}
-
-function getSquareColor(x, y) {
-  if (x % 2 === 0) {
-    return y % 2 === 0 ? "#eeeed2" : "#6f8d51";
-  }
-  return y % 2 === 0 ? "#6f8d51" : "#eeeed2";
-}
-
-function screenRelativeCoords({ x, y, startingX, startingY }) {
-  return {
-    x: x - startingX,
-    y: y - startingY,
-  };
-}
-
 function MoveButtons({
   moveableSquares,
   coords,
@@ -109,7 +81,7 @@ function MoveButtons({
   });
   return Array.from(moveableSquares.values()).map((key) => {
     const [x, y] = keyToCoords(key);
-    const { x: screenX, y: screenY } = screenRelativeCoords({
+    const { x: screenX, y: screenY } = getScreenRelativeCoords({
       x,
       y,
       startingX,
@@ -169,7 +141,7 @@ function AllPieces({ pieces, coords, width, height, handlePieceClick }) {
     ) {
       return null;
     }
-    const { x, y } = screenRelativeCoords({
+    const { x, y } = getScreenRelativeCoords({
       x: piece.x,
       y: piece.y,
       startingX,
@@ -193,7 +165,6 @@ function AllPieces({ pieces, coords, width, height, handlePieceClick }) {
 }
 
 function Board({ coords, pieces, submitMove, setCoords }) {
-  const canvasRef = React.useRef(null);
   const [selectedPiece, setSelectedPiece] = React.useState(null);
   const [moveableSquares, setMoveableSquares] = React.useState(new Set());
   const innerRef = React.useRef(null);
@@ -211,10 +182,6 @@ function Board({ coords, pieces, submitMove, setCoords }) {
     (piece) => {
       setSelectedPiece(piece);
       const moveableSquares = getMoveableSquares(piece, pieces);
-      console.log(
-        "MOVEABLE SQUARES",
-        JSON.stringify(Array.from(moveableSquares.values()))
-      );
       setMoveableSquares(moveableSquares);
     },
     [pieces]
@@ -240,54 +207,72 @@ function Board({ coords, pieces, submitMove, setCoords }) {
 
   const lastPanzoom = React.useRef({ lastX: 0, lastY: 0, accX: 0, accY: 0 });
   React.useEffect(() => {
-    console.log("INNER REF", innerRef.current);
     const panzoom = Panzoom(innerRef.current, {
-      setTransform: (e, { scale, x, y }) => {
-        console.log("SET TRANSFORM", e, scale, x, y);
-      },
+      setTransform: (e, { scale, x, y }) => {},
       disablePan: false,
       disableZoom: false,
     });
 
     innerRef.current.addEventListener("panzoomstart", (e) => {
-      console.log("PANZOOM START", e.detail);
+      console.log("panzoomstart");
       lastPanzoom.current = {
         ...lastPanzoom.current,
         lastX: e.detail.x,
         lastY: e.detail.y,
         accX: 0,
         accY: 0,
+        firstXMove: true,
+        firstYMove: true,
+        lastPanTime: null,
       };
     });
 
+    innerRef.current.addEventListener("panzoomend", (e) => {
+      console.log("panzoomend");
+    });
+
     innerRef.current.addEventListener("panzoompan", (e) => {
-      console.log("PANZOOM PAN", e.detail);
       const panzoomDX = e.detail.x - lastPanzoom.current.lastX;
       const panzoomDY = e.detail.y - lastPanzoom.current.lastY;
-      console.log("PANZOOM DX", panzoomDX, "DY", panzoomDY);
       lastPanzoom.current.accX += panzoomDX;
       lastPanzoom.current.accY += panzoomDY;
+      if (lastPanzoom.current.lastPanTime === null) {
+        // nothing
+      } else if (performance.now() - lastPanzoom.current.lastPanTime > 600) {
+        lastPanzoom.current.firstXMove = true;
+        lastPanzoom.current.firstYMove = true;
+        lastPanzoom.current.accX = 0;
+        lastPanzoom.current.accY = 0;
+      }
+      lastPanzoom.current.lastPanTime = performance.now();
 
       let dx = 0;
       let dy = 0;
-      const step = 32;
-      const dStep = 2;
+      let baseStep = 24;
+      const dStep = 1;
+      const xMult = lastPanzoom.current.firstXMove ? 1 : 2;
+      const yMult = lastPanzoom.current.firstYMove ? 1 : 2;
 
-      while (lastPanzoom.current.accX > step) {
-        dx -= dStep;
-        lastPanzoom.current.accX -= step;
+      while (lastPanzoom.current.accX > baseStep * xMult) {
+        dx -= dStep * xMult;
+        lastPanzoom.current.accX -= baseStep * xMult;
+        lastPanzoom.current.firstXMove = false;
+        console.log(`baseStep: ${baseStep}`);
       }
-      while (lastPanzoom.current.accX < -step) {
-        dx += dStep;
-        lastPanzoom.current.accX += step;
+      while (lastPanzoom.current.accX < -baseStep * xMult) {
+        dx += dStep * xMult;
+        lastPanzoom.current.accX += baseStep * xMult;
+        lastPanzoom.current.firstXMove = false;
       }
-      while (lastPanzoom.current.accY > step) {
-        dy -= dStep;
-        lastPanzoom.current.accY -= step;
+      while (lastPanzoom.current.accY > baseStep * yMult) {
+        dy -= dStep * yMult;
+        lastPanzoom.current.accY -= baseStep * yMult;
+        lastPanzoom.current.firstYMove = false;
       }
-      while (lastPanzoom.current.accY < -step) {
-        dy += dStep;
-        lastPanzoom.current.accY += step;
+      while (lastPanzoom.current.accY < -baseStep * yMult) {
+        dy += dStep * yMult;
+        lastPanzoom.current.accY += baseStep * yMult;
+        lastPanzoom.current.firstYMove = false;
       }
       if (dx !== 0 || dy !== 0) {
         // CR nroyalty: make sure not to pan off the edge!!!
@@ -304,81 +289,55 @@ function Board({ coords, pieces, submitMove, setCoords }) {
       };
     });
 
-    innerRef.current.addEventListener("panzoomzoom", (e) => {
-      console.log("ZOOM", e.detail.scale);
-    });
+    innerRef.current.addEventListener("panzoomzoom", (e) => {});
 
-    return () => {
-      panzoom.destroy();
-    };
-  }, [setCoords]);
-
-  // this should be in a requestAnimationFrame loop...
-  React.useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    const { startingX, startingY, endingX, endingY } =
-      getStartingAndEndingCoords({
-        coords,
-        width: WIDTH,
-        height: HEIGHT,
-      });
-    for (let x = startingX; x <= endingX; x++) {
-      for (let y = startingY; y <= endingY; y++) {
-        let color = getSquareColor(x, y);
-        // if (moveableSquares.has(pieceKey(x, y))) {
-        //   console.log(`match: ${x}, ${y}`);
-        //   color = "slateblue";
-        // }
-        const { x: screenX, y: screenY } = screenRelativeCoords({
-          x,
-          y,
-          startingX,
-          startingY,
-        });
-        ctx.fillStyle = color;
-        ctx.fillRect(
-          screenX * PIXELS_PER_SQUARE,
-          screenY * PIXELS_PER_SQUARE,
-          PIXELS_PER_SQUARE,
-          PIXELS_PER_SQUARE
-        );
-        if (x % 8 === 0 && x > 0) {
-          // leftmost square, draw tiny line on the left side
-          ctx.save();
-          ctx.fillStyle = BOARD_BORDER_COLOR;
-          ctx.fillRect(
-            screenX * PIXELS_PER_SQUARE - BOARD_BORDER_HALF_WIDTH,
-            screenY * PIXELS_PER_SQUARE,
-            BOARD_BORDER_HALF_WIDTH * 2,
-            PIXELS_PER_SQUARE
-          );
-          ctx.restore();
-        }
-        if (y % 8 === 0 && y > 0) {
-          // topmost square, draw tiny line on the top side
-          ctx.save();
-          ctx.fillStyle = BOARD_BORDER_COLOR;
-          ctx.fillRect(
-            screenX * PIXELS_PER_SQUARE,
-            screenY * PIXELS_PER_SQUARE - BOARD_BORDER_HALF_WIDTH,
-            PIXELS_PER_SQUARE,
-            BOARD_BORDER_HALF_WIDTH * 2
-          );
-          ctx.restore();
-        }
+    function handleKeyDown(e) {
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        console.log("arrow up");
+        setCoords((coords) => ({
+          x: coords.x,
+          y: coords.y - 2,
+        }));
+      }
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setCoords((coords) => ({
+          x: coords.x,
+          y: coords.y + 2,
+        }));
+      }
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setCoords((coords) => ({
+          x: coords.x - 2,
+          y: coords.y,
+        }));
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        setCoords((coords) => ({
+          x: coords.x + 2,
+          y: coords.y,
+        }));
       }
     }
-  }, [coords, selectedPiece, moveableSquares]);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      panzoom.destroy();
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [setCoords]);
 
   return (
     <BoardContainer>
       <Inner ref={innerRef}>
-        <Canvas
-          width={WIDTH * PIXELS_PER_SQUARE}
-          height={HEIGHT * PIXELS_PER_SQUARE}
-          ref={canvasRef}
-        ></Canvas>
+        <BoardCanvas
+          coords={coords}
+          width={WIDTH}
+          height={HEIGHT}
+          pixelsPerSquare={PIXELS_PER_SQUARE}
+        />
         <AllPieces
           pieces={pieces}
           coords={coords}

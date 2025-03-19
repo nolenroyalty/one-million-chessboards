@@ -72,6 +72,7 @@ class Pieces {
     const { pieces, startingSeqnum, endingSeqnum } = this._piecesOfSnapshot({
       snapshot,
     });
+    console.log("PIECE COUNT", pieces.size);
     const moves = this.filterMoves({
       moves: this.moves,
       afterSeqnum: startingSeqnum,
@@ -82,9 +83,10 @@ class Pieces {
     this.pieces = pieces;
     this.moves = moves;
     this.snapshotSeqnum = { from: startingSeqnum, to: endingSeqnum };
+    this.broadcast();
   }
 
-  handleMoves({ moves }) {
+  handleMoves({ moves, captures }) {
     moves.forEach((move) => {
       const { skip } = this._applyMove({
         pieces: this.pieces,
@@ -94,6 +96,7 @@ class Pieces {
         this.moves.push(move);
       }
     });
+    console.log("captures", JSON.stringify(captures));
     this.broadcast();
   }
 }
