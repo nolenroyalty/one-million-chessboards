@@ -3,6 +3,7 @@ import styled from "styled-components";
 import {
   getStartingAndEndingCoords,
   getScreenRelativeCoords,
+  pieceKey,
 } from "../../utils";
 
 const Canvas = styled.canvas`
@@ -21,7 +22,13 @@ function getSquareColor(x, y) {
   return y % 2 === 0 ? "#6f8d51" : "#eeeed2";
 }
 
-function BoardCanvas({ coords, width, height, pixelsPerSquare }) {
+function BoardCanvas({
+  coords,
+  width,
+  height,
+  pixelsPerSquare,
+  moveableSquares,
+}) {
   const ref = React.useRef(null);
   React.useEffect(() => {
     if (!ref.current) {
@@ -38,10 +45,7 @@ function BoardCanvas({ coords, width, height, pixelsPerSquare }) {
     for (let x = startingX; x <= endingX; x++) {
       for (let y = startingY; y <= endingY; y++) {
         let color = getSquareColor(x, y);
-        // if (moveableSquares.has(pieceKey(x, y))) {
-        //   console.log(`match: ${x}, ${y}`);
-        //   color = "slateblue";
-        // }
+
         const { x: screenX, y: screenY } = getScreenRelativeCoords({
           x,
           y,
@@ -55,6 +59,18 @@ function BoardCanvas({ coords, width, height, pixelsPerSquare }) {
           pixelsPerSquare,
           pixelsPerSquare
         );
+        if (moveableSquares.has(pieceKey(x, y))) {
+          ctx.save();
+          ctx.fillStyle = "slateblue";
+          ctx.globalAlpha = 0.7;
+          ctx.fillRect(
+            screenX * pixelsPerSquare,
+            screenY * pixelsPerSquare,
+            pixelsPerSquare,
+            pixelsPerSquare
+          );
+          ctx.restore();
+        }
         if (x % 8 === 0 && x > 0) {
           // leftmost square, draw tiny line on the left side
           ctx.save();
@@ -81,7 +97,7 @@ function BoardCanvas({ coords, width, height, pixelsPerSquare }) {
         }
       }
     }
-  }, [coords, width, height, pixelsPerSquare]);
+  }, [coords, width, height, pixelsPerSquare, moveableSquares]);
   return (
     <Canvas
       width={width * pixelsPerSquare}

@@ -62,8 +62,9 @@ const MoveButton = styled.button`
   top: 0;
   left: 0;
   transform: translate(var(--x), var(--y));
-  background-color: slateblue;
-  opacity: 0.6;
+  background-color: transparent;
+  /* background-color: slateblue; */
+  /* opacity: 0.6; */
 `;
 
 function MoveButtons({
@@ -337,6 +338,7 @@ function Board({ coords, pieces, submitMove, setCoords }) {
           width={WIDTH}
           height={HEIGHT}
           pixelsPerSquare={PIXELS_PER_SQUARE}
+          moveableSquares={moveableSquares}
         />
         <AllPieces
           pieces={pieces}
