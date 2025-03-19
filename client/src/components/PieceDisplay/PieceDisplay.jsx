@@ -4,6 +4,7 @@ import {
   imageForPieceType,
   getStartingAndEndingCoords,
   getScreenRelativeCoords,
+  easeInOutSquare,
 } from "../../utils";
 
 const ANIMATION_DURATION = 300;
@@ -180,10 +181,6 @@ function PieceDisplay({
     };
   }, [pieceHandler]);
 
-  const easeInOutCubic = (t) => {
-    return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-  };
-
   const getAnimatedCoords = React.useCallback(({ pieceId, now }) => {
     const recentMove = recentMoveByPieceIdRef.current.get(pieceId);
     if (recentMove) {
@@ -192,7 +189,7 @@ function PieceDisplay({
       if (elapsed > ANIMATION_DURATION) {
         return { x: toX, y: toY, finished: true };
       }
-      const progress = easeInOutCubic(elapsed / ANIMATION_DURATION);
+      const progress = easeInOutSquare(elapsed / ANIMATION_DURATION);
       const x = fromX + (toX - fromX) * progress;
       const y = fromY + (toY - fromY) * progress;
       return { x, y, finished: false };

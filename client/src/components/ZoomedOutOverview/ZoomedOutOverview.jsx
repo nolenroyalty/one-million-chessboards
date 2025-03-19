@@ -4,11 +4,14 @@ import {
   getStartingAndEndingCoords,
   getSquareColor,
   getScreenRelativeCoords,
+  easeInOutSquare,
+  colorForPieceType,
 } from "../../utils";
 
 const MAX_VIEWPORT_WIDTH = 81;
 const MAX_VIEWPORT_HEIGHT = 81;
 const MIN_PX_PER_SQUARE = 12;
+const MOVE_ANIMATION_DURATION = 300;
 
 const ZoomedOutOverviewWrapper = styled.div`
   position: absolute;
@@ -23,6 +26,9 @@ const ZoomCanvas = styled.canvas`
   inset: 0;
   width: 100%;
   height: 100%;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
 `;
 
 function ZoomedOutOverview({
@@ -35,12 +41,16 @@ function ZoomedOutOverview({
   const pieceCanvasRef = React.useRef(null);
   const boardCanvasRef = React.useRef(null);
   const piecesRef = React.useRef(new Map(pieceHandler.current.getPieces()));
+  const recentMovesRef = React.useRef(new Map());
 
   React.useEffect(() => {
     pieceHandler.current.subscribe({
       id: "zoomed-out-overview",
       callback: (data) => {
         piecesRef.current = new Map(data.pieces);
+        data.recentMoves.forEach((move) => {
+          recentMovesRef.current.set(move.pieceId, move);
+        });
       },
     });
     return () => {
@@ -103,7 +113,8 @@ function ZoomedOutOverview({
     const ctx = boardCanvasRef.current.getContext("2d");
     ctx.fillStyle = "slategrey"; //  CR nroyalty: fix colors
     ctx.fillRect(0, 0, pxWidth, pxHeight);
-    ctx.fillStyle = "#BFDBFE"; // CR nroyalty: FIX
+    // ctx.fillStyle = "#BFDBFE"; // CR nroyalty: FIX
+    ctx.fillStyle = "#6B7280";
     ctx.fillRect(
       leftPadding,
       topPadding,
@@ -167,7 +178,19 @@ function ZoomedOutOverview({
       const ctx = pieceCanvasRef.current.getContext("2d");
       ctx.clearRect(0, 0, pxWidth, pxHeight);
       piecesRef.current.values().forEach((piece) => {
-        const { x, y } = piece;
+        let { x, y } = piece;
+        const recentMove = recentMovesRef.current.get(piece.id);
+        if (recentMove) {
+          const { fromX, fromY, toX, toY, receivedAt } = recentMove;
+          const elapsed = performance.now() - receivedAt;
+          if (elapsed > MOVE_ANIMATION_DURATION) {
+            recentMovesRef.current.delete(piece.id);
+          } else {
+            const progress = easeInOutSquare(elapsed / MOVE_ANIMATION_DURATION);
+            x = fromX + (toX - fromX) * progress;
+            y = fromY + (toY - fromY) * progress;
+          }
+        }
         if (x < startingX || x >= endingX || y < startingY || y >= endingY) {
           return;
         }
@@ -181,13 +204,15 @@ function ZoomedOutOverview({
         screenY *= squareSize;
         screenX += leftPadding;
         screenY += topPadding;
-        ctx.fillStyle = "green";
-        ctx.fillRect(
-          screenX + (squareSize - pieceSize) / 2,
-          screenY + (squareSize - pieceSize) / 2,
-          pieceSize,
-          pieceSize
-        );
+        const upperLeftX = screenX + (squareSize - pieceSize) / 2;
+        const upperLeftY = screenY + (squareSize - pieceSize) / 2;
+
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = colorForPieceType({
+          pieceType: piece.type,
+          isWhite: piece.isWhite,
+        });
+        ctx.fillRect(upperLeftX, upperLeftY, pieceSize, pieceSize);
       });
     };
     rafId = requestAnimationFrame(loop);
@@ -209,15 +234,9 @@ function ZoomedOutOverview({
     pxWidth,
     pxHeight,
     pieceSize,
+    halfBoardLineWidth,
   ]);
 
-  console.log(`pxWidth: ${pxWidth}, pxHeight: ${pxHeight}`);
-  console.log(
-    `leftPadding: ${leftPadding}, topPadding: ${topPadding}, rightPadding: ${rightPadding}, bottomPadding: ${bottomPadding}`
-  );
-  console.log(`pieceSize: ${pieceSize}`);
-  console.log(`numSquares: ${numSquares}`);
-  console.log(`squareSize: ${squareSize}`);
   return (
     <ZoomedOutOverviewWrapper style={{ "--opacity": hidden ? 0 : 1 }}>
       <ZoomCanvas width={pxWidth} height={pxHeight} ref={boardCanvasRef} />

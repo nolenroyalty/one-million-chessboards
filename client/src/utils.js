@@ -12,6 +12,10 @@ export function getPiece(pieces, x, y) {
   return pieces.get(pieceKey(x, y));
 }
 
+export function easeInOutSquare(t) {
+  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+}
+
 export function getStartingAndEndingCoords({ coords, width, height }) {
   // if (width % 2 === 0 || height % 2 === 0) {
   //   throw new Error(
@@ -66,6 +70,31 @@ export const TYPE_TO_NAME = {
 export function imageForPieceType({ pieceType, isWhite }) {
   const name = TYPE_TO_NAME[pieceType];
   return `/pieces/${isWhite ? "white" : "black"}/${name}.png`;
+}
+
+const defaultWhiteColor = "#3B82F6";
+const WHITE_PIECE_COLORS = {
+  pawn: "#94A3B8",
+  bishop: defaultWhiteColor,
+  rook: defaultWhiteColor,
+  queen: "#F0ABFC",
+  king: "#FDE047",
+  knight: defaultWhiteColor,
+};
+
+const defaultBlackColor = "#1E3A8A";
+const BLACK_PIECE_COLORS = {
+  pawn: "#334155",
+  bishop: defaultBlackColor,
+  rook: defaultBlackColor,
+  queen: "#C026D3",
+  king: "#CA8A04",
+  knight: defaultBlackColor,
+};
+
+export function colorForPieceType({ pieceType, isWhite }) {
+  const name = TYPE_TO_NAME[pieceType];
+  return isWhite ? WHITE_PIECE_COLORS[name] : BLACK_PIECE_COLORS[name];
 }
 
 function spawnsTwoBoards({ fromX, fromY, toX, toY }) {
