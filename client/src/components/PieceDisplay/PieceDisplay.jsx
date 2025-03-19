@@ -1,7 +1,7 @@
 import React from "react";
-import styled from "styled-components";
+import styled, { keyframes } from "styled-components";
 import {
-  imageForPiece,
+  imageForPieceType,
   getStartingAndEndingCoords,
   getScreenRelativeCoords,
 } from "../../utils";
@@ -30,6 +30,48 @@ const PieceButtonWrapper = styled.button`
   transition: opacity 0.3s ease-in-out;
 `;
 
+const AnimFadeout = keyframes`
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+`;
+
+const CapturedPieceWrapper = styled.button`
+  all: unset;
+  cursor: none;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--size);
+  height: var(--size);
+  animation: ${AnimFadeout} 0.25s ease-in-out both 0.03s;
+  transform: translate(var(--x), var(--y));
+`;
+
+function CapturedPiece({ id, x, y, src, pieceX, pieceY, size }) {
+  return (
+    <CapturedPieceWrapper
+      id={id}
+      data-id={id}
+      data-piece-x={pieceX}
+      data-piece-y={pieceY}
+      style={{
+        "--x": `${x * size}px`,
+        "--y": `${y * size}px`,
+        "--size": `${size}px`,
+      }}
+    >
+      <PieceImg src={src} />
+    </CapturedPieceWrapper>
+  );
+}
 const Piece = React.forwardRef(
   ({ id, x, y, src, onClick, dataId, pieceX, pieceY, size, hidden }, ref) => {
     return (
@@ -76,15 +118,25 @@ function PieceDisplay({
       height,
     }
   );
-  const [pieces, setPieces] = React.useState(
-    new Map(pieceHandler.current.getPieces())
-  );
+
+  const piecesById = React.useCallback((pieces) => {
+    const piecesById = new Map();
+    for (const piece of pieces) {
+      piecesById.set(piece.id, piece);
+    }
+    return piecesById;
+  }, []);
+
+  const [piecesAndCaptures, setPiecesAndCaptures] = React.useState({
+    pieces: piecesById(pieceHandler.current.getPieces()),
+    captures: pieceHandler.current.getCaptures(),
+    recentPieces: new Map(),
+  });
   const piecesRefsMap = React.useRef(new Map());
   const recentMoveByPieceIdRef = React.useRef(
     pieceHandler.current.getMoveMapByPieceId()
   );
   const lastAnimatedCoords = React.useRef(new Map());
-  const [, forceRender] = React.useReducer((x) => x + 1, 0);
 
   const isNotVisible = React.useCallback(
     ({ x, y }) => {
@@ -111,13 +163,21 @@ function PieceDisplay({
     pieceHandler.current.subscribe({
       id: "piece-display",
       callback: (data) => {
-        setPieces(new Map(data.pieces));
-        // we can do something with data.recentMoves to access moves that came through
-        // from this update
-        // each move has fromX, fromY, toX, toY, pieceId, isWhite, pieceType
         data.recentMoves.forEach((move) => {
           recentMoveByPieceIdRef.current.set(move.pieceId, move);
         });
+        const now = performance.now();
+        const filterTime = 1000;
+        setPiecesAndCaptures((prev) => {
+          const newPieces = new Map(data.pieces);
+          const newCaptures = [...prev.captures, ...data.recentCaptures].filter(
+            (capture) => {
+              return capture.receivedAt > now - filterTime;
+            }
+          );
+          return { pieces: newPieces, captures: newCaptures };
+        });
+        console.log("called set pieces");
       },
     });
     return () => {
@@ -161,19 +221,6 @@ function PieceDisplay({
       frameId = requestAnimationFrame(loop);
       const now = performance.now();
       const toKeep = new Map();
-      let doForceRender = false;
-      const setForceRenderIfVisibityChanged = (pieceId, x, y) => {
-        const lastCoords = lastAnimatedCoords.current.get(pieceId);
-        if (!lastCoords) {
-          doForceRender = true;
-          return;
-        }
-        const lastVisible = isNotVisible(lastCoords);
-        const newVisible = isNotVisible({ x, y });
-        if (lastVisible !== newVisible) {
-          doForceRender = true;
-        }
-      };
       const maybeSetRefTransform = (ref, x, y) => {
         if (ref) {
           ref.style.transform = `translate(${x * pixelsPerSquare}px, ${y * pixelsPerSquare}px)`;
@@ -187,8 +234,6 @@ function PieceDisplay({
         });
         if (!maybeAnimated) {
           maybeSetRefTransform(ref, move.toX, move.toY);
-          setForceRenderIfVisibityChanged(move.pieceId, move.toX, move.toY);
-          doForceRender = true;
           lastAnimatedCoords.current.delete(move.pieceId);
           continue;
         }
@@ -199,7 +244,6 @@ function PieceDisplay({
           startingX,
           startingY,
         });
-        setForceRenderIfVisibityChanged(move.pieceId, x, y);
         if (!finished) {
           maybeSetRefTransform(ref, x, y);
           lastAnimatedCoords.current.set(move.pieceId, { x, y });
@@ -210,10 +254,6 @@ function PieceDisplay({
         }
       }
       recentMoveByPieceIdRef.current = toKeep;
-      if (doForceRender) {
-        console.log("forceRender");
-        forceRender();
-      }
     };
     frameId = requestAnimationFrame(loop);
     return () => {
@@ -221,47 +261,80 @@ function PieceDisplay({
     };
   }, [pixelsPerSquare, startingX, startingY, isNotVisible, getAnimatedCoords]);
 
-  return Array.from(pieces.values()).map((piece) => {
-    const now = performance.now();
-    let maybeAnimatedX = piece.x;
-    let maybeAnimatedY = piece.y;
-    const maybeAnimated = getAnimatedCoords({
-      pieceId: piece.id,
-      now,
-    });
-    if (maybeAnimated) {
-      maybeAnimatedX = maybeAnimated.x;
-      maybeAnimatedY = maybeAnimated.y;
-    }
-    if (isInvisibleNowAndViaMove({ piece })) {
-      return null;
-    }
-    const { x, y } = getScreenRelativeCoords({
-      x: maybeAnimatedX,
-      y: maybeAnimatedY,
-      startingX,
-      startingY,
-    });
-    return (
-      <Piece
-        key={piece.id}
-        ref={(el) => savePieceRef(piece.id, el)}
-        dataId={piece.id}
-        src={imageForPiece(piece)}
-        pieceX={piece.x}
-        pieceY={piece.y}
-        x={x}
-        y={y}
-        size={pixelsPerSquare}
-        hidden={hidden}
-        onClick={() => {
-          if (!hidden) {
-            handlePieceClick(piece);
-          }
-        }}
-      />
-    );
-  });
+  return (
+    <>
+      {piecesAndCaptures.captures.map((capture) => {
+        if (isNotVisible({ x: capture.x, y: capture.y })) {
+          return null;
+        }
+        const { x, y } = getScreenRelativeCoords({
+          x: capture.x,
+          y: capture.y,
+          startingX,
+          startingY,
+        });
+        return (
+          <CapturedPiece
+            key={capture.capturedPieceId}
+            id={capture.id}
+            src={imageForPieceType({
+              pieceType: capture.capturedType,
+              isWhite: capture.wasWhite,
+            })}
+            pieceX={capture.x}
+            pieceY={capture.y}
+            x={x}
+            y={y}
+            size={pixelsPerSquare}
+          />
+        );
+      })}
+      {Array.from(piecesAndCaptures.pieces.values()).map((piece) => {
+        const now = performance.now();
+        let maybeAnimatedX = piece.x;
+        let maybeAnimatedY = piece.y;
+        const maybeAnimated = getAnimatedCoords({
+          pieceId: piece.id,
+          now,
+        });
+        if (maybeAnimated) {
+          maybeAnimatedX = maybeAnimated.x;
+          maybeAnimatedY = maybeAnimated.y;
+        }
+        if (isInvisibleNowAndViaMove({ piece })) {
+          return null;
+        }
+        const { x, y } = getScreenRelativeCoords({
+          x: maybeAnimatedX,
+          y: maybeAnimatedY,
+          startingX,
+          startingY,
+        });
+        return (
+          <Piece
+            key={piece.id}
+            ref={(el) => savePieceRef(piece.id, el)}
+            dataId={piece.id}
+            src={imageForPieceType({
+              pieceType: piece.type,
+              isWhite: piece.isWhite,
+            })}
+            pieceX={piece.x}
+            pieceY={piece.y}
+            x={x}
+            y={y}
+            size={pixelsPerSquare}
+            hidden={hidden}
+            onClick={() => {
+              if (!hidden) {
+                handlePieceClick(piece);
+              }
+            }}
+          />
+        );
+      })}
+    </>
+  );
 }
 
 export default PieceDisplay;

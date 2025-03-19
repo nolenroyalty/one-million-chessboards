@@ -54,9 +54,8 @@ export const TYPE_TO_NAME = {
   5: "king",
 };
 
-export function imageForPiece(piece) {
-  const isWhite = piece.isWhite;
-  const name = TYPE_TO_NAME[piece.type];
+export function imageForPieceType({ pieceType, isWhite }) {
+  const name = TYPE_TO_NAME[pieceType];
   return `/pieces/${isWhite ? "white" : "black"}/${name}.png`;
 }
 

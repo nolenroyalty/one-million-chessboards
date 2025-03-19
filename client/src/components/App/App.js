@@ -44,6 +44,7 @@ function App() {
         if (data.type === "stateSnapshot") {
           pieceHandler.current.handleSnapshot({ snapshot: data });
         } else if (data.type === "moveUpdates") {
+          console.log("moveUpdates", JSON.stringify(data, null, 2));
           pieceHandler.current.handleMoves({
             moves: data.moves,
             captures: data.captures,

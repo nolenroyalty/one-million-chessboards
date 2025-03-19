@@ -5,12 +5,13 @@ class PieceHandler {
     this.pieces = new Map();
     this.subscribers = [];
     this.moves = [];
+    this.captures = [];
     this.snapshotSeqnum = { from: -2, to: -1 };
   }
 
-  filterMoves({ moves, afterSeqnum }) {
-    return moves.filter((move) => {
-      return move.seqNum > afterSeqnum;
+  filterBySeqnum({ list, afterSeqnum }) {
+    return list.filter((item) => {
+      return item.seqNum > afterSeqnum;
     });
   }
 
@@ -32,6 +33,10 @@ class PieceHandler {
 
   getPieces() {
     return this.pieces;
+  }
+
+  getCaptures() {
+    return this.captures;
   }
 
   getMoveableSquares(piece) {
@@ -94,8 +99,12 @@ class PieceHandler {
     const { pieces, startingSeqnum, endingSeqnum } = this._piecesOfSnapshot({
       snapshot,
     });
-    const moves = this.filterMoves({
-      moves: this.moves,
+    const moves = this.filterBySeqnum({
+      list: this.moves,
+      afterSeqnum: startingSeqnum,
+    });
+    this.captures = this.filterBySeqnum({
+      list: this.captures,
       afterSeqnum: startingSeqnum,
     });
     moves.forEach((move) => {
@@ -107,7 +116,7 @@ class PieceHandler {
     this.broadcast({ recentMoves: [], recentCaptures: [] });
   }
 
-  addMoveTimestamp(move) {
+  addReceivedAt(move) {
     move.receivedAt = performance.now();
   }
 
@@ -116,13 +125,28 @@ class PieceHandler {
       const { skip } = this._applyMove({
         pieces: this.pieces,
         move,
+        afterSeqnum: this.snapshotSeqnum.from,
       });
       if (!skip) {
-        this.addMoveTimestamp(move);
+        console.log("adding move", move);
+        this.addReceivedAt(move);
         this.moves.push(move);
+      } else {
+        console.log("skipping move", move);
       }
     });
-    this.broadcast({ recentMoves: moves, recentCaptures: captures });
+    const recentCaptures = [];
+    captures.forEach((capture) => {
+      if (capture.seqNum <= this.snapshotSeqnum.from) {
+        console.log("skipping capture", capture);
+      } else {
+        console.log("adding capture", capture);
+        this.addReceivedAt(capture);
+        recentCaptures.push(capture);
+        this.captures.push(capture);
+      }
+    });
+    this.broadcast({ recentMoves: moves, recentCaptures });
   }
 }
 

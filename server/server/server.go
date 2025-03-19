@@ -180,6 +180,8 @@ func (s *Server) Run() {
 }
 
 // processMoves handles move validation and application
+// PERFORMANCE: there are a few allocations here; if we're running into
+// issues we could avoid allocations
 func (s *Server) processMoves() {
 	for moveReq := range s.moveRequests {
 		log.Printf("Processing move request")
