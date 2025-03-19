@@ -4,6 +4,7 @@ import {
   getStartingAndEndingCoords,
   getScreenRelativeCoords,
   pieceKey,
+  getSquareColor,
 } from "../../utils";
 
 const Canvas = styled.canvas`
@@ -17,13 +18,6 @@ const Canvas = styled.canvas`
 const BOARD_BORDER_COLOR = "black";
 const BOARD_BORDER_HALF_WIDTH = 2;
 
-function getSquareColor(x, y) {
-  if (x % 2 === 0) {
-    return y % 2 === 0 ? "#eeeed2" : "#6f8d51";
-  }
-  return y % 2 === 0 ? "#6f8d51" : "#eeeed2";
-}
-
 function BoardCanvas({
   coords,
   width,
@@ -31,6 +25,7 @@ function BoardCanvas({
   pixelsPerSquare,
   moveableSquares,
   hidden,
+  selectedPiece,
 }) {
   const ref = React.useRef(null);
   React.useEffect(() => {
@@ -45,8 +40,8 @@ function BoardCanvas({
         width,
         height,
       });
-    for (let x = startingX; x <= endingX; x++) {
-      for (let y = startingY; y <= endingY; y++) {
+    for (let x = startingX; x < endingX; x++) {
+      for (let y = startingY; y < endingY; y++) {
         let color = getSquareColor(x, y);
 
         const { x: screenX, y: screenY } = getScreenRelativeCoords({
@@ -65,6 +60,21 @@ function BoardCanvas({
         if (moveableSquares.has(pieceKey(x, y))) {
           ctx.save();
           ctx.fillStyle = "slateblue";
+          ctx.globalAlpha = 0.7;
+          ctx.fillRect(
+            screenX * pixelsPerSquare,
+            screenY * pixelsPerSquare,
+            pixelsPerSquare,
+            pixelsPerSquare
+          );
+          ctx.restore();
+        } else if (
+          selectedPiece &&
+          selectedPiece.x === x &&
+          selectedPiece.y === y
+        ) {
+          ctx.save();
+          ctx.fillStyle = "gold";
           ctx.globalAlpha = 0.7;
           ctx.fillRect(
             screenX * pixelsPerSquare,
@@ -100,7 +110,7 @@ function BoardCanvas({
         }
       }
     }
-  }, [coords, width, height, pixelsPerSquare, moveableSquares]);
+  }, [coords, width, height, pixelsPerSquare, moveableSquares, selectedPiece]);
   return (
     <Canvas
       width={width * pixelsPerSquare}

@@ -27,7 +27,7 @@ const PieceButtonWrapper = styled.button`
   align-items: center;
   justify-content: center;
   opacity: var(--opacity);
-  transition: opacity 0.3s ease-in-out;
+  transition: opacity 0.3s ease;
 `;
 
 const AnimFadeout = keyframes`

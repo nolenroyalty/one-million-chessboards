@@ -4,6 +4,7 @@ import Panzoom from "@panzoom/panzoom";
 import BoardCanvas from "../BoardCanvas/BoardCanvas";
 import PieceDisplay from "../PieceDisplay/PieceDisplay";
 import PieceMoveButtons from "../PieceMoveButtons/PieceMoveButtons";
+import ZoomedOutOverview from "../ZoomedOutOverview/ZoomedOutOverview";
 const BoardContainer = styled.div`
   display: flex;
   flex-direction: column;
@@ -68,20 +69,31 @@ function PiecesAndMaybeMoves({
   );
 }
 
-const LargeBoardWrapper = styled.div`
-  position: absolute;
-  inset: 0;
-  background-color: #2bb0557e;
-  opacity: var(--opacity);
-  transition: opacity 0.3s ease-in-out;
-`;
+function useElementSize(ref) {
+  const [size, setSize] = React.useState({ width: 0, height: 0 });
 
-function TestLargeBoard({ hidden }) {
-  return (
-    <LargeBoardWrapper
-      style={{ "--opacity": hidden ? 0 : 1 }}
-    ></LargeBoardWrapper>
-  );
+  React.useEffect(() => {
+    if (!ref.current) {
+      return;
+    }
+    const elt = ref.current;
+    setSize({
+      width: elt.clientWidth,
+      height: elt.clientHeight,
+    });
+    const handleResize = () => {
+      setSize({
+        width: elt.clientWidth,
+        height: elt.clientHeight,
+      });
+    };
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [ref]);
+
+  return size;
 }
 
 function Board({ coords, submitMove, setCoords, pieceHandler }) {
@@ -89,15 +101,18 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
   const [moveableSquares, setMoveableSquares] = React.useState(new Set());
   const panzoomBoxRef = React.useRef(null);
   const boardContainerRef = React.useRef(null);
-
+  const innerRef = React.useRef(null);
   const [showLargeBoard, setShowLargeBoard] = React.useState(false);
   const [smallHidden, setSmallHidden] = React.useState(false);
   const [largeHidden, setLargeHidden] = React.useState(true);
   const [smallMounted, setSmallMounted] = React.useState(true);
   const [largeMounted, setLargeMounted] = React.useState(false);
 
-  const toggleLargeBoard = React.useCallback(() => {
-    setShowLargeBoard((showLargeBoard) => !showLargeBoard);
+  const innerSize = useElementSize(innerRef);
+
+  const clearMoveableSquares = React.useCallback(() => {
+    setSelectedPiece(null);
+    setMoveableSquares(new Set());
   }, []);
 
   React.useEffect(() => {
@@ -117,6 +132,7 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
       if (!smallMounted) {
         setSmallMounted(true);
       }
+      clearMoveableSquares();
       setSmallHidden(false);
       setLargeHidden(true);
 
@@ -126,7 +142,7 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
 
       return () => clearTimeout(timer);
     }
-  }, [showLargeBoard, largeMounted, smallMounted]);
+  }, [showLargeBoard, largeMounted, smallMounted, clearMoveableSquares]);
 
   const moveAndClear = React.useCallback(
     ({ piece, toX, toY }) => {
@@ -145,11 +161,6 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
     },
     [pieceHandler]
   );
-
-  const clearMoveableSquares = React.useCallback(() => {
-    setSelectedPiece(null);
-    setMoveableSquares(new Set());
-  }, []);
 
   React.useEffect(() => {
     // clear piece when escape is pressed
@@ -270,6 +281,7 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
     };
     elt.addEventListener("panzoompan", handlePanzoomPan);
 
+    // CR nroyalty: handle zooming on phones
     const handlePanzoomZoom = (e) => {
       console.log("panzoomzoom", e);
     };
@@ -316,11 +328,11 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
       elt.removeEventListener("panzoompan", handlePanzoomPan);
       elt.removeEventListener("panzoomzoom", handlePanzoomZoom);
     };
-  }, [setCoords, clearMoveableSquares, toggleLargeBoard]);
+  }, [setCoords, clearMoveableSquares]);
 
   return (
     <BoardContainer ref={boardContainerRef}>
-      <Inner>
+      <Inner ref={innerRef}>
         {smallMounted && (
           <BoardCanvas
             coords={coords}
@@ -328,10 +340,19 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
             height={HEIGHT}
             pixelsPerSquare={PIXELS_PER_SQUARE}
             moveableSquares={moveableSquares}
+            selectedPiece={selectedPiece}
             hidden={smallHidden}
           />
         )}
-        {largeMounted && <TestLargeBoard hidden={largeHidden} />}
+        {largeMounted && (
+          <ZoomedOutOverview
+            hidden={largeHidden}
+            pxWidth={innerSize.width}
+            pxHeight={innerSize.height}
+            coords={coords}
+            pieceHandler={pieceHandler}
+          />
+        )}
         <PanzoomBox ref={panzoomBoxRef} />
         {smallMounted && (
           <PiecesAndMaybeMoves

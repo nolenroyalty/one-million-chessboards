@@ -13,18 +13,27 @@ export function getPiece(pieces, x, y) {
 }
 
 export function getStartingAndEndingCoords({ coords, width, height }) {
-  if (width % 2 === 0 || height % 2 === 0) {
-    throw new Error(
-      `We're lazy so width and height must be odd. width: ${width}, height: ${height}`
-    );
-  }
-  const halfWidth = Math.floor(width / 2);
-  const halfHeight = Math.floor(height / 2);
-  const startingX = coords.x - halfWidth;
-  const startingY = coords.y - halfHeight;
-  const endingX = coords.x + halfWidth;
-  const endingY = coords.y + halfHeight;
+  // if (width % 2 === 0 || height % 2 === 0) {
+  //   throw new Error(
+  //     `We're lazy so width and height must be odd. width: ${width}, height: ${height}`
+  //   );
+  // }
+  const halfWidthSmall = Math.floor(width / 2);
+  const halfHeightSmall = Math.floor(height / 2);
+  const halfWidthLarge = Math.ceil(width / 2);
+  const halfHeightLarge = Math.ceil(height / 2);
+  const startingX = coords.x - halfWidthSmall;
+  const startingY = coords.y - halfHeightSmall;
+  const endingX = coords.x + halfWidthLarge;
+  const endingY = coords.y + halfHeightLarge;
   return { startingX, startingY, endingX, endingY };
+}
+
+export function getSquareColor(x, y) {
+  if (x % 2 === 0) {
+    return y % 2 === 0 ? "#eeeed2" : "#6f8d51";
+  }
+  return y % 2 === 0 ? "#6f8d51" : "#eeeed2";
 }
 
 export function getScreenRelativeCoords({ x, y, startingX, startingY }) {
