@@ -117,7 +117,7 @@ function PieceDisplay({
   }, [pieceHandler]);
 
   const easeInOutCubic = (t) => {
-    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
   };
 
   const getAnimatedCoords = ({ pieceId, now }) => {
