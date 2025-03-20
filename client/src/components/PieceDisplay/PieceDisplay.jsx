@@ -13,6 +13,9 @@ const ANIMATION_DURATION = 300;
 const PieceImg = styled.img`
   width: var(--size);
   height: var(--size);
+  opacity: var(--opacity);
+  transition: opacity 0.3s ease;
+  will-change: opacity;
 `;
 
 const PieceButtonWrapper = styled.button`
@@ -28,7 +31,8 @@ const PieceButtonWrapper = styled.button`
   align-items: center;
   justify-content: center;
   opacity: var(--opacity);
-  transition: opacity var(--transition-time) ease;
+  transition: opacity 0.3s ease;
+  will-change: opacity, transform;
 `;
 
 const AnimFadeout = keyframes`
@@ -74,7 +78,10 @@ function CapturedPiece({ id, x, y, src, pieceX, pieceY, size }) {
   );
 }
 const Piece = React.forwardRef(
-  ({ id, x, y, src, onClick, dataId, pieceX, pieceY, size, hidden }, ref) => {
+  (
+    { id, x, y, src, onClick, dataId, pieceX, pieceY, size, hidden, opacity },
+    ref
+  ) => {
     return (
       <PieceButtonWrapper
         id={id}
@@ -88,10 +95,9 @@ const Piece = React.forwardRef(
         style={{
           "--size": `${size}px`,
           transform: `translate(${x * size}px, ${y * size}px)`,
-          "--opacity": hidden ? 0 : 1,
+          "--opacity": opacity,
           "--pointer-events": hidden ? "none" : "auto",
           "--cursor": hidden ? "none" : "pointer",
-          "--transition-time": hidden ? "0.1s" : "0.25s",
         }}
         onClick={onClick}
         ref={ref}
@@ -111,6 +117,7 @@ function PieceDisplay({
   handlePieceClick,
   pixelsPerSquare,
   hidden,
+  opacity,
 }) {
   console.log("RENDER PIECE DISPLAY");
   const { startingX, startingY, endingX, endingY } = getStartingAndEndingCoords(
@@ -317,6 +324,7 @@ function PieceDisplay({
             y={y}
             size={pixelsPerSquare}
             hidden={hidden}
+            opacity={opacity}
             onClick={() => {
               if (!hidden) {
                 handlePieceClick(piece);

@@ -17,7 +17,8 @@ const ZoomedOutOverviewWrapper = styled.div`
   position: absolute;
   inset: 0;
   background-color: #2bb0557e;
-  transition: opacity var(--transition-time) ease;
+  // longer than the small board, looks a little nicer
+  transition: opacity 0.5s ease;
   opacity: var(--opacity);
 `;
 
@@ -37,6 +38,7 @@ function ZoomedOutOverview({
   pxHeight,
   coords,
   pieceHandler,
+  opacity,
 }) {
   const pieceCanvasRef = React.useRef(null);
   const boardCanvasRef = React.useRef(null);
@@ -196,6 +198,9 @@ function ZoomedOutOverview({
     getBoardColor,
   ]);
 
+  // CR nroyalty: rework this to only re-write when pieces have changed,
+  // and then only loop over the pieces that are currently moving.
+  // we should use two canvases here...
   React.useEffect(() => {
     let rafId;
     const loop = () => {
@@ -205,7 +210,7 @@ function ZoomedOutOverview({
       }
       const ctx = pieceCanvasRef.current.getContext("2d");
       ctx.clearRect(0, 0, pxWidth, pxHeight);
-      piecesRef.current.values().forEach((piece) => {
+      for (const piece of piecesRef.current.values()) {
         let { x, y } = piece;
         const recentMove = recentMovesRef.current.get(piece.id);
         if (recentMove) {
@@ -220,7 +225,7 @@ function ZoomedOutOverview({
           }
         }
         if (x < startingX || x >= endingX || y < startingY || y >= endingY) {
-          return;
+          continue;
         }
         let { x: screenX, y: screenY } = getScreenRelativeCoords({
           x,
@@ -241,7 +246,7 @@ function ZoomedOutOverview({
           isWhite: piece.isWhite,
         });
         ctx.fillRect(upperLeftX, upperLeftY, pieceSize, pieceSize);
-      });
+      }
     };
     rafId = requestAnimationFrame(loop);
     return () => {
@@ -268,8 +273,7 @@ function ZoomedOutOverview({
   return (
     <ZoomedOutOverviewWrapper
       style={{
-        "--opacity": hidden ? 0 : 1,
-        "--transition-time": hidden ? "0.1s" : "0.25s",
+        "--opacity": opacity,
       }}
     >
       <ZoomCanvas width={pxWidth} height={pxHeight} ref={boardCanvasRef} />

@@ -12,7 +12,7 @@ const Canvas = styled.canvas`
   top: 0;
   left: 0;
   opacity: var(--opacity);
-  transition: opacity 0.3s ease-in-out;
+  transition: opacity 0.3s ease;
 `;
 
 const BOARD_BORDER_COLOR = "black";
@@ -26,6 +26,7 @@ function BoardCanvas({
   moveableSquares,
   hidden,
   selectedPiece,
+  opacity,
 }) {
   const ref = React.useRef(null);
   React.useEffect(() => {
@@ -116,7 +117,7 @@ function BoardCanvas({
       width={width * pixelsPerSquare}
       height={height * pixelsPerSquare}
       ref={ref}
-      style={{ "--opacity": hidden ? 0 : 1 }}
+      style={{ "--opacity": opacity }}
     />
   );
 }

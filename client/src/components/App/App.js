@@ -37,7 +37,12 @@ function App() {
     let pongInterval = null;
 
     function connect() {
-      const ws = new WebSocket("ws://localhost:8080/ws");
+      const protocol =
+        window.location.protocol === "https:" ? "wss://" : "ws://";
+      const hostname = window.location.host;
+      const wsPath = "/ws";
+      const wsUrl = `${protocol}${hostname}${wsPath}`;
+      const ws = new WebSocket(wsUrl);
 
       ws.addEventListener("message", (event) => {
         const data = JSON.parse(event.data);
@@ -133,6 +138,9 @@ function App() {
         setCoords={setCoords}
         pieceHandler={pieceHandler}
       />
+      <p>
+        {coords.x} {coords.y}
+      </p>
     </Main>
   );
 }
