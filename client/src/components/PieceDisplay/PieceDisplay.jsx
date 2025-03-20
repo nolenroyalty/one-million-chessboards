@@ -160,6 +160,7 @@ function PieceDisplay({
   hidden,
   opacity,
 }) {
+  console.log("SELECTED PIECE", selectedPiece);
   const { startingX, startingY, endingX, endingY } = React.useMemo(() => {
     return getStartingAndEndingCoords({
       coords,
@@ -168,16 +169,12 @@ function PieceDisplay({
     });
   }, [coords, numSquares]);
 
-  //   const [piecesAndCaptures, setPiecesAndCaptures] = React.useState({
-  //     pieces: new Map(pieceHandler.current.getPieces()),
-  //     captures: new Set(pieceHandler.current.getCaptures()),
   const piecesRefsMap = React.useRef(new Map());
   const recentMoveByPieceIdRef = React.useRef(
     pieceHandler.current.getMoveMapByPieceId()
   );
-  const lastAnimatedCoords = React.useRef(new Map());
   const [forceUpdate, setForceUpdate] = React.useState(0);
-  //   });
+
   const isNotVisible = React.useCallback(
     ({ x, y }) => {
       return x < startingX || x >= endingX || y < startingY || y >= endingY;
@@ -217,10 +214,13 @@ function PieceDisplay({
     },
     [isInvisibleNowAndViaMove]
   );
-
-  const [visiblePiecesAndIds, setVisiblePiecesAndIds] = React.useState(
+  const visiblePiecesAndIdsRef = React.useRef(
     getVisiblePiecesAndIds(pieceHandler.current.getPieces())
   );
+
+  //   const [visiblePiecesAndIds, setVisiblePiecesAndIds] = React.useState(
+  //     getVisiblePiecesAndIds(pieceHandler.current.getPieces())
+  //   );
 
   React.useEffect(() => {
     pieceHandler.current.subscribe({
@@ -229,7 +229,16 @@ function PieceDisplay({
         data.recentMoves.forEach((move) => {
           recentMoveByPieceIdRef.current.set(move.pieceId, move);
         });
-        setVisiblePiecesAndIds(getVisiblePiecesAndIds(data.pieces));
+        const nowVisiblePiecesAndIds = getVisiblePiecesAndIds(data.pieces);
+        const newIds = nowVisiblePiecesAndIds.ids;
+        const oldIds = visiblePiecesAndIdsRef.current.ids;
+        if (
+          newIds.size !== oldIds.size ||
+          ![...newIds].every((id) => oldIds.has(id))
+        ) {
+          setForceUpdate((prev) => prev + 1);
+        }
+        visiblePiecesAndIdsRef.current = nowVisiblePiecesAndIds;
       },
     });
     return () => {
@@ -291,6 +300,7 @@ function PieceDisplay({
           ref.style.transform = `translate(${x * pixelsPerSquare}px, ${y * pixelsPerSquare}px)`;
         }
       };
+
       for (const move of recentMoveByPieceIdRef.current.values()) {
         const ref = piecesRefsMap.current.get(move.pieceId);
         const maybeAnimated = getAnimatedCoords({
@@ -299,7 +309,6 @@ function PieceDisplay({
         });
         if (!maybeAnimated) {
           maybeSetRefTransform(ref, move.toX, move.toY);
-          lastAnimatedCoords.current.delete(move.pieceId);
           continue;
         }
         const { x: animatedX, y: animatedY, finished } = maybeAnimated;
@@ -311,11 +320,9 @@ function PieceDisplay({
         });
         if (!finished) {
           maybeSetRefTransform(ref, x, y);
-          lastAnimatedCoords.current.set(move.pieceId, { x, y });
           toKeep.set(move.pieceId, move);
         } else {
           maybeSetRefTransform(ref, x, y);
-          lastAnimatedCoords.current.delete(move.pieceId);
         }
       }
       recentMoveByPieceIdRef.current = toKeep;
@@ -327,9 +334,14 @@ function PieceDisplay({
   }, [pixelsPerSquare, startingX, startingY, isNotVisible, getAnimatedCoords]);
 
   const createOnClickHandler = React.useCallback(
-    (piece) => {
+    (pieceId) => {
       return (e) => {
-        maybeHandlePieceClick(piece);
+        const piece = visiblePiecesAndIdsRef.current.pieces.find(
+          (p) => p.id === pieceId
+        );
+        if (piece) {
+          maybeHandlePieceClick(piece);
+        }
       };
     },
     [maybeHandlePieceClick]
@@ -345,8 +357,10 @@ function PieceDisplay({
   );
 
   const memoizedPieces = React.useMemo(() => {
+    console.log("SELECTED PIECE", selectedPiece);
     const pieces = [];
-    for (const piece of visiblePiecesAndIds.pieces) {
+    const shutUpError = forceUpdate;
+    for (const piece of visiblePiecesAndIdsRef.current.pieces) {
       if (isInvisibleNowAndViaMove({ piece })) {
         continue;
       }
@@ -376,7 +390,8 @@ function PieceDisplay({
         }),
         x,
         y,
-        onClick: createOnClickHandler(piece),
+        onClick: createOnClickHandler(piece.id),
+        selected: piece.id === selectedPiece?.id,
       });
     }
     return pieces;
@@ -385,9 +400,10 @@ function PieceDisplay({
     createRefFunc,
     getAnimatedCoords,
     isInvisibleNowAndViaMove,
-    visiblePiecesAndIds.pieces,
     startingX,
     startingY,
+    forceUpdate,
+    selectedPiece,
   ]);
 
   return memoizedPieces.map(({ piece, refFunc, imageSrc, x, y, onClick }) => {
@@ -405,6 +421,7 @@ function PieceDisplay({
         hidden={hidden}
         opacity={opacity}
         onClick={onClick}
+        selected={piece.id === selectedPiece?.id}
       />
     );
   });
