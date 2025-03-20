@@ -185,13 +185,25 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
   const panzoomBoxRef = React.useRef(null);
   const boardContainerRef = React.useRef(null);
   const innerRef = React.useRef(null);
-  const [showLargeBoard, setShowLargeBoard] = React.useState(false);
+  const [showLargeBoard, _setShowLargeBoard] = React.useState(false);
   const [smallHidden, setSmallHidden] = React.useState(false);
   const [smallMounted, setSmallMounted] = React.useState(true);
   const [largeMounted, setLargeMounted] = React.useState(false);
   const [smallOpacity, setSmallOpacity] = React.useState(1);
   const [largeOpacity, setLargeOpacity] = React.useState(0);
-  console.log("BOARD");
+  const largeBoardKillSwitch = React.useRef(false);
+
+  const setShowLargeBoard = React.useCallback(
+    (show) => {
+      _setShowLargeBoard(show);
+      if (show) {
+        largeBoardKillSwitch.current = false;
+      } else {
+        largeBoardKillSwitch.current = true;
+      }
+    },
+    [_setShowLargeBoard]
+  );
 
   const innerSize = useElementSize(innerRef);
   const zoomedOutParams = useZoomedOutParams({ innerSize });
@@ -209,7 +221,6 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
         setSmallOpacity(0);
       }
       setSmallHidden(true);
-
       const opacityTimeout = setTimeout(() => {
         setLargeOpacity(1);
       }, 50);
@@ -228,7 +239,6 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
         setSmallOpacity(0);
         setLargeOpacity(0);
       }
-
       clearMoveableSquares();
       setSmallHidden(false);
       const opacityTimeout = setTimeout(() => {
@@ -534,7 +544,6 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
       elt.removeEventListener("panzoomstart", handlePanzoomStart);
       elt.removeEventListener("panzoomend", handlePanzoomEnd);
       elt.removeEventListener("panzoompan", handlePanzoomPan);
-      //   elt.removeEventListener("panzoomzoom", handlePanzoomZoom);
     };
   }, [setCoords, clearMoveableSquares, showLargeBoard]);
 
@@ -562,6 +571,7 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
             pieceHandler={pieceHandler}
             opacity={largeOpacity}
             sizeParams={zoomedOutParams}
+            largeBoardKillSwitch={largeBoardKillSwitch}
           />
         )}
         <PanzoomBox ref={panzoomBoxRef} />

@@ -8,7 +8,7 @@ import {
   colorForPieceType,
 } from "../../utils";
 
-const MOVE_ANIMATION_DURATION = 300;
+const MOVE_ANIMATION_DURATION = 600;
 
 const ZoomedOutOverviewWrapper = styled.div`
   position: absolute;
@@ -30,27 +30,34 @@ const ZoomCanvas = styled.canvas`
 `;
 
 function ZoomedOutOverview({
-  hidden,
   pxWidth,
   pxHeight,
   coords,
   pieceHandler,
   opacity,
   sizeParams,
+  largeBoardKillSwitch,
 }) {
   const pieceCanvasRef = React.useRef(null);
   const boardCanvasRef = React.useRef(null);
+  const animationCanvasRef = React.useRef(null);
   const piecesRef = React.useRef(new Map(pieceHandler.current.getPieces()));
+  const [forcePieceRerender, setForcePieceRerender] = React.useState(0);
   const recentMovesRef = React.useRef(new Map());
 
   React.useEffect(() => {
     pieceHandler.current.subscribe({
       id: "zoomed-out-overview",
       callback: (data) => {
-        piecesRef.current = new Map(data.pieces);
+        const piecesById = new Map();
+        data.pieces.forEach((piece) => {
+          piecesById.set(piece.id, piece);
+        });
+        piecesRef.current = piecesById;
         data.recentMoves.forEach((move) => {
           recentMovesRef.current.set(move.pieceId, move);
         });
+        setForcePieceRerender((x) => x + 1);
       },
     });
     return () => {
@@ -70,44 +77,6 @@ function ZoomedOutOverview({
     rightPadding,
     bottomPadding,
   } = sizeParams;
-
-  //   const {
-  //     squareSize,
-  //     numSquares,
-  //     pieceSize,
-  //     halfBoardLineWidth,
-  //     leftPadding,
-  //     topPadding,
-  //     rightPadding,
-  //     bottomPadding,
-  //   } = React.useMemo(() => {
-  //     const minDist = Math.min(pxWidth, pxHeight);
-  //     let candidateSize = MIN_PX_PER_SQUARE;
-  //     while (minDist / candidateSize > MAX_VIEWPORT_WIDTH) {
-  //       candidateSize += 2;
-  //     }
-  //     const numSquares = Math.floor(minDist / candidateSize);
-  //     const horizontalPadding = pxWidth - numSquares * candidateSize;
-  //     const verticalPadding = pxHeight - numSquares * candidateSize;
-  //     let pieceSize = candidateSize / 2;
-  //     let halfBoardLineWidth = 1;
-  //     if (candidateSize > 24) {
-  //       halfBoardLineWidth = 2;
-  //     }
-  //     if (candidateSize > 30) {
-  //       halfBoardLineWidth = 3;
-  //     }
-  //     return {
-  //       squareSize: candidateSize,
-  //       numSquares,
-  //       leftPadding: Math.floor(horizontalPadding / 2),
-  //       topPadding: Math.floor(verticalPadding / 2),
-  //       rightPadding: Math.ceil(horizontalPadding / 2),
-  //       bottomPadding: Math.ceil(verticalPadding / 2),
-  //       pieceSize,
-  //       halfBoardLineWidth,
-  //     };
-  //   }, [pxWidth, pxHeight]);
 
   const { startingX, startingY, endingX, endingY } = getStartingAndEndingCoords(
     {
@@ -130,6 +99,9 @@ function ZoomedOutOverview({
 
   React.useEffect(() => {
     if (!boardCanvasRef.current) {
+      return;
+    }
+    if (largeBoardKillSwitch.current) {
       return;
     }
     const ctx = boardCanvasRef.current.getContext("2d");
@@ -205,56 +177,133 @@ function ZoomedOutOverview({
     halfBoardLineWidth,
     squareSize,
     getBoardColor,
+    largeBoardKillSwitch,
   ]);
 
-  // CR nroyalty: rework this to only re-write when pieces have changed,
-  // and then only loop over the pieces that are currently moving.
-  // we should use two canvases here...
+  const drawPiece = React.useCallback(
+    ({ screenX, screenY, ctx, pieceType, isWhite }) => {
+      ctx.save();
+      ctx.fillStyle = colorForPieceType({ pieceType, isWhite });
+      let x = screenX * squareSize;
+      let y = screenY * squareSize;
+      x += leftPadding;
+      y += topPadding;
+      const upperLeftX = x + (squareSize - pieceSize) / 2;
+      const upperLeftY = y + (squareSize - pieceSize) / 2;
+      ctx.fillRect(upperLeftX, upperLeftY, pieceSize, pieceSize);
+      ctx.restore();
+    },
+    [squareSize, pieceSize, leftPadding, topPadding]
+  );
+
+  // Draw on the non-animated pieces
+  // Doesn't really require a RAF because we're not animating.
+  React.useEffect(() => {
+    if (!pieceCanvasRef.current) {
+      return;
+    }
+    if (largeBoardKillSwitch.current) {
+      return;
+    }
+    const ctx = pieceCanvasRef.current.getContext("2d");
+    ctx.clearRect(0, 0, pxWidth, pxHeight);
+    for (const piece of piecesRef.current.values()) {
+      const { x, y } = piece;
+      if (x < startingX || x >= endingX || y < startingY || y >= endingY) {
+        continue;
+      }
+      if (recentMovesRef.current.has(piece.id)) {
+        // when we remove a move here, we draw it to this canvas if
+        // applicable. so we shouldn't ever need to draw it here
+        continue;
+      }
+      let { x: screenX, y: screenY } = getScreenRelativeCoords({
+        x,
+        y,
+        startingX,
+        startingY,
+      });
+      drawPiece({
+        screenX,
+        screenY,
+        ctx,
+        pieceType: piece.type,
+        isWhite: piece.isWhite,
+      });
+    }
+  }, [
+    drawPiece,
+    endingX,
+    endingY,
+    pxHeight,
+    pxWidth,
+    startingX,
+    startingY,
+    forcePieceRerender,
+    largeBoardKillSwitch,
+  ]);
+
+  // draw JUST the moving pieces, and draw the piece's final resting
+  // position on the non-animated canvas...
   React.useEffect(() => {
     let rafId;
+    if (!animationCanvasRef.current) {
+      return;
+    }
+    if (largeBoardKillSwitch.current) {
+      return;
+    }
     const loop = () => {
-      rafId = requestAnimationFrame(loop);
-      if (!pieceCanvasRef.current) {
+      if (largeBoardKillSwitch.current) {
         return;
       }
-      const ctx = pieceCanvasRef.current.getContext("2d");
+      rafId = requestAnimationFrame(loop);
+      const ctx = animationCanvasRef.current.getContext("2d");
       ctx.clearRect(0, 0, pxWidth, pxHeight);
-      for (const piece of piecesRef.current.values()) {
-        let { x, y } = piece;
-        const recentMove = recentMovesRef.current.get(piece.id);
-        if (recentMove) {
-          const { fromX, fromY, toX, toY, receivedAt } = recentMove;
-          const elapsed = performance.now() - receivedAt;
-          if (elapsed > MOVE_ANIMATION_DURATION) {
-            recentMovesRef.current.delete(piece.id);
-          } else {
-            const progress = easeInOutSquare(elapsed / MOVE_ANIMATION_DURATION);
-            x = fromX + (toX - fromX) * progress;
-            y = fromY + (toY - fromY) * progress;
-          }
-        }
-        if (x < startingX || x >= endingX || y < startingY || y >= endingY) {
+      for (const move of recentMovesRef.current.values()) {
+        const { fromX, fromY, toX, toY, receivedAt } = move;
+        const piece = piecesRef.current.get(move.pieceId);
+        if (!piece) {
           continue;
         }
+        const elapsed = performance.now() - receivedAt;
+        if (elapsed > MOVE_ANIMATION_DURATION) {
+          if (!pieceCanvasRef.current) {
+            continue;
+          }
+          const staticCtx = pieceCanvasRef.current.getContext("2d");
+          let { x: screenX, y: screenY } = getScreenRelativeCoords({
+            x: toX,
+            y: toY,
+            startingX,
+            startingY,
+          });
+          drawPiece({
+            screenX,
+            screenY,
+            ctx: staticCtx,
+            pieceType: piece.type,
+            isWhite: piece.isWhite,
+          });
+          recentMovesRef.current.delete(move.pieceId);
+          continue;
+        }
+        const progress = easeInOutSquare(elapsed / MOVE_ANIMATION_DURATION);
+        const x = fromX + (toX - fromX) * progress;
+        const y = fromY + (toY - fromY) * progress;
         let { x: screenX, y: screenY } = getScreenRelativeCoords({
           x,
           y,
           startingX,
           startingY,
         });
-        screenX *= squareSize;
-        screenY *= squareSize;
-        screenX += leftPadding;
-        screenY += topPadding;
-        const upperLeftX = screenX + (squareSize - pieceSize) / 2;
-        const upperLeftY = screenY + (squareSize - pieceSize) / 2;
-
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = colorForPieceType({
+        drawPiece({
+          screenX,
+          screenY,
+          ctx,
           pieceType: piece.type,
           isWhite: piece.isWhite,
         });
-        ctx.fillRect(upperLeftX, upperLeftY, pieceSize, pieceSize);
       }
     };
     rafId = requestAnimationFrame(loop);
@@ -262,21 +311,12 @@ function ZoomedOutOverview({
       cancelAnimationFrame(rafId);
     };
   }, [
-    coords,
-    bottomPadding,
-    leftPadding,
-    rightPadding,
-    topPadding,
-    numSquares,
-    squareSize,
+    drawPiece,
+    largeBoardKillSwitch,
+    pxHeight,
+    pxWidth,
     startingX,
     startingY,
-    endingX,
-    endingY,
-    pxWidth,
-    pxHeight,
-    pieceSize,
-    halfBoardLineWidth,
   ]);
 
   return (
@@ -287,6 +327,7 @@ function ZoomedOutOverview({
     >
       <ZoomCanvas width={pxWidth} height={pxHeight} ref={boardCanvasRef} />
       <ZoomCanvas width={pxWidth} height={pxHeight} ref={pieceCanvasRef} />
+      <ZoomCanvas width={pxWidth} height={pxHeight} ref={animationCanvasRef} />
     </ZoomedOutOverviewWrapper>
   );
 }
