@@ -82,6 +82,15 @@ const Piece = React.forwardRef(
     { id, x, y, src, onClick, dataId, pieceX, pieceY, size, hidden, opacity },
     ref
   ) => {
+    const style = React.useMemo(() => {
+      return {
+        "--size": `${size}px`,
+        transform: `translate(${x * size}px, ${y * size}px)`,
+        "--opacity": opacity,
+        "--pointer-events": hidden ? "none" : "auto",
+        "--cursor": hidden ? "none" : "pointer",
+      };
+    }, [size, x, y, opacity, hidden]);
     return (
       <PieceButtonWrapper
         id={id}
@@ -92,13 +101,7 @@ const Piece = React.forwardRef(
         // it's important that we use an inline style here because it lets
         // us override that style from our animation handler and then automatically
         // remove that overridden style when we re-render the piece
-        style={{
-          "--size": `${size}px`,
-          transform: `translate(${x * size}px, ${y * size}px)`,
-          "--opacity": opacity,
-          "--pointer-events": hidden ? "none" : "auto",
-          "--cursor": hidden ? "none" : "pointer",
-        }}
+        style={style}
         onClick={onClick}
         ref={ref}
       >
@@ -112,19 +115,17 @@ const Piece = React.forwardRef(
 function PieceDisplay({
   pieceHandler,
   coords,
-  width,
-  height,
+  numSquares,
   handlePieceClick,
   pixelsPerSquare,
   hidden,
   opacity,
 }) {
-  console.log("RENDER PIECE DISPLAY");
   const { startingX, startingY, endingX, endingY } = getStartingAndEndingCoords(
     {
       coords,
-      width,
-      height,
+      width: numSquares,
+      height: numSquares,
     }
   );
 
@@ -140,7 +141,7 @@ function PieceDisplay({
 
   const isNotVisible = React.useCallback(
     ({ x, y }) => {
-      return x < startingX || x > endingX || y < startingY || y > endingY;
+      return x < startingX || x >= endingX || y < startingY || y >= endingY;
     },
     [startingX, startingY, endingX, endingY]
   );
@@ -205,13 +206,22 @@ function PieceDisplay({
     return null;
   }, []);
 
-  const savePieceRef = (pieceId, ref) => {
+  const savePieceRef = React.useCallback((pieceId, ref) => {
     if (ref) {
       piecesRefsMap.current.set(pieceId, ref);
     } else {
       piecesRefsMap.current.delete(pieceId);
     }
-  };
+  }, []);
+
+  const maybeHandlePieceClick = React.useCallback(
+    (piece) => {
+      if (!hidden) {
+        handlePieceClick(piece);
+      }
+    },
+    [hidden, handlePieceClick]
+  );
 
   React.useEffect(() => {
     let frameId;
@@ -325,10 +335,8 @@ function PieceDisplay({
             size={pixelsPerSquare}
             hidden={hidden}
             opacity={opacity}
-            onClick={() => {
-              if (!hidden) {
-                handlePieceClick(piece);
-              }
+            onClick={(e) => {
+              maybeHandlePieceClick(piece);
             }}
           />
         );

@@ -16,15 +16,15 @@ const Canvas = styled.canvas`
 `;
 
 const BOARD_BORDER_COLOR = "black";
-const BOARD_BORDER_HALF_WIDTH = 1;
 
 function BoardCanvas({
   coords,
-  width,
-  height,
+  pxWidth,
+  pxHeight,
+  numSquares,
+  borderHalfWidth,
   pixelsPerSquare,
   moveableSquares,
-  hidden,
   selectedPiece,
   opacity,
 }) {
@@ -38,8 +38,8 @@ function BoardCanvas({
     const { startingX, startingY, endingX, endingY } =
       getStartingAndEndingCoords({
         coords,
-        width,
-        height,
+        width: numSquares,
+        height: numSquares,
       });
     for (let x = startingX; x < endingX; x++) {
       for (let y = startingY; y < endingY; y++) {
@@ -90,9 +90,9 @@ function BoardCanvas({
           ctx.save();
           ctx.fillStyle = BOARD_BORDER_COLOR;
           ctx.fillRect(
-            screenX * pixelsPerSquare - BOARD_BORDER_HALF_WIDTH,
+            screenX * pixelsPerSquare - borderHalfWidth,
             screenY * pixelsPerSquare,
-            BOARD_BORDER_HALF_WIDTH * 2,
+            borderHalfWidth * 2,
             pixelsPerSquare
           );
           ctx.restore();
@@ -103,19 +103,27 @@ function BoardCanvas({
           ctx.fillStyle = BOARD_BORDER_COLOR;
           ctx.fillRect(
             screenX * pixelsPerSquare,
-            screenY * pixelsPerSquare - BOARD_BORDER_HALF_WIDTH,
+            screenY * pixelsPerSquare - borderHalfWidth,
             pixelsPerSquare,
-            BOARD_BORDER_HALF_WIDTH * 2
+            borderHalfWidth * 2
           );
           ctx.restore();
         }
       }
     }
-  }, [coords, width, height, pixelsPerSquare, moveableSquares, selectedPiece]);
+  }, [
+    coords,
+    numSquares,
+    borderHalfWidth,
+    pixelsPerSquare,
+    moveableSquares,
+    selectedPiece,
+  ]);
+
   return (
     <Canvas
-      width={width * pixelsPerSquare}
-      height={height * pixelsPerSquare}
+      width={pxWidth}
+      height={pxHeight}
       ref={ref}
       style={{ "--opacity": opacity }}
     />

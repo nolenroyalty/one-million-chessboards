@@ -5,6 +5,8 @@ import BoardCanvas from "../BoardCanvas/BoardCanvas";
 import PieceDisplay from "../PieceDisplay/PieceDisplay";
 import PieceMoveButtons from "../PieceMoveButtons/PieceMoveButtons";
 import ZoomedOutOverview from "../ZoomedOutOverview/ZoomedOutOverview";
+import { clamp } from "../../utils";
+
 const BoardContainer = styled.div`
   display: flex;
   flex-direction: column;
@@ -15,9 +17,7 @@ const BoardContainer = styled.div`
 
 const WIDTH = 23;
 const HEIGHT = 23;
-
 const PIXELS_PER_SQUARE = 24;
-
 const INNER_PADDING = 4;
 
 const Inner = styled.div`
@@ -33,43 +33,43 @@ const PanzoomBox = styled.div`
   inset: 0;
 `;
 
-function PiecesAndMaybeMoves({
-  coords,
-  handlePieceClick,
-  width,
-  height,
-  pixelsPerSquare,
-  pieceHandler,
-  moveableSquares,
-  moveAndClear,
-  selectedPiece,
-  hidden,
-  opacity,
-}) {
-  return (
-    <>
-      <PieceDisplay
-        coords={coords}
-        handlePieceClick={handlePieceClick}
-        width={width}
-        height={height}
-        pixelsPerSquare={pixelsPerSquare}
-        pieceHandler={pieceHandler}
-        opacity={opacity}
-      />
-      <PieceMoveButtons
-        moveableSquares={moveableSquares}
-        coords={coords}
-        width={width}
-        height={height}
-        moveAndClear={moveAndClear}
-        selectedPiece={selectedPiece}
-        size={pixelsPerSquare}
-        opacity={opacity}
-      />
-    </>
-  );
-}
+const PiecesAndMaybeMoves = React.memo(
+  ({
+    coords,
+    handlePieceClick,
+    numSquares,
+    pixelsPerSquare,
+    pieceHandler,
+    moveableSquares,
+    moveAndClear,
+    selectedPiece,
+    opacity,
+    hidden,
+  }) => {
+    return (
+      <>
+        <PieceDisplay
+          coords={coords}
+          handlePieceClick={handlePieceClick}
+          numSquares={numSquares}
+          pixelsPerSquare={pixelsPerSquare}
+          pieceHandler={pieceHandler}
+          opacity={opacity}
+          hidden={hidden}
+        />
+        <PieceMoveButtons
+          moveableSquares={moveableSquares}
+          coords={coords}
+          numSquares={numSquares}
+          moveAndClear={moveAndClear}
+          selectedPiece={selectedPiece}
+          size={pixelsPerSquare}
+          opacity={opacity}
+        />
+      </>
+    );
+  }
+);
 
 function useElementSize(ref) {
   const [size, setSize] = React.useState({ width: 0, height: 0 });
@@ -99,20 +99,84 @@ function useElementSize(ref) {
 }
 
 function useZoomedOutParams({ innerSize }) {
-  const [x, setX] = React.useState(0);
+  const MAX_VIEWPORT_WIDTH = 81;
+  const MAX_VIEWPORT_HEIGHT = 81;
+  const MIN_PX_PER_SQUARE = 12;
+  const timeout = React.useRef(null);
+  const [params, setParams] = React.useState({
+    squareSize: MIN_PX_PER_SQUARE,
+    numSquares: 0,
+    pieceSize: 0,
+    halfBoardLineWidth: 0,
+    leftPadding: 0,
+    topPadding: 0,
+    rightPadding: 0,
+    bottomPadding: 0,
+    initialized: false,
+  });
+  React.useEffect(() => {
+    if (timeout.current) {
+      clearTimeout(timeout.current);
+    }
+    timeout.current = setTimeout(() => {
+      console.log("calculating zoomed out params", innerSize);
+      const minDist = Math.min(innerSize.width, innerSize.height);
+      let candidateSize = MIN_PX_PER_SQUARE;
+      while (minDist / candidateSize > MAX_VIEWPORT_WIDTH) {
+        candidateSize += 2;
+      }
+      const numSquares = Math.floor(minDist / candidateSize);
+      const horizontalPadding = innerSize.width - numSquares * candidateSize;
+      const verticalPadding = innerSize.height - numSquares * candidateSize;
+      let pieceSize = candidateSize / 2;
+      let halfBoardLineWidth = 1;
+      if (candidateSize > 24) {
+        halfBoardLineWidth = 2;
+      }
+      if (candidateSize > 30) {
+        halfBoardLineWidth = 3;
+      }
+      setParams({
+        squareSize: candidateSize,
+        numSquares,
+        pieceSize,
+        halfBoardLineWidth,
+        leftPadding: Math.floor(horizontalPadding / 2),
+        topPadding: Math.floor(verticalPadding / 2),
+        rightPadding: Math.ceil(horizontalPadding / 2),
+        bottomPadding: Math.ceil(verticalPadding / 2),
+        initialized: true,
+      });
+    }, 100);
+  }, [innerSize]);
+  return params;
+}
+
+function useZoomedInParams({ innerSize }) {
+  const [params, setParams] = React.useState({
+    squareSize: PIXELS_PER_SQUARE,
+    numSquares: WIDTH,
+    innerPadding: INNER_PADDING,
+    borderHalfWidth: 1,
+    initialized: false,
+  });
+
   const timeout = React.useRef(null);
   React.useEffect(() => {
     if (timeout.current) {
       clearTimeout(timeout.current);
     }
     timeout.current = setTimeout(() => {
-      console.log("CALC SIZE", innerSize);
-      const x2 = innerSize.width / 2;
-      const y2 = innerSize.height / 2;
-      setX(x2);
+      setParams({
+        squareSize: PIXELS_PER_SQUARE,
+        numSquares: WIDTH,
+        innerPadding: INNER_PADDING,
+        borderHalfWidth: 1,
+        initialized: true,
+      });
     }, 100);
   }, [innerSize]);
-  return { x };
+  return params;
 }
 
 function Board({ coords, submitMove, setCoords, pieceHandler }) {
@@ -123,14 +187,15 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
   const innerRef = React.useRef(null);
   const [showLargeBoard, setShowLargeBoard] = React.useState(false);
   const [smallHidden, setSmallHidden] = React.useState(false);
-  const [largeHidden, setLargeHidden] = React.useState(true);
   const [smallMounted, setSmallMounted] = React.useState(true);
   const [largeMounted, setLargeMounted] = React.useState(false);
   const [smallOpacity, setSmallOpacity] = React.useState(1);
   const [largeOpacity, setLargeOpacity] = React.useState(0);
+  console.log("BOARD");
 
   const innerSize = useElementSize(innerRef);
-  const { x } = useZoomedOutParams({ innerSize });
+  const zoomedOutParams = useZoomedOutParams({ innerSize });
+  const zoomedInParams = useZoomedInParams({ innerSize });
   const clearMoveableSquares = React.useCallback(() => {
     setSelectedPiece(null);
     setMoveableSquares(new Set());
@@ -144,7 +209,6 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
         setSmallOpacity(0);
       }
       setSmallHidden(true);
-      setLargeHidden(false);
 
       const opacityTimeout = setTimeout(() => {
         setLargeOpacity(1);
@@ -167,7 +231,6 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
 
       clearMoveableSquares();
       setSmallHidden(false);
-      setLargeHidden(true);
       const opacityTimeout = setTimeout(() => {
         setSmallOpacity(1);
       }, 50);
@@ -214,14 +277,61 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
     };
   }, [clearMoveableSquares]);
 
+  const zoomInOnBoard = React.useCallback(
+    (e) => {
+      const elt = boardContainerRef.current;
+      if (!elt) {
+        return;
+      }
+      const eltRect = elt.getBoundingClientRect();
+      const deltaX = e.clientX - eltRect.left;
+      const deltaY = e.clientY - eltRect.top;
+      const clampedX = clamp(deltaX, 0, eltRect.width);
+      const clampedY = clamp(deltaY, 0, eltRect.height);
+      const xPos = clampedX / zoomedOutParams.squareSize;
+      const yPos = clampedY / zoomedOutParams.squareSize;
+      const centerXPos = Math.floor(zoomedOutParams.numSquares / 2);
+      const centerYPos = Math.floor(zoomedOutParams.numSquares / 2);
+      const xOffset = Math.floor(xPos - centerXPos);
+      const yOffset = Math.floor(yPos - centerYPos);
+      setCoords((coords) => {
+        const newX = coords.x + xOffset;
+        const newY = coords.y + yOffset;
+        const boardX = Math.floor(newX / 8);
+        const boardY = Math.floor(newY / 8);
+        return {
+          x: boardX * 8 + 4,
+          y: boardY * 8 + 4,
+        };
+      });
+    },
+    [setCoords, zoomedOutParams]
+  );
+
+  // zoom in on double click if we're zoomed out
   React.useEffect(() => {
     const elt = boardContainerRef.current;
+    const handleDoubleClick = (e) => {
+      if (showLargeBoard) {
+        setShowLargeBoard(false);
+        zoomInOnBoard(e);
+      }
+    };
+    elt.addEventListener("dblclick", handleDoubleClick);
+    return () => elt.removeEventListener("dblclick", handleDoubleClick);
+  }, [showLargeBoard, zoomInOnBoard]);
+
+  // handler for desktop zoom
+  React.useEffect(() => {
+    const elt = boardContainerRef.current;
+    console.log("DESKTOP ZOOM");
     const handleWheel = (e) => {
       const doScroll = e.ctrlKey || e.metaKey;
       if (doScroll && e.deltaY > 0 && !showLargeBoard) {
         setShowLargeBoard(true);
       } else if (doScroll && e.deltaY < 0 && showLargeBoard) {
         setShowLargeBoard(false);
+        zoomInOnBoard(e);
       }
       if (doScroll) {
         e.preventDefault();
@@ -229,7 +339,7 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
     };
     elt.addEventListener("wheel", handleWheel, { passive: false });
     return () => elt.removeEventListener("wheel", handleWheel);
-  }, [showLargeBoard]);
+  }, [setCoords, showLargeBoard, zoomInOnBoard, zoomedOutParams]);
 
   const touchStartState = React.useRef({
     touchStartDist: null,
@@ -245,7 +355,6 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
         touchStartState.current.changed = false;
         return;
       }
-      console.log("touchstart");
       e.preventDefault();
       touchStartState.current.touchStartDist = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
@@ -256,7 +365,6 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
     const handleTouchEnd = (e) => {
       touchStartState.current.touchStartDist = null;
       touchStartState.current.changed = false;
-      console.log("touchend");
     };
 
     const handleTouchMove = (e) => {
@@ -281,6 +389,9 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
         showLargeBoard
       ) {
         setShowLargeBoard(false);
+        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        zoomInOnBoard({ clientX: midX, clientY: midY });
         touchStartState.current.changed = true;
       }
     };
@@ -293,18 +404,15 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
       elt.removeEventListener("touchend", handleTouchEnd);
       elt.removeEventListener("touchmove", handleTouchMove);
     };
-  }, [showLargeBoard]);
+  }, [showLargeBoard, zoomInOnBoard]);
 
   const lastPanzoom = React.useRef({ lastX: 0, lastY: 0, accX: 0, accY: 0 });
-  const lastPanzoomZoom = React.useRef({ scale: 1 });
   React.useEffect(() => {
     const elt = panzoomBoxRef.current;
     const panzoom = Panzoom(panzoomBoxRef.current, {
-      setTransform: (e, { scale, x, y }) => {
-        // console.log("setTransform", e, { scale, x, y });
-      },
+      setTransform: (e, { scale, x, y }) => {},
       disablePan: false,
-      disableZoom: false,
+      disableZoom: true,
     });
 
     const handlePanzoomStart = (e) => {
@@ -387,25 +495,6 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
     };
     elt.addEventListener("panzoompan", handlePanzoomPan);
 
-    // CR nroyalty: handle zooming on phones
-    // const handlePanzoomZoom = (e) => {
-    //   console.log("panzoomzoom", e, lastPanzoomZoom.current.scale);
-    //   lastPanzoomZoom.current.scale = e.detail.scale;
-    //   if (e.detail.scale === lastPanzoomZoom.current.scale) {
-    //     return;
-    //   }
-    //   //   if (e.detail.scale > lastPanzoomZoom.current.scale && !showLargeBoard) {
-    //   //     setShowLargeBoard(true);
-    //   //   } else if (
-    //   //     e.detail.scale < lastPanzoomZoom.current.scale &&
-    //   //     showLargeBoard
-    //   //   ) {
-    //   //     setShowLargeBoard(false);
-    //   //   }
-    //   lastPanzoomZoom.current.scale = e.detail.scale;
-    // };
-    // elt.addEventListener("panzoomzoom", handlePanzoomZoom);
-
     function handleKeyDown(e) {
       const increment = showLargeBoard ? 6 : 2;
       if (e.key === "ArrowUp") {
@@ -455,23 +544,24 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
         {smallMounted && (
           <BoardCanvas
             coords={coords}
-            width={WIDTH}
-            height={HEIGHT}
-            pixelsPerSquare={PIXELS_PER_SQUARE}
+            pxWidth={innerSize.width}
+            pxHeight={innerSize.height}
+            numSquares={zoomedInParams.numSquares}
+            borderHalfWidth={zoomedInParams.borderHalfWidth}
+            pixelsPerSquare={zoomedInParams.squareSize}
             moveableSquares={moveableSquares}
             selectedPiece={selectedPiece}
-            hidden={smallHidden}
             opacity={smallOpacity}
           />
         )}
         {largeMounted && (
           <ZoomedOutOverview
-            hidden={largeHidden}
             pxWidth={innerSize.width}
             pxHeight={innerSize.height}
             coords={coords}
             pieceHandler={pieceHandler}
             opacity={largeOpacity}
+            sizeParams={zoomedOutParams}
           />
         )}
         <PanzoomBox ref={panzoomBoxRef} />
@@ -479,9 +569,8 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
           <PiecesAndMaybeMoves
             coords={coords}
             handlePieceClick={handlePieceClick}
-            width={WIDTH}
-            height={HEIGHT}
-            pixelsPerSquare={PIXELS_PER_SQUARE}
+            numSquares={zoomedInParams.numSquares}
+            pixelsPerSquare={zoomedInParams.squareSize}
             pieceHandler={pieceHandler}
             moveableSquares={moveableSquares}
             moveAndClear={moveAndClear}

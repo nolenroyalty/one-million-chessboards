@@ -24,8 +24,7 @@ const MoveButton = styled.button`
 function PieceMoveButtons({
   moveableSquares,
   coords,
-  width,
-  height,
+  numSquares,
   selectedPiece,
   moveAndClear,
   size,
@@ -33,8 +32,8 @@ function PieceMoveButtons({
 }) {
   const { startingX, startingY } = getStartingAndEndingCoords({
     coords,
-    width,
-    height,
+    width: numSquares,
+    height: numSquares,
   });
   return Array.from(moveableSquares.values()).map((key) => {
     const [x, y] = keyToCoords(key);

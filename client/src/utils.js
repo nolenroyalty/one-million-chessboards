@@ -360,3 +360,7 @@ export function getMoveableSquares(piece, pieces) {
   }
   return ret;
 }
+
+export function clamp(value, min, max) {
+  return Math.max(min, Math.min(value, max));
+}

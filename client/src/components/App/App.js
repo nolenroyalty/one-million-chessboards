@@ -45,11 +45,12 @@ function App() {
       const ws = new WebSocket(wsUrl);
 
       ws.addEventListener("message", (event) => {
+        // CR nroyalty: handle movement error / cancelation
+        // CR nroyalty: handle other updates...
         const data = JSON.parse(event.data);
         if (data.type === "stateSnapshot") {
           pieceHandler.current.handleSnapshot({ snapshot: data });
         } else if (data.type === "moveUpdates") {
-          console.log("moveUpdates", JSON.stringify(data, null, 2));
           pieceHandler.current.handleMoves({
             moves: data.moves,
             captures: data.captures,

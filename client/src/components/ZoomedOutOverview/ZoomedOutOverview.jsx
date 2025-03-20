@@ -8,9 +8,6 @@ import {
   colorForPieceType,
 } from "../../utils";
 
-const MAX_VIEWPORT_WIDTH = 81;
-const MAX_VIEWPORT_HEIGHT = 81;
-const MIN_PX_PER_SQUARE = 12;
 const MOVE_ANIMATION_DURATION = 300;
 
 const ZoomedOutOverviewWrapper = styled.div`
@@ -39,6 +36,7 @@ function ZoomedOutOverview({
   coords,
   pieceHandler,
   opacity,
+  sizeParams,
 }) {
   const pieceCanvasRef = React.useRef(null);
   const boardCanvasRef = React.useRef(null);
@@ -71,34 +69,45 @@ function ZoomedOutOverview({
     topPadding,
     rightPadding,
     bottomPadding,
-  } = React.useMemo(() => {
-    const minDist = Math.min(pxWidth, pxHeight);
-    let candidateSize = MIN_PX_PER_SQUARE;
-    while (minDist / candidateSize > MAX_VIEWPORT_WIDTH) {
-      candidateSize += 2;
-    }
-    const numSquares = Math.floor(minDist / candidateSize);
-    const horizontalPadding = pxWidth - numSquares * candidateSize;
-    const verticalPadding = pxHeight - numSquares * candidateSize;
-    let pieceSize = candidateSize / 2;
-    let halfBoardLineWidth = 1;
-    if (candidateSize > 24) {
-      halfBoardLineWidth = 2;
-    }
-    if (candidateSize > 30) {
-      halfBoardLineWidth = 3;
-    }
-    return {
-      squareSize: candidateSize,
-      numSquares,
-      leftPadding: Math.floor(horizontalPadding / 2),
-      topPadding: Math.floor(verticalPadding / 2),
-      rightPadding: Math.ceil(horizontalPadding / 2),
-      bottomPadding: Math.ceil(verticalPadding / 2),
-      pieceSize,
-      halfBoardLineWidth,
-    };
-  }, [pxWidth, pxHeight]);
+  } = sizeParams;
+
+  //   const {
+  //     squareSize,
+  //     numSquares,
+  //     pieceSize,
+  //     halfBoardLineWidth,
+  //     leftPadding,
+  //     topPadding,
+  //     rightPadding,
+  //     bottomPadding,
+  //   } = React.useMemo(() => {
+  //     const minDist = Math.min(pxWidth, pxHeight);
+  //     let candidateSize = MIN_PX_PER_SQUARE;
+  //     while (minDist / candidateSize > MAX_VIEWPORT_WIDTH) {
+  //       candidateSize += 2;
+  //     }
+  //     const numSquares = Math.floor(minDist / candidateSize);
+  //     const horizontalPadding = pxWidth - numSquares * candidateSize;
+  //     const verticalPadding = pxHeight - numSquares * candidateSize;
+  //     let pieceSize = candidateSize / 2;
+  //     let halfBoardLineWidth = 1;
+  //     if (candidateSize > 24) {
+  //       halfBoardLineWidth = 2;
+  //     }
+  //     if (candidateSize > 30) {
+  //       halfBoardLineWidth = 3;
+  //     }
+  //     return {
+  //       squareSize: candidateSize,
+  //       numSquares,
+  //       leftPadding: Math.floor(horizontalPadding / 2),
+  //       topPadding: Math.floor(verticalPadding / 2),
+  //       rightPadding: Math.ceil(horizontalPadding / 2),
+  //       bottomPadding: Math.ceil(verticalPadding / 2),
+  //       pieceSize,
+  //       halfBoardLineWidth,
+  //     };
+  //   }, [pxWidth, pxHeight]);
 
   const { startingX, startingY, endingX, endingY } = getStartingAndEndingCoords(
     {
