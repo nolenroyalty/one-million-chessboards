@@ -308,7 +308,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request, staticDir str
 		s.ServeWs(w, r)
 		return
 	}
-	log.Printf("Serving static file: %s", r.URL.Path)
 	
 	// Serve static files
 	http.FileServer(http.Dir(staticDir)).ServeHTTP(w, r)
@@ -325,10 +324,17 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request, staticDir str
 // }
 
 func (s *Server) InitializeBoard() {
-	startX := uint16(61)
-	startY := uint16(61)
-	for dx := range 3 {
-		for dy := range 3 {
+	// startX := uint16(40)
+	// startY := uint16(40)
+	// for dx := range 30 {
+	// 	for dy := range 30 {
+	// 		s.board.ResetBoardSection(startX + uint16(dx), startY + uint16(dy), false, false)
+	// 	}
+	// }
+	startX := uint16(0)
+	startY := uint16(0)
+	for dx := range 1000 {
+		for dy := range 1000 {
 			s.board.ResetBoardSection(startX + uint16(dx), startY + uint16(dy), false, false)
 		}
 	}

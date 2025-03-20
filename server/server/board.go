@@ -167,6 +167,11 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 // ResetBoardSection initializes a standard 8x8 chess board at the given position
 func (b *Board) ResetBoardSection(boardX, boardY uint16, whiteOnly, blackOnly bool) []*PieceState {
 	
+	if boardX >= 1000 || boardY >= 1000 {
+		log.Printf("Board section is out of bounds")
+		return nil
+	}
+	
 	// Calculate base coordinates
 	baseX := boardX * 8
 	baseY := boardY * 8

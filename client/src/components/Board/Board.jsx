@@ -268,6 +268,7 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
 
   const handlePieceClick = React.useCallback(
     (piece) => {
+      console.log("HANDLE PIECE CLICK", piece);
       setSelectedPiece(piece);
       const moveableSquares = pieceHandler.current.getMoveableSquares(piece);
       setMoveableSquares(moveableSquares);

@@ -247,7 +247,7 @@ func (c *Client) SendPeriodicUpdates() {
 
 // ProcessMoveUpdates sends pending move updates to the client
 func (c *Client) ProcessMoveUpdates() {
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(150 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
