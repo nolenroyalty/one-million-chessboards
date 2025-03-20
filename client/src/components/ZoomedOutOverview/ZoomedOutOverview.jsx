@@ -17,7 +17,7 @@ const ZoomedOutOverviewWrapper = styled.div`
   position: absolute;
   inset: 0;
   background-color: #2bb0557e;
-  transition: opacity 0.3s ease;
+  transition: opacity var(--transition-time) ease;
   opacity: var(--opacity);
 `;
 
@@ -106,6 +106,17 @@ function ZoomedOutOverview({
     }
   );
 
+  const getBoardColor = React.useCallback(({ x, y }) => {
+    const boardIdxX = Math.floor(x / 8);
+    const boardIdxY = Math.floor(y / 8);
+    const color1 = "#6b7280";
+    const color2 = "#78716c";
+    if (boardIdxX % 2 === 0) {
+      return boardIdxY % 2 === 0 ? color1 : color2;
+    }
+    return boardIdxY % 2 === 0 ? color2 : color1;
+  }, []);
+
   React.useEffect(() => {
     if (!boardCanvasRef.current) {
       return;
@@ -113,8 +124,7 @@ function ZoomedOutOverview({
     const ctx = boardCanvasRef.current.getContext("2d");
     ctx.fillStyle = "slategrey"; //  CR nroyalty: fix colors
     ctx.fillRect(0, 0, pxWidth, pxHeight);
-    // ctx.fillStyle = "#BFDBFE"; // CR nroyalty: FIX
-    ctx.fillStyle = "#6B7280";
+    ctx.fillStyle = "black";
     ctx.fillRect(
       leftPadding,
       topPadding,
@@ -126,10 +136,29 @@ function ZoomedOutOverview({
     let yMod = startingY % 8;
     let xOff = 8 - xMod;
     let yOff = 8 - yMod;
-    let x = startingX + xOff;
-    let y = startingY + yOff;
+
+    for (let x = startingX + xOff - 8; x < endingX; x += 8) {
+      for (let y = startingY + yOff - 8; y < endingY; y += 8) {
+        let { x: screenX, y: screenY } = getScreenRelativeCoords({
+          x,
+          y,
+          startingX,
+          startingY,
+        });
+        screenX = Math.max(0, screenX);
+        screenY = Math.max(0, screenY);
+        ctx.fillStyle = getBoardColor({ x, y });
+        ctx.fillRect(
+          leftPadding + screenX * squareSize,
+          topPadding + screenY * squareSize,
+          squareSize * 8,
+          squareSize * 8
+        );
+      }
+    }
+
     ctx.fillStyle = "black"; // CR nroyalty: fix colors
-    while (x < endingX) {
+    for (let x = startingX + xOff; x < endingX; x += 8) {
       const { x: screenX } = getScreenRelativeCoords({
         x,
         y: 0,
@@ -139,9 +168,8 @@ function ZoomedOutOverview({
       const starting = leftPadding + screenX * squareSize - halfBoardLineWidth;
       const ending = starting + halfBoardLineWidth * 2;
       ctx.fillRect(starting, 0, ending - starting, pxHeight);
-      x += 8;
     }
-    while (y < endingY) {
+    for (let y = startingY + yOff; y < endingY; y += 8) {
       const { y: screenY } = getScreenRelativeCoords({
         x: 0,
         y,
@@ -151,7 +179,6 @@ function ZoomedOutOverview({
       const starting = topPadding + screenY * squareSize - halfBoardLineWidth;
       const ending = starting + halfBoardLineWidth * 2;
       ctx.fillRect(0, starting, pxWidth, ending - starting);
-      y += 8;
     }
   }, [
     pxWidth,
@@ -166,6 +193,7 @@ function ZoomedOutOverview({
     endingY,
     halfBoardLineWidth,
     squareSize,
+    getBoardColor,
   ]);
 
   React.useEffect(() => {
@@ -238,7 +266,12 @@ function ZoomedOutOverview({
   ]);
 
   return (
-    <ZoomedOutOverviewWrapper style={{ "--opacity": hidden ? 0 : 1 }}>
+    <ZoomedOutOverviewWrapper
+      style={{
+        "--opacity": hidden ? 0 : 1,
+        "--transition-time": hidden ? "0.1s" : "0.25s",
+      }}
+    >
       <ZoomCanvas width={pxWidth} height={pxHeight} ref={boardCanvasRef} />
       <ZoomCanvas width={pxWidth} height={pxHeight} ref={pieceCanvasRef} />
     </ZoomedOutOverviewWrapper>

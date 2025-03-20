@@ -16,7 +16,7 @@ const Canvas = styled.canvas`
 `;
 
 const BOARD_BORDER_COLOR = "black";
-const BOARD_BORDER_HALF_WIDTH = 2;
+const BOARD_BORDER_HALF_WIDTH = 1;
 
 function BoardCanvas({
   coords,

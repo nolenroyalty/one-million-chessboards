@@ -77,7 +77,7 @@ const WHITE_PIECE_COLORS = {
   pawn: "#94A3B8",
   bishop: defaultWhiteColor,
   rook: defaultWhiteColor,
-  queen: "#F0ABFC",
+  queen: "#A78BFA",
   king: "#FDE047",
   knight: defaultWhiteColor,
 };
@@ -87,12 +87,13 @@ const BLACK_PIECE_COLORS = {
   pawn: "#334155",
   bishop: defaultBlackColor,
   rook: defaultBlackColor,
-  queen: "#C026D3",
+  queen: "#5B21B6",
   king: "#CA8A04",
   knight: defaultBlackColor,
 };
 
 export function colorForPieceType({ pieceType, isWhite }) {
+  // return "transparent";
   const name = TYPE_TO_NAME[pieceType];
   return isWhite ? WHITE_PIECE_COLORS[name] : BLACK_PIECE_COLORS[name];
 }

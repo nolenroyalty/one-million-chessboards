@@ -240,7 +240,7 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
       let dx = 0;
       let dy = 0;
       let baseStep = 24;
-      const dStep = 1;
+      const dStep = showLargeBoard ? 5 : 1;
       const xMult = lastPanzoom.current.firstXMove ? 1 : 2;
       const yMult = lastPanzoom.current.firstYMove ? 1 : 2;
 
@@ -288,32 +288,32 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
     elt.addEventListener("panzoomzoom", handlePanzoomZoom);
 
     function handleKeyDown(e) {
+      const increment = showLargeBoard ? 6 : 2;
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        console.log("arrow up");
         setCoords((coords) => ({
           x: coords.x,
-          y: coords.y - 2,
+          y: coords.y - increment,
         }));
       }
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setCoords((coords) => ({
           x: coords.x,
-          y: coords.y + 2,
+          y: coords.y + increment,
         }));
       }
       if (e.key === "ArrowLeft") {
         e.preventDefault();
         setCoords((coords) => ({
-          x: coords.x - 2,
+          x: coords.x - increment,
           y: coords.y,
         }));
       }
       if (e.key === "ArrowRight") {
         e.preventDefault();
         setCoords((coords) => ({
-          x: coords.x + 2,
+          x: coords.x + increment,
           y: coords.y,
         }));
       }
@@ -328,7 +328,7 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
       elt.removeEventListener("panzoompan", handlePanzoomPan);
       elt.removeEventListener("panzoomzoom", handlePanzoomZoom);
     };
-  }, [setCoords, clearMoveableSquares]);
+  }, [setCoords, clearMoveableSquares, showLargeBoard]);
 
   return (
     <BoardContainer ref={boardContainerRef}>

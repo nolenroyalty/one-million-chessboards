@@ -28,7 +28,7 @@ const PieceButtonWrapper = styled.button`
   align-items: center;
   justify-content: center;
   opacity: var(--opacity);
-  transition: opacity 0.3s ease;
+  transition: opacity var(--transition-time) ease;
 `;
 
 const AnimFadeout = keyframes`
@@ -91,6 +91,7 @@ const Piece = React.forwardRef(
           "--opacity": hidden ? 0 : 1,
           "--pointer-events": hidden ? "none" : "auto",
           "--cursor": hidden ? "none" : "pointer",
+          "--transition-time": hidden ? "0.1s" : "0.25s",
         }}
         onClick={onClick}
         ref={ref}
