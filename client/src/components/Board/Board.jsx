@@ -56,7 +56,6 @@ const PiecesAndMaybeMoves = React.memo(
           pieceHandler={pieceHandler}
           opacity={opacity}
           hidden={hidden}
-          selectedPiece={selectedPiece}
         />
         <PieceMoveButtons
           moveableSquares={moveableSquares}

@@ -92,7 +92,6 @@ function CapturedPiece({ id, x, y, src, pieceX, pieceY, size }) {
 const _Piece = React.forwardRef(
   (
     {
-      id,
       x,
       y,
       src,
@@ -116,10 +115,11 @@ const _Piece = React.forwardRef(
         "--cursor": hidden ? "none" : "pointer",
       };
     }, [size, x, y, opacity, hidden]);
+    const imgStyle = React.useMemo(() => {
+      return { "--transform": selected ? "scale(1.12)" : "scale(1)" };
+    }, [selected]);
     return (
       <PieceButtonWrapper
-        id={id}
-        key={id}
         data-id={dataId}
         data-piece-x={pieceX}
         data-piece-y={pieceY}
@@ -130,26 +130,23 @@ const _Piece = React.forwardRef(
         onClick={onClick}
         ref={ref}
       >
-        <PieceImg
-          src={src}
-          style={{ "--transform": selected ? "scale(1.12)" : "scale(1)" }}
-        />
+        <PieceImg src={src} style={imgStyle} />
       </PieceButtonWrapper>
     );
   }
 );
 
-const Piece = React.memo(_Piece, (prev, next) => {
-  return true;
-  // prev.id === next.id
-  // prev.selected === next.selected &&
-  // prev.hidden === next.hidden &&
-  // prev.opacity === next.opacity &&
-  // prev.x === next.x &&
-  // prev.y === next.y &&
-  // prev.pieceX === next.pieceX &&
-  // prev.pieceY === next.pieceY &&
-  // prev.size === next.size
+const Piece = React.memo(_Piece, (prevProps, nextProps) => {
+  return (
+    prevProps.dataId === nextProps.dataId &&
+    prevProps.pieceX === nextProps.pieceX &&
+    prevProps.pieceY === nextProps.pieceY &&
+    prevProps.src === nextProps.src &&
+    prevProps.selected === nextProps.selected &&
+    prevProps.hidden === nextProps.hidden &&
+    prevProps.opacity === nextProps.opacity &&
+    prevProps.size === nextProps.size
+  );
 });
 
 // CR nroyalty: make sure to deselect a piece if it's moved by another player
@@ -163,25 +160,24 @@ function PieceDisplay({
   hidden,
   opacity,
 }) {
-  console.log("PieceDisplay");
-  const { startingX, startingY, endingX, endingY } = getStartingAndEndingCoords(
-    {
+  const { startingX, startingY, endingX, endingY } = React.useMemo(() => {
+    return getStartingAndEndingCoords({
       coords,
       width: numSquares,
       height: numSquares,
-    }
-  );
+    });
+  }, [coords, numSquares]);
 
-  const [piecesAndCaptures, setPiecesAndCaptures] = React.useState({
-    pieces: new Map(pieceHandler.current.getPieces()),
-    captures: new Set(pieceHandler.current.getCaptures()),
-  });
+  //   const [piecesAndCaptures, setPiecesAndCaptures] = React.useState({
+  //     pieces: new Map(pieceHandler.current.getPieces()),
+  //     captures: new Set(pieceHandler.current.getCaptures()),
   const piecesRefsMap = React.useRef(new Map());
   const recentMoveByPieceIdRef = React.useRef(
     pieceHandler.current.getMoveMapByPieceId()
   );
   const lastAnimatedCoords = React.useRef(new Map());
-
+  const [forceUpdate, setForceUpdate] = React.useState(0);
+  //   });
   const isNotVisible = React.useCallback(
     ({ x, y }) => {
       return x < startingX || x >= endingX || y < startingY || y >= endingY;
@@ -203,6 +199,29 @@ function PieceDisplay({
     [isNotVisible]
   );
 
+  const getVisiblePiecesAndIds = React.useCallback(
+    (piecesMap) => {
+      const pieces = [];
+      const ids = new Set();
+      for (const piece of piecesMap.values()) {
+        if (ids.has(piece.id)) {
+          continue;
+        }
+        if (isInvisibleNowAndViaMove({ piece })) {
+          continue;
+        }
+        ids.add(piece.id);
+        pieces.push(piece);
+      }
+      return { pieces, ids };
+    },
+    [isInvisibleNowAndViaMove]
+  );
+
+  const [visiblePiecesAndIds, setVisiblePiecesAndIds] = React.useState(
+    getVisiblePiecesAndIds(pieceHandler.current.getPieces())
+  );
+
   React.useEffect(() => {
     pieceHandler.current.subscribe({
       id: "piece-display",
@@ -210,20 +229,7 @@ function PieceDisplay({
         data.recentMoves.forEach((move) => {
           recentMoveByPieceIdRef.current.set(move.pieceId, move);
         });
-        const now = performance.now();
-        const filterTime = 1000;
-        setPiecesAndCaptures((prev) => {
-          const newPieces = new Map(data.pieces);
-          const newCaptures = [...prev.captures, ...data.recentCaptures].filter(
-            (capture) => {
-              return capture.receivedAt > now - filterTime;
-            }
-          );
-          return {
-            pieces: newPieces,
-            captures: new Set(newCaptures),
-          };
-        });
+        setVisiblePiecesAndIds(getVisiblePiecesAndIds(data.pieces));
       },
     });
     return () => {
@@ -231,7 +237,7 @@ function PieceDisplay({
         id: "piece-display",
       });
     };
-  }, [pieceHandler]);
+  }, [getVisiblePiecesAndIds, pieceHandler]);
 
   const getAnimatedCoords = React.useCallback(({ pieceId, now }) => {
     const recentMove = recentMoveByPieceIdRef.current.get(pieceId);
@@ -320,81 +326,88 @@ function PieceDisplay({
     };
   }, [pixelsPerSquare, startingX, startingY, isNotVisible, getAnimatedCoords]);
 
-  // CR nroyalty: captures are not displayed because they cause flickering...
-  return (
-    <>
-      {/* {Array.from(piecesAndCaptures.captures).map((capture) => {
-        if (isNotVisible({ x: capture.x, y: capture.y })) {
-          return null;
-        }
-        const { x, y } = getScreenRelativeCoords({
-          x: capture.x,
-          y: capture.y,
-          startingX,
-          startingY,
-        });
-        return (
-          <CapturedPiece
-            key={capture.capturedPieceId}
-            id={capture.id}
-            src={imageForPieceType({
-              pieceType: capture.capturedType,
-              isWhite: capture.wasWhite,
-            })}
-            pieceX={capture.x}
-            pieceY={capture.y}
-            x={x}
-            y={y}
-            size={pixelsPerSquare}
-          />
-        );
-      })} */}
-      {Array.from(piecesAndCaptures.pieces.values()).map((piece) => {
-        const now = performance.now();
-        let maybeAnimatedX = piece.x;
-        let maybeAnimatedY = piece.y;
-        const maybeAnimated = getAnimatedCoords({
-          pieceId: piece.id,
-          now,
-        });
-        if (maybeAnimated) {
-          maybeAnimatedX = maybeAnimated.x;
-          maybeAnimatedY = maybeAnimated.y;
-        }
-        if (isInvisibleNowAndViaMove({ piece })) {
-          return null;
-        }
-        const { x, y } = getScreenRelativeCoords({
-          x: maybeAnimatedX,
-          y: maybeAnimatedY,
-          startingX,
-          startingY,
-        });
-        return (
-          <Piece
-            key={piece.id}
-            ref={(el) => savePieceRef(piece.id, el)}
-            selected={selectedPiece?.id === piece.id}
-            dataId={piece.id}
-            src={imageForPieceType({
-              pieceType: piece.type,
-              isWhite: piece.isWhite,
-            })}
-            pieceX={piece.x}
-            pieceY={piece.y}
-            x={x}
-            y={y}
-            size={pixelsPerSquare}
-            hidden={hidden}
-            opacity={opacity}
-            onClick={(e) => {
-              maybeHandlePieceClick(piece);
-            }}
-          />
-        );
-      })}
-    </>
+  const createOnClickHandler = React.useCallback(
+    (piece) => {
+      return (e) => {
+        maybeHandlePieceClick(piece);
+      };
+    },
+    [maybeHandlePieceClick]
   );
+
+  const createRefFunc = React.useCallback(
+    (pieceId) => {
+      return (el) => {
+        savePieceRef(pieceId, el);
+      };
+    },
+    [savePieceRef]
+  );
+
+  const memoizedPieces = React.useMemo(() => {
+    const pieces = [];
+    for (const piece of visiblePiecesAndIds.pieces) {
+      if (isInvisibleNowAndViaMove({ piece })) {
+        continue;
+      }
+      const now = performance.now();
+      let maybeAnimatedX = piece.x;
+      let maybeAnimatedY = piece.y;
+      const maybeAnimated = getAnimatedCoords({
+        pieceId: piece.id,
+        now,
+      });
+      if (maybeAnimated) {
+        maybeAnimatedX = maybeAnimated.x;
+        maybeAnimatedY = maybeAnimated.y;
+      }
+      const { x, y } = getScreenRelativeCoords({
+        x: maybeAnimatedX,
+        y: maybeAnimatedY,
+        startingX,
+        startingY,
+      });
+      pieces.push({
+        piece,
+        refFunc: createRefFunc(piece.id),
+        imageSrc: imageForPieceType({
+          pieceType: piece.type,
+          isWhite: piece.isWhite,
+        }),
+        x,
+        y,
+        onClick: createOnClickHandler(piece),
+      });
+    }
+    return pieces;
+  }, [
+    createOnClickHandler,
+    createRefFunc,
+    getAnimatedCoords,
+    isInvisibleNowAndViaMove,
+    visiblePiecesAndIds.pieces,
+    startingX,
+    startingY,
+  ]);
+
+  return memoizedPieces.map(({ piece, refFunc, imageSrc, x, y, onClick }) => {
+    return (
+      <Piece
+        key={piece.id}
+        ref={refFunc}
+        dataId={piece.id}
+        pieceX={piece.x}
+        pieceY={piece.y}
+        src={imageSrc}
+        x={x}
+        y={y}
+        size={pixelsPerSquare}
+        hidden={hidden}
+        opacity={opacity}
+        onClick={onClick}
+      />
+    );
+  });
 }
 
 export default PieceDisplay;

@@ -205,6 +205,7 @@ function App() {
       <p>
         {coords.x} {coords.y}
       </p>
+      <p>{runBot ? "running bot" : "not running bot"}</p>
     </Main>
   );
 }
