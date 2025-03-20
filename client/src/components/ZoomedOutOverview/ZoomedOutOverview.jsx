@@ -2,13 +2,15 @@ import React from "react";
 import styled from "styled-components";
 import {
   getStartingAndEndingCoords,
-  getSquareColor,
   getScreenRelativeCoords,
   easeInOutSquare,
   colorForPieceType,
+  computeAnimationDuration,
 } from "../../utils";
 
-const MOVE_ANIMATION_DURATION = 600;
+const MAX_ANIMATION_DURATION = 1200;
+const MIN_ANIMATION_DURATION = 500;
+const MAX_DMOVE = 25;
 
 const ZoomedOutOverviewWrapper = styled.div`
   position: absolute;
@@ -97,6 +99,7 @@ function ZoomedOutOverview({
     return boardIdxY % 2 === 0 ? color2 : color1;
   }, []);
 
+  // draw on the gridlines
   React.useEffect(() => {
     if (!boardCanvasRef.current) {
       return;
@@ -197,7 +200,8 @@ function ZoomedOutOverview({
   );
 
   // Draw on the non-animated pieces
-  // Doesn't really require a RAF because we're not animating.
+  // It's kinda nice to use RAF here because it gives us a debounce-esque mechanic,
+  // but we don't need a loop since we only want to trigger this when the pieces change.
   React.useEffect(() => {
     if (!pieceCanvasRef.current) {
       return;
@@ -205,32 +209,42 @@ function ZoomedOutOverview({
     if (largeBoardKillSwitch.current) {
       return;
     }
-    const ctx = pieceCanvasRef.current.getContext("2d");
-    ctx.clearRect(0, 0, pxWidth, pxHeight);
-    for (const piece of piecesRef.current.values()) {
-      const { x, y } = piece;
-      if (x < startingX || x >= endingX || y < startingY || y >= endingY) {
-        continue;
+
+    const loop = () => {
+      const ctx = pieceCanvasRef.current.getContext("2d");
+      ctx.clearRect(0, 0, pxWidth, pxHeight);
+      console.log("drawing non-animated pieces");
+      for (const piece of piecesRef.current.values()) {
+        const { x, y } = piece;
+        if (x < startingX || x >= endingX || y < startingY || y >= endingY) {
+          continue;
+        }
+        if (recentMovesRef.current.has(piece.id)) {
+          // when we remove a move here, we draw it to this canvas if
+          // applicable. so we shouldn't ever need to draw it here
+          continue;
+        }
+        let { x: screenX, y: screenY } = getScreenRelativeCoords({
+          x,
+          y,
+          startingX,
+          startingY,
+        });
+        drawPiece({
+          screenX,
+          screenY,
+          ctx,
+          pieceType: piece.type,
+          isWhite: piece.isWhite,
+        });
       }
-      if (recentMovesRef.current.has(piece.id)) {
-        // when we remove a move here, we draw it to this canvas if
-        // applicable. so we shouldn't ever need to draw it here
-        continue;
-      }
-      let { x: screenX, y: screenY } = getScreenRelativeCoords({
-        x,
-        y,
-        startingX,
-        startingY,
-      });
-      drawPiece({
-        screenX,
-        screenY,
-        ctx,
-        pieceType: piece.type,
-        isWhite: piece.isWhite,
-      });
-    }
+    };
+
+    const rafId = requestAnimationFrame(loop);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+    };
   }, [
     drawPiece,
     endingX,
@@ -267,7 +281,13 @@ function ZoomedOutOverview({
           continue;
         }
         const elapsed = performance.now() - receivedAt;
-        if (elapsed > MOVE_ANIMATION_DURATION) {
+        const animationDuration = computeAnimationDuration({
+          moveDistance: Math.hypot(toX - fromX, toY - fromY),
+          maxAnimationDuration: MAX_ANIMATION_DURATION,
+          minAnimationDuration: MIN_ANIMATION_DURATION,
+          maxMoveDistance: MAX_DMOVE,
+        });
+        if (elapsed > animationDuration) {
           if (!pieceCanvasRef.current) {
             continue;
           }
@@ -288,7 +308,7 @@ function ZoomedOutOverview({
           recentMovesRef.current.delete(move.pieceId);
           continue;
         }
-        const progress = easeInOutSquare(elapsed / MOVE_ANIMATION_DURATION);
+        const progress = easeInOutSquare(elapsed / animationDuration);
         const x = fromX + (toX - fromX) * progress;
         const y = fromY + (toY - fromY) * progress;
         let { x: screenX, y: screenY } = getScreenRelativeCoords({

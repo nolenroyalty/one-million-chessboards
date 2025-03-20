@@ -128,7 +128,6 @@ class PieceHandler {
         afterSeqnum: this.snapshotSeqnum.from,
       });
       if (!skip) {
-        console.log("adding move", move);
         this.addReceivedAt(move);
         this.moves.push(move);
       } else {
@@ -140,7 +139,6 @@ class PieceHandler {
       if (capture.seqNum <= this.snapshotSeqnum.from) {
         console.log("skipping capture", capture);
       } else {
-        console.log("adding capture", capture);
         this.addReceivedAt(capture);
         recentCaptures.push(capture);
         this.captures.push(capture);

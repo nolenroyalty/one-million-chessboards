@@ -2,7 +2,7 @@ import React from "react";
 import styled from "styled-components";
 import Board from "../Board/Board";
 import PieceHandler from "../../pieceHandler.js";
-import { createMoveRequest } from "../../utils";
+import { createMoveRequest, keyToCoords } from "../../utils";
 
 const Main = styled.main`
   display: flex;
@@ -13,10 +13,55 @@ const Main = styled.main`
   margin: 0 auto;
 `;
 
+function useStartBot({ pieceHandler, submitMove, started }) {
+  React.useEffect(() => {
+    if (!started) {
+      return;
+    }
+    let botInterval;
+    const loop = () => {
+      let attempts = 0;
+      let targetPiece, targetSquare;
+      while (attempts < 50) {
+        const randomPiece = Array.from(pieceHandler.current.pieces.values())[
+          Math.floor(Math.random() * pieceHandler.current.pieces.size)
+        ];
+        const moveableSquares =
+          pieceHandler.current.getMoveableSquares(randomPiece);
+        if (moveableSquares.size > 0) {
+          targetPiece = randomPiece;
+          targetSquare =
+            Array.from(moveableSquares)[
+              Math.floor(Math.random() * moveableSquares.size)
+            ];
+          break;
+        }
+        attempts++;
+      }
+      if (targetPiece && targetSquare) {
+        const [x, y] = keyToCoords(targetSquare);
+        submitMove({
+          piece: targetPiece,
+          toX: x,
+          toY: y,
+        });
+      }
+    };
+    console.log("starting bot");
+    botInterval = setInterval(loop, 55);
+
+    return () => {
+      console.log("stopping bot");
+      clearInterval(botInterval);
+    };
+  }, [pieceHandler, submitMove, started]);
+}
+
 function App() {
   const [websocket, setWebsocket] = React.useState(null);
   const [coords, setCoords] = React.useState({ x: 500, y: 500 });
   const pieceHandler = React.useRef(new PieceHandler());
+  const [runBot, setRunBot] = React.useState(false);
 
   const submitMove = React.useCallback(
     ({ piece, toX, toY }) => {
@@ -29,6 +74,22 @@ function App() {
     },
     [websocket]
   );
+
+  useStartBot({ pieceHandler, submitMove, started: runBot });
+
+  // CR nroyalty: delete this before rolling to prod...
+  // run bot on CTRL-B
+  React.useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.ctrlKey && event.key === "b") {
+        setRunBot((prev) => !prev);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
 
   const failedReconnections = React.useRef(0);
   React.useEffect(() => {
@@ -46,6 +107,8 @@ function App() {
 
       ws.addEventListener("message", (event) => {
         // CR nroyalty: handle movement error / cancelation
+        // CR nroyalty: move error handling is like "keep recent moves clientside
+        // and send a move ID to the server; use that to figure out what to cancel"
         // CR nroyalty: handle other updates...
         const data = JSON.parse(event.data);
         if (data.type === "stateSnapshot") {

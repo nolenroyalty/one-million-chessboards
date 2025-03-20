@@ -1,4 +1,4 @@
-const MAX_MOVE_DISTANCE = 50;
+const MAX_MOVE_DISTANCE = 40;
 
 export function pieceKey(x, y) {
   return `${x}-${y}`;
@@ -14,6 +14,18 @@ export function getPiece(pieces, x, y) {
 
 export function easeInOutSquare(t) {
   return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+}
+
+export function computeAnimationDuration({
+  moveDistance,
+  maxAnimationDuration,
+  minAnimationDuration,
+  maxMoveDistance,
+}) {
+  const t = clamp(moveDistance / maxMoveDistance, 0, 1);
+  const diff = maxAnimationDuration - minAnimationDuration;
+  const percent = t * diff;
+  return minAnimationDuration + percent;
 }
 
 export function getStartingAndEndingCoords({ coords, width, height }) {

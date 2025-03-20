@@ -5,17 +5,29 @@ import {
   getStartingAndEndingCoords,
   getScreenRelativeCoords,
   easeInOutSquare,
+  computeAnimationDuration,
 } from "../../utils";
 
-const ANIMATION_DURATION = 300;
+const MAX_ANIMATION_DURATION = 750;
+const MIN_ANIMATION_DURATION = 350;
+const MAX_DMOVE = 15;
+
 // CR nroyalty: tombstones for recently captured pieces!
 
 const PieceImg = styled.img`
   width: var(--size);
   height: var(--size);
   opacity: var(--opacity);
-  transition: opacity 0.3s ease;
-  will-change: opacity;
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
+  will-change: opacity, transform;
+
+  transform-origin: center;
+  transform: var(--transform);
+  &:hover {
+    transform: scale(1.12);
+  }
 `;
 
 const PieceButtonWrapper = styled.button`
@@ -77,9 +89,22 @@ function CapturedPiece({ id, x, y, src, pieceX, pieceY, size }) {
     </CapturedPieceWrapper>
   );
 }
-const Piece = React.forwardRef(
+const _Piece = React.forwardRef(
   (
-    { id, x, y, src, onClick, dataId, pieceX, pieceY, size, hidden, opacity },
+    {
+      id,
+      x,
+      y,
+      src,
+      onClick,
+      dataId,
+      pieceX,
+      pieceY,
+      size,
+      hidden,
+      opacity,
+      selected,
+    },
     ref
   ) => {
     const style = React.useMemo(() => {
@@ -105,11 +130,27 @@ const Piece = React.forwardRef(
         onClick={onClick}
         ref={ref}
       >
-        <PieceImg src={src} />
+        <PieceImg
+          src={src}
+          style={{ "--transform": selected ? "scale(1.12)" : "scale(1)" }}
+        />
       </PieceButtonWrapper>
     );
   }
 );
+
+const Piece = React.memo(_Piece, (prev, next) => {
+  return true;
+  // prev.id === next.id
+  // prev.selected === next.selected &&
+  // prev.hidden === next.hidden &&
+  // prev.opacity === next.opacity &&
+  // prev.x === next.x &&
+  // prev.y === next.y &&
+  // prev.pieceX === next.pieceX &&
+  // prev.pieceY === next.pieceY &&
+  // prev.size === next.size
+});
 
 // CR nroyalty: make sure to deselect a piece if it's moved by another player
 function PieceDisplay({
@@ -118,9 +159,11 @@ function PieceDisplay({
   numSquares,
   handlePieceClick,
   pixelsPerSquare,
+  selectedPiece,
   hidden,
   opacity,
 }) {
+  console.log("PieceDisplay");
   const { startingX, startingY, endingX, endingY } = getStartingAndEndingCoords(
     {
       coords,
@@ -195,10 +238,18 @@ function PieceDisplay({
     if (recentMove) {
       const { fromX, fromY, toX, toY, receivedAt } = recentMove;
       const elapsed = now - receivedAt;
-      if (elapsed > ANIMATION_DURATION) {
+      const moveDistance = Math.hypot(toX - fromX, toY - fromY);
+      // CR-maybe nroyalty: we could memoize this if need be
+      const animationDuration = computeAnimationDuration({
+        moveDistance,
+        maxAnimationDuration: MAX_ANIMATION_DURATION,
+        minAnimationDuration: MIN_ANIMATION_DURATION,
+        maxMoveDistance: MAX_DMOVE,
+      });
+      if (elapsed > animationDuration) {
         return { x: toX, y: toY, finished: true };
       }
-      const progress = easeInOutSquare(elapsed / ANIMATION_DURATION);
+      const progress = easeInOutSquare(elapsed / animationDuration);
       const x = fromX + (toX - fromX) * progress;
       const y = fromY + (toY - fromY) * progress;
       return { x, y, finished: false };
@@ -323,6 +374,7 @@ function PieceDisplay({
           <Piece
             key={piece.id}
             ref={(el) => savePieceRef(piece.id, el)}
+            selected={selectedPiece?.id === piece.id}
             dataId={piece.id}
             src={imageForPieceType({
               pieceType: piece.type,
