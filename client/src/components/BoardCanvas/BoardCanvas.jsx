@@ -33,6 +33,7 @@ function BoardCanvas({
     if (!ref.current) {
       return;
     }
+
     const canvas = ref.current;
     const ctx = canvas.getContext("2d");
     const { startingX, startingY, endingX, endingY } =
@@ -44,7 +45,6 @@ function BoardCanvas({
     for (let x = startingX; x < endingX; x++) {
       for (let y = startingY; y < endingY; y++) {
         let color = getSquareColor(x, y);
-
         const { x: screenX, y: screenY } = getScreenRelativeCoords({
           x,
           y,

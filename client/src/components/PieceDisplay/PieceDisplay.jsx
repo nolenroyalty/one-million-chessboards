@@ -72,13 +72,13 @@ const CapturedPieceWrapper = styled.button`
   transform: translate(var(--x), var(--y));
 `;
 
-function CapturedPiece({ id, x, y, src, pieceX, pieceY, size }) {
+function CapturedPiece({ id, x, y, src, piece, size }) {
   return (
     <CapturedPieceWrapper
       id={id}
       data-id={id}
-      data-piece-x={pieceX}
-      data-piece-y={pieceY}
+      data-piece-x={piece.x}
+      data-piece-y={piece.y}
       style={{
         "--x": `${x * size}px`,
         "--y": `${y * size}px`,
@@ -106,18 +106,24 @@ const _Piece = React.forwardRef(
     },
     ref
   ) => {
+    const translate = React.useMemo(() => {
+      return `translate(${x * size}px, ${y * size}px)`;
+    }, [x, y, size]);
+
     const style = React.useMemo(() => {
       return {
         "--size": `${size}px`,
-        transform: `translate(${x * size}px, ${y * size}px)`,
+        transform: translate,
         "--opacity": opacity,
         "--pointer-events": hidden ? "none" : "auto",
         "--cursor": hidden ? "none" : "pointer",
       };
-    }, [size, x, y, opacity, hidden]);
+    }, [size, translate, opacity, hidden]);
+
     const imgStyle = React.useMemo(() => {
       return { "--transform": selected ? "scale(1.12)" : "scale(1)" };
     }, [selected]);
+
     return (
       <PieceButtonWrapper
         data-id={dataId}
@@ -139,8 +145,8 @@ const _Piece = React.forwardRef(
 const Piece = React.memo(_Piece, (prevProps, nextProps) => {
   return (
     prevProps.dataId === nextProps.dataId &&
-    prevProps.pieceX === nextProps.pieceX &&
-    prevProps.pieceY === nextProps.pieceY &&
+    prevProps.piece.x === nextProps.piece.x &&
+    prevProps.piece.y === nextProps.piece.y &&
     prevProps.src === nextProps.src &&
     prevProps.selected === nextProps.selected &&
     prevProps.hidden === nextProps.hidden &&
@@ -159,8 +165,8 @@ function PieceDisplay({
   selectedPiece,
   hidden,
   opacity,
+  clearMoveableSquares,
 }) {
-  console.log("SELECTED PIECE", selectedPiece);
   const { startingX, startingY, endingX, endingY } = React.useMemo(() => {
     return getStartingAndEndingCoords({
       coords,
@@ -227,6 +233,9 @@ function PieceDisplay({
       id: "piece-display",
       callback: (data) => {
         data.recentMoves.forEach((move) => {
+          if (move.pieceId === selectedPiece?.id) {
+            clearMoveableSquares();
+          }
           recentMoveByPieceIdRef.current.set(move.pieceId, move);
         });
         const nowVisiblePiecesAndIds = getVisiblePiecesAndIds(data.pieces);
@@ -246,7 +255,12 @@ function PieceDisplay({
         id: "piece-display",
       });
     };
-  }, [getVisiblePiecesAndIds, pieceHandler]);
+  }, [
+    getVisiblePiecesAndIds,
+    pieceHandler,
+    selectedPiece?.id,
+    clearMoveableSquares,
+  ]);
 
   const getAnimatedCoords = React.useCallback(({ pieceId, now }) => {
     const recentMove = recentMoveByPieceIdRef.current.get(pieceId);
@@ -357,7 +371,6 @@ function PieceDisplay({
   );
 
   const memoizedPieces = React.useMemo(() => {
-    console.log("SELECTED PIECE", selectedPiece);
     const pieces = [];
     const shutUpError = forceUpdate;
     for (const piece of visiblePiecesAndIdsRef.current.pieces) {
@@ -411,9 +424,7 @@ function PieceDisplay({
       <Piece
         key={piece.id}
         ref={refFunc}
-        dataId={piece.id}
-        pieceX={piece.x}
-        pieceY={piece.y}
+        piece={piece}
         src={imageSrc}
         x={x}
         y={y}

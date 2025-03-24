@@ -27,59 +27,32 @@ const Inner = styled.div`
   overflow: hidden;
 `;
 
-const PiecesAndMaybeMoves = React.memo(
-  ({
-    coords,
-    handlePieceClick,
-    numSquares,
-    pixelsPerSquare,
-    pieceHandler,
-    moveableSquares,
-    moveAndClear,
-    selectedPiece,
-    opacity,
-    hidden,
-  }) => {
-    return (
-      <>
-        <PieceDisplay
-          coords={coords}
-          handlePieceClick={handlePieceClick}
-          numSquares={numSquares}
-          pixelsPerSquare={pixelsPerSquare}
-          pieceHandler={pieceHandler}
-          opacity={opacity}
-          hidden={hidden}
-          selectedPiece={selectedPiece}
-        />
-        <PieceMoveButtons
-          moveableSquares={moveableSquares}
-          coords={coords}
-          numSquares={numSquares}
-          moveAndClear={moveAndClear}
-          selectedPiece={selectedPiece}
-          size={pixelsPerSquare}
-          opacity={opacity}
-        />
-      </>
-    );
-  }
-);
-
 function useElementSize(ref) {
-  const [size, setSize] = React.useState({ width: 0, height: 0 });
+  const [size, setSize] = React.useState({
+    left: 0,
+    top: 0,
+    width: 0,
+    height: 0,
+  });
 
   React.useEffect(() => {
     if (!ref.current) {
       return;
     }
     const elt = ref.current;
+    const bounds = elt.getBoundingClientRect();
+    // client width doesn't account for border etc, which is nice
     setSize({
+      left: bounds.left,
+      top: bounds.top,
       width: elt.clientWidth,
       height: elt.clientHeight,
     });
     const handleResize = () => {
+      const bounds = elt.getBoundingClientRect();
       setSize({
+        left: bounds.left,
+        top: bounds.top,
         width: elt.clientWidth,
         height: elt.clientHeight,
       });
@@ -207,6 +180,17 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
     setMoveableSquares(new Set());
   }, []);
 
+  const makeCoordsRelativeToInner = React.useCallback(
+    (coords) => {
+      let x = coords.x - innerSize.left;
+      let y = coords.y - innerSize.top;
+      return {
+        x: clamp(x, 0, innerSize.width),
+        y: clamp(y, 0, innerSize.height),
+      };
+    },
+    [innerSize]
+  );
   React.useEffect(() => {
     if (showLargeBoard) {
       if (!largeMounted) {
@@ -261,7 +245,6 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
 
   const handlePieceClick = React.useCallback(
     (piece) => {
-      console.log("HANDLE PIECE CLICK", piece);
       setSelectedPiece(piece);
       const moveableSquares = pieceHandler.current.getMoveableSquares(piece);
       setMoveableSquares(moveableSquares);
@@ -329,7 +312,6 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
   // handler for desktop zoom
   React.useEffect(() => {
     const elt = boardContainerRef.current;
-    console.log("DESKTOP ZOOM");
     const handleWheel = (e) => {
       const doScroll = e.ctrlKey || e.metaKey;
       if (doScroll && e.deltaY > 0 && !showLargeBoard) {
@@ -444,18 +426,30 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
           showLargeBoard={showLargeBoard}
         />
         {smallMounted && (
-          <PiecesAndMaybeMoves
-            coords={coords}
-            handlePieceClick={handlePieceClick}
-            numSquares={zoomedInParams.numSquares}
-            pixelsPerSquare={zoomedInParams.squareSize}
-            pieceHandler={pieceHandler}
-            moveableSquares={moveableSquares}
-            moveAndClear={moveAndClear}
-            selectedPiece={selectedPiece}
-            hidden={smallHidden}
-            opacity={smallOpacity}
-          />
+          <>
+            <PieceDisplay
+              coords={coords}
+              handlePieceClick={handlePieceClick}
+              numSquares={zoomedInParams.numSquares}
+              pixelsPerSquare={zoomedInParams.squareSize}
+              pieceHandler={pieceHandler}
+              opacity={smallOpacity}
+              hidden={smallHidden}
+              selectedPiece={selectedPiece}
+              setSelectedPiece={setSelectedPiece}
+              makeCoordsRelativeToInner={makeCoordsRelativeToInner}
+              clearMoveableSquares={clearMoveableSquares}
+            />
+            <PieceMoveButtons
+              moveableSquares={moveableSquares}
+              coords={coords}
+              numSquares={zoomedInParams.numSquares}
+              moveAndClear={moveAndClear}
+              selectedPiece={selectedPiece}
+              size={zoomedInParams.squareSize}
+              opacity={smallOpacity}
+            />
+          </>
         )}
       </Inner>
     </BoardContainer>
