@@ -6,13 +6,91 @@ import PieceMoveButtons from "../PieceMoveButtons/PieceMoveButtons";
 import ZoomedOutOverview from "../ZoomedOutOverview/ZoomedOutOverview";
 import { clamp } from "../../utils";
 import PanzoomBox from "../PanzoomBox/PanzoomBox";
+import IconButton from "../IconButton/IconButton";
+import { CirclePlus, CircleMinus, Flame } from "lucide-react";
+
 const BoardContainer = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   background-color: var(--color-slate-400);
+  gap: 0.5rem;
 `;
+
+const BoardControls = styled.div`
+  display: flex;
+  flex-direction: row;
+  align-items: start;
+  width: 100%;
+  position: relative;
+  justify-content: space-between;
+`;
+
+const PlusMinusControls = styled.div`
+  display: flex;
+  flex-direction: row;
+  gap: 0.25rem;
+  align-items: center;
+  justify-content: space-between;
+`;
+
+const MinimapWrapper = styled.div`
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, 0);
+  width: 84px;
+  height: 84px;
+  background-color: var(--color-slate-500);
+  border: 2px solid var(--color-slate-600);
+  border-radius: 0.5rem;
+  cursor: pointer;
+`;
+
+const MinimapDot = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  background-color: var(--color-green-400);
+  border-radius: 2px;
+  transform: translate(var(--x), var(--y));
+`;
+
+function Minimap({ coords, setCoords }) {
+  const ref = React.useRef(null);
+  const xPercent = (coords.x / 8000) * 100;
+  const yPercent = (coords.y / 8000) * 100;
+  const adjustForDotSizeX = (xPercent * 80) / 10;
+  const adjustForDotSizeY = (yPercent * 80) / 10;
+
+  const handleClick = React.useCallback(
+    (e) => {
+      const rect = ref.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const xPct = clamp(x / rect.width, 0, 1);
+      const yPct = clamp(y / rect.height, 0, 1);
+      let xCoord = Math.floor(xPct * 8000);
+      let yCoord = Math.floor(yPct * 8000);
+      setCoords({ x: xCoord, y: yCoord });
+    },
+    [setCoords]
+  );
+
+  return (
+    <MinimapWrapper ref={ref} onClick={handleClick}>
+      <MinimapDot
+        style={{
+          "--x": adjustForDotSizeX + "%",
+          "--y": adjustForDotSizeY + "%",
+        }}
+      />
+    </MinimapWrapper>
+  );
+}
 
 const WIDTH = 23;
 const HEIGHT = 23;
@@ -267,7 +345,7 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
 
   const zoomInOnBoard = React.useCallback(
     (e) => {
-      const elt = boardContainerRef.current;
+      const elt = innerRef.current;
       if (!elt) {
         return;
       }
@@ -298,7 +376,7 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
 
   // zoom in on double click if we're zoomed out
   React.useEffect(() => {
-    const elt = boardContainerRef.current;
+    const elt = innerRef.current;
     const handleDoubleClick = (e) => {
       if (showLargeBoard) {
         setShowLargeBoard(false);
@@ -311,7 +389,7 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
 
   // handler for desktop zoom
   React.useEffect(() => {
-    const elt = boardContainerRef.current;
+    const elt = innerRef.current;
     const handleWheel = (e) => {
       const doScroll = e.ctrlKey || e.metaKey;
       if (doScroll && e.deltaY > 0 && !showLargeBoard) {
@@ -333,7 +411,7 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
     changed: false,
   });
   React.useEffect(() => {
-    const elt = boardContainerRef.current;
+    const elt = innerRef.current;
 
     const handleTouchStart = (e) => {
       console.log(e);
@@ -452,6 +530,51 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
           </>
         )}
       </Inner>
+      <BoardControls>
+        <div>
+          <form
+            onSubmit={(e) => {
+              console.log("submit");
+              e.preventDefault();
+              console.log(e.target[0].value);
+              let [x, y] = e.target[0].value.split(",");
+              x = parseInt(x);
+              y = parseInt(y);
+              if (isNaN(x) || isNaN(y)) {
+                console.log("invalid coords");
+                return;
+              }
+              setCoords({ x, y });
+              e.target[0].value = "";
+            }}
+          >
+            <input
+              type="text"
+              placeholder={`${coords.x},${coords.y}`}
+              style={{ width: "10ch" }}
+            />
+            <button type="submit">jump</button>
+          </form>
+        </div>
+        <Minimap coords={coords} setCoords={setCoords} />
+        <PlusMinusControls>
+          <IconButton>
+            <Flame />
+          </IconButton>
+          <IconButton
+            disabled={!showLargeBoard}
+            onClick={() => setShowLargeBoard(false)}
+          >
+            <CirclePlus />
+          </IconButton>
+          <IconButton
+            disabled={showLargeBoard}
+            onClick={() => setShowLargeBoard(true)}
+          >
+            <CircleMinus />
+          </IconButton>
+        </PlusMinusControls>
+      </BoardControls>
     </BoardContainer>
   );
 }

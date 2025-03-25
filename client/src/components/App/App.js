@@ -3,6 +3,8 @@ import styled from "styled-components";
 import Board from "../Board/Board";
 import PieceHandler from "../../pieceHandler.js";
 import { createMoveRequest, keyToCoords } from "../../utils";
+import IconButton from "../IconButton/IconButton";
+import { Plus } from "lucide-react";
 
 const Main = styled.main`
   display: flex;
