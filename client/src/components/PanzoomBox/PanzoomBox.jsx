@@ -9,7 +9,11 @@ const PanzoomWrapper = styled.div`
   inset: 0;
 `;
 
-function PanzoomBox({ setCoords, clearMoveableSquares, showLargeBoard }) {
+function PanzoomBox({
+  setCoords,
+  clearSelectedPieceAndSquares,
+  showLargeBoard,
+}) {
   const ref = React.useRef(null);
   const lastPanzoom = React.useRef({ lastX: 0, lastY: 0, accX: 0, accY: 0 });
   React.useEffect(() => {
@@ -22,7 +26,7 @@ function PanzoomBox({ setCoords, clearMoveableSquares, showLargeBoard }) {
 
     const handlePanzoomStart = (e) => {
       console.log("panzoomstart");
-      clearMoveableSquares();
+      clearSelectedPieceAndSquares();
       lastPanzoom.current = {
         ...lastPanzoom.current,
         lastX: e.detail.x,
@@ -140,7 +144,7 @@ function PanzoomBox({ setCoords, clearMoveableSquares, showLargeBoard }) {
       elt.removeEventListener("panzoomend", handlePanzoomEnd);
       elt.removeEventListener("panzoompan", handlePanzoomPan);
     };
-  }, [setCoords, clearMoveableSquares, showLargeBoard]);
+  }, [setCoords, clearSelectedPieceAndSquares, showLargeBoard]);
   return <PanzoomWrapper ref={ref} />;
 }
 

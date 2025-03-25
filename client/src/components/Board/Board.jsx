@@ -262,7 +262,7 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
   const innerSize = useElementSize(innerRef);
   const zoomedOutParams = useZoomedOutParams({ innerSize });
   const zoomedInParams = useZoomedInParams({ innerSize });
-  const clearMoveableSquares = React.useCallback(() => {
+  const clearSelectedPieceAndSquares = React.useCallback(() => {
     setSelectedPiece(null);
     setMoveableSquares(new Set());
   }, []);
@@ -304,7 +304,7 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
         setSmallOpacity(0);
         setLargeOpacity(0);
       }
-      clearMoveableSquares();
+      clearSelectedPieceAndSquares();
       setSmallHidden(false);
       const opacityTimeout = setTimeout(() => {
         setSmallOpacity(1);
@@ -319,7 +319,12 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
         clearTimeout(opacityTimeout);
       };
     }
-  }, [showLargeBoard, largeMounted, smallMounted, clearMoveableSquares]);
+  }, [
+    showLargeBoard,
+    largeMounted,
+    smallMounted,
+    clearSelectedPieceAndSquares,
+  ]);
 
   const moveAndClear = React.useCallback(
     ({ piece, toX, toY }) => {
@@ -343,14 +348,14 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
     // clear piece when escape is pressed
     const handleEscape = (e) => {
       if (e.key === "Escape") {
-        clearMoveableSquares();
+        clearSelectedPieceAndSquares();
       }
     };
     window.addEventListener("keydown", handleEscape);
     return () => {
       window.removeEventListener("keydown", handleEscape);
     };
-  }, [clearMoveableSquares]);
+  }, [clearSelectedPieceAndSquares]);
 
   const zoomInOnBoard = React.useCallback(
     (e) => {
@@ -509,7 +514,7 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
         )}
         <PanzoomBox
           setCoords={setCoords}
-          clearMoveableSquares={clearMoveableSquares}
+          clearSelectedPieceAndSquares={clearSelectedPieceAndSquares}
           showLargeBoard={showLargeBoard}
         />
         {smallMounted && (
@@ -525,7 +530,7 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
               selectedPiece={selectedPiece}
               setSelectedPiece={setSelectedPiece}
               makeCoordsRelativeToInner={makeCoordsRelativeToInner}
-              clearMoveableSquares={clearMoveableSquares}
+              clearSelectedPieceAndSquares={clearSelectedPieceAndSquares}
             />
             <PieceMoveButtons
               moveableSquares={moveableSquares}
@@ -545,7 +550,6 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
           <div>
             <form
               onSubmit={(e) => {
-                console.log("submit");
                 e.preventDefault();
                 console.log(e.target[0].value);
                 let [x, y] = e.target[0].value.split(",");

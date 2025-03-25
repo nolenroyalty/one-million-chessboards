@@ -165,7 +165,7 @@ function PieceDisplay({
   selectedPiece,
   hidden,
   opacity,
-  clearMoveableSquares,
+  clearSelectedPieceAndSquares,
 }) {
   const { startingX, startingY, endingX, endingY } = React.useMemo(() => {
     return getStartingAndEndingCoords({
@@ -224,19 +224,21 @@ function PieceDisplay({
     getVisiblePiecesAndIds(pieceHandler.current.getPieces())
   );
 
-  //   const [visiblePiecesAndIds, setVisiblePiecesAndIds] = React.useState(
-  //     getVisiblePiecesAndIds(pieceHandler.current.getPieces())
-  //   );
-
   React.useEffect(() => {
     pieceHandler.current.subscribe({
       id: "piece-display",
       callback: (data) => {
         data.recentMoves.forEach((move) => {
           if (move.pieceId === selectedPiece?.id) {
-            clearMoveableSquares();
+            clearSelectedPieceAndSquares();
           }
           recentMoveByPieceIdRef.current.set(move.pieceId, move);
+        });
+        data.recentCaptures.forEach((capture) => {
+          console.log("capture", capture);
+          if (capture.capturedPieceId === selectedPiece?.id) {
+            clearSelectedPieceAndSquares();
+          }
         });
         const nowVisiblePiecesAndIds = getVisiblePiecesAndIds(data.pieces);
         const newIds = nowVisiblePiecesAndIds.ids;
@@ -259,7 +261,7 @@ function PieceDisplay({
     getVisiblePiecesAndIds,
     pieceHandler,
     selectedPiece?.id,
-    clearMoveableSquares,
+    clearSelectedPieceAndSquares,
   ]);
 
   const getAnimatedCoords = React.useCallback(({ pieceId, now }) => {
