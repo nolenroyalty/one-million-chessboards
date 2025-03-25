@@ -22,33 +22,35 @@ function useStartBot({ pieceHandler, submitMove, started }) {
     const loop = () => {
       let attempts = 0;
       let targetPiece, targetSquare;
-      while (attempts < 50) {
-        const randomPiece = Array.from(pieceHandler.current.pieces.values())[
-          Math.floor(Math.random() * pieceHandler.current.pieces.size)
-        ];
-        const moveableSquares =
-          pieceHandler.current.getMoveableSquares(randomPiece);
-        if (moveableSquares.size > 0) {
-          targetPiece = randomPiece;
-          targetSquare =
-            Array.from(moveableSquares)[
-              Math.floor(Math.random() * moveableSquares.size)
-            ];
-          break;
+      for (let i = 0; i < 10; i++) {
+        while (attempts < 50) {
+          const randomPiece = Array.from(pieceHandler.current.pieces.values())[
+            Math.floor(Math.random() * pieceHandler.current.pieces.size)
+          ];
+          const moveableSquares =
+            pieceHandler.current.getMoveableSquares(randomPiece);
+          if (moveableSquares.size > 0) {
+            targetPiece = randomPiece;
+            targetSquare =
+              Array.from(moveableSquares)[
+                Math.floor(Math.random() * moveableSquares.size)
+              ];
+            break;
+          }
+          attempts++;
         }
-        attempts++;
-      }
-      if (targetPiece && targetSquare) {
-        const [x, y] = keyToCoords(targetSquare);
-        submitMove({
-          piece: targetPiece,
-          toX: x,
-          toY: y,
-        });
+        if (targetPiece && targetSquare) {
+          const [x, y] = keyToCoords(targetSquare);
+          submitMove({
+            piece: targetPiece,
+            toX: x,
+            toY: y,
+          });
+        }
       }
     };
     console.log("starting bot");
-    botInterval = setInterval(loop, 55);
+    botInterval = setInterval(loop, 100);
 
     return () => {
       console.log("stopping bot");
