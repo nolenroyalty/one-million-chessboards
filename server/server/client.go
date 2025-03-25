@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	PeriodicUpdateInterval = time.Second * 2
+	PeriodicUpdateInterval = time.Second * 30
 )
 
 // Client represents a connected websocket client
