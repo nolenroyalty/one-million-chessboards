@@ -31,9 +31,9 @@ const Wrapper = styled.button`
   }
 `;
 
-function IconButton({ children, onClick, disabled }) {
+function IconButton({ children, onClick, disabled, style }) {
   return (
-    <Wrapper disabled={disabled} onClick={onClick}>
+    <Wrapper disabled={disabled} onClick={onClick} style={style}>
       {children}
     </Wrapper>
   );

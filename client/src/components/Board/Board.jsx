@@ -23,7 +23,6 @@ const BoardControls = styled.div`
   flex-direction: row;
   align-items: start;
   width: 100%;
-  position: relative;
   justify-content: space-between;
 `;
 
@@ -32,19 +31,25 @@ const PlusMinusControls = styled.div`
   flex-direction: row;
   gap: 0.25rem;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
 `;
 
+const AllBoardButtons = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+`;
+
+const WRAPPER_SIZE = 80;
+const WRAPPER_BORDER_SIZE = 4;
+const MINIMAP_DOT_SIZE = 10;
 const MinimapWrapper = styled.div`
-  position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translate(-50%, 0);
-  width: 84px;
-  height: 84px;
+  width: ${WRAPPER_SIZE + WRAPPER_BORDER_SIZE * 2}px;
+  height: ${WRAPPER_SIZE + WRAPPER_BORDER_SIZE * 2}px;
   background-color: var(--color-slate-500);
-  border: 2px solid var(--color-slate-600);
+  border: ${WRAPPER_BORDER_SIZE}px solid var(--color-slate-600);
   border-radius: 0.5rem;
+  position: relative;
   cursor: pointer;
 `;
 
@@ -52,8 +57,8 @@ const MinimapDot = styled.div`
   position: absolute;
   top: 0;
   left: 0;
-  width: 10px;
-  height: 10px;
+  width: ${MINIMAP_DOT_SIZE}px;
+  height: ${MINIMAP_DOT_SIZE}px;
   background-color: var(--color-green-400);
   border-radius: 2px;
   transform: translate(var(--x), var(--y));
@@ -61,31 +66,35 @@ const MinimapDot = styled.div`
 
 function Minimap({ coords, setCoords }) {
   const ref = React.useRef(null);
-  const xPercent = (coords.x / 8000) * 100;
-  const yPercent = (coords.y / 8000) * 100;
-  const adjustForDotSizeX = (xPercent * 80) / 10;
-  const adjustForDotSizeY = (yPercent * 80) / 10;
+  const minPos = React.useMemo(() => 2 + MINIMAP_DOT_SIZE / 2, []);
+  const maxPos = React.useMemo(() => WRAPPER_SIZE - minPos, [minPos]);
+  const xPercent = coords.x / 8000;
+  const yPercent = coords.y / 8000;
+  const maxAdjust = maxPos - minPos;
+  const x = minPos + xPercent * maxAdjust;
+  const y = minPos + yPercent * maxAdjust;
 
   const handleClick = React.useCallback(
     (e) => {
       const rect = ref.current.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      const xPct = clamp(x / rect.width, 0, 1);
-      const yPct = clamp(y / rect.height, 0, 1);
+      const x = e.clientX - WRAPPER_BORDER_SIZE - minPos - rect.left;
+      const y = e.clientY - WRAPPER_BORDER_SIZE - minPos - rect.top;
+      const width = maxPos - minPos;
+      const xPct = clamp(x / width, 0, 1);
+      const yPct = clamp(y / width, 0, 1);
       let xCoord = Math.floor(xPct * 8000);
       let yCoord = Math.floor(yPct * 8000);
       setCoords({ x: xCoord, y: yCoord });
     },
-    [setCoords]
+    [maxPos, minPos, setCoords]
   );
 
   return (
     <MinimapWrapper ref={ref} onClick={handleClick}>
       <MinimapDot
         style={{
-          "--x": adjustForDotSizeX + "%",
-          "--y": adjustForDotSizeY + "%",
+          "--x": `calc(${x}px - 50%)`,
+          "--y": `calc(${y}px - 50%)`,
         }}
       />
     </MinimapWrapper>
@@ -531,49 +540,51 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
         )}
       </Inner>
       <BoardControls>
-        <div>
-          <form
-            onSubmit={(e) => {
-              console.log("submit");
-              e.preventDefault();
-              console.log(e.target[0].value);
-              let [x, y] = e.target[0].value.split(",");
-              x = parseInt(x);
-              y = parseInt(y);
-              if (isNaN(x) || isNaN(y)) {
-                console.log("invalid coords");
-                return;
-              }
-              setCoords({ x, y });
-              e.target[0].value = "";
-            }}
-          >
-            <input
-              type="text"
-              placeholder={`${coords.x},${coords.y}`}
-              style={{ width: "10ch" }}
-            />
-            <button type="submit">jump</button>
-          </form>
-        </div>
         <Minimap coords={coords} setCoords={setCoords} />
-        <PlusMinusControls>
-          <IconButton>
-            <Flame />
-          </IconButton>
-          <IconButton
-            disabled={!showLargeBoard}
-            onClick={() => setShowLargeBoard(false)}
-          >
-            <CirclePlus />
-          </IconButton>
-          <IconButton
-            disabled={showLargeBoard}
-            onClick={() => setShowLargeBoard(true)}
-          >
-            <CircleMinus />
-          </IconButton>
-        </PlusMinusControls>
+        <AllBoardButtons>
+          <div>
+            <form
+              onSubmit={(e) => {
+                console.log("submit");
+                e.preventDefault();
+                console.log(e.target[0].value);
+                let [x, y] = e.target[0].value.split(",");
+                x = parseInt(x);
+                y = parseInt(y);
+                if (isNaN(x) || isNaN(y)) {
+                  console.log("invalid coords");
+                  return;
+                }
+                setCoords({ x, y });
+                e.target[0].value = "";
+              }}
+            >
+              <input
+                type="text"
+                placeholder={`${coords.x},${coords.y}`}
+                style={{ width: "10ch" }}
+              />
+              <button type="submit">jump</button>
+            </form>
+          </div>
+          <PlusMinusControls>
+            <IconButton style={{ transform: "translate(10%, -3%)" }}>
+              <Flame />
+            </IconButton>
+            <IconButton
+              disabled={!showLargeBoard}
+              onClick={() => setShowLargeBoard(false)}
+            >
+              <CirclePlus />
+            </IconButton>
+            <IconButton
+              disabled={showLargeBoard}
+              onClick={() => setShowLargeBoard(true)}
+            >
+              <CircleMinus />
+            </IconButton>
+          </PlusMinusControls>
+        </AllBoardButtons>
       </BoardControls>
     </BoardContainer>
   );
