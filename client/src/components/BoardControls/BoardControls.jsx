@@ -3,7 +3,12 @@ import styled from "styled-components";
 import { clamp } from "../../utils";
 import IconButton from "../IconButton/IconButton";
 import { CirclePlus, CircleMinus, Flame, ArrowDownUp, Axe } from "lucide-react";
-import { imageForPieceType, TYPE_TO_NAME } from "../../utils";
+import {
+  imageForPieceType,
+  TYPE_TO_NAME,
+  getPieceMoves,
+  getPieceCaptures,
+} from "../../utils";
 
 const Wrapper = styled.div`
   display: flex;
@@ -256,8 +261,14 @@ function SelectedPiece({ selectedPiece }) {
             <PieceName>{pieceName}</PieceName>
             <PieceId>{pieceId}</PieceId>
             <YourStats>
-              <StatSquare icon={<ArrowDownUp />} getLabel={() => "2"} />
-              <StatSquare icon={<Axe />} getLabel={() => "2"} />
+              <StatSquare
+                icon={<ArrowDownUp />}
+                getLabel={() => getPieceMoves(selectedPiece.id)}
+              />
+              <StatSquare
+                icon={<Axe />}
+                getLabel={() => getPieceCaptures(selectedPiece.id)}
+              />
             </YourStats>
           </>
         )}

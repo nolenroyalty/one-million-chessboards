@@ -16,6 +16,82 @@ export function easeInOutSquare(t) {
   return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 }
 
+const PIECE_STATE_KEY = "pieceState";
+function getPieceState() {
+  const json = localStorage.getItem(PIECE_STATE_KEY);
+  if (!json) {
+    return { pieces: {} };
+  }
+  try {
+    return JSON.parse(json);
+  } catch (e) {
+    return { pieces: {} };
+  }
+}
+
+const MAX_PIECE_STATES = 5000;
+const DELETE_WHEN_OVER = 1000;
+function maybeFilterPieceStateIfTooLong(pieceState) {
+  if (Object.keys(pieceState.pieces).length > MAX_PIECE_STATES) {
+    const keys = Object.keys(pieceState.pieces);
+    keys.sort(
+      (a, b) => pieceState.pieces[a].accessAt - pieceState.pieces[b].accessAt
+    );
+
+    const toDelete = keys.slice(0, DELETE_WHEN_OVER);
+    for (const key of toDelete) {
+      delete pieceState.pieces[key];
+    }
+  }
+  return pieceState;
+}
+
+function savePieceState(pieceState) {
+  pieceState = maybeFilterPieceStateIfTooLong(pieceState);
+  localStorage.setItem(PIECE_STATE_KEY, JSON.stringify(pieceState));
+}
+
+function getIndividualPieceState(pieceState, pieceId) {
+  if (!pieceState.pieces[pieceId]) {
+    pieceState.pieces[pieceId] = {
+      move: 0,
+      capture: 0,
+      accessAt: performance.now(),
+    };
+    savePieceState(pieceState);
+  }
+  return pieceState.pieces[pieceId];
+}
+
+export function incrementPieceMove(pieceId) {
+  // update local storage
+  const pieceState = getPieceState();
+  const pieceStateForPiece = getIndividualPieceState(pieceState, pieceId);
+  pieceStateForPiece.move++;
+  pieceStateForPiece.accessAt = performance.now();
+  savePieceState(pieceState);
+}
+
+export function incrementPieceCapture(pieceId) {
+  const pieceState = getPieceState();
+  const pieceStateForPiece = getIndividualPieceState(pieceState, pieceId);
+  pieceStateForPiece.capture++;
+  pieceStateForPiece.accessAt = performance.now();
+  savePieceState(pieceState);
+}
+
+export function getPieceMoves(pieceId) {
+  const pieceState = getPieceState();
+  const pieceStateForPiece = getIndividualPieceState(pieceState, pieceId);
+  return pieceStateForPiece.move;
+}
+
+export function getPieceCaptures(pieceId) {
+  const pieceState = getPieceState();
+  const pieceStateForPiece = getIndividualPieceState(pieceState, pieceId);
+  return pieceStateForPiece.capture;
+}
+
 export function computeAnimationDuration({
   moveDistance,
   maxAnimationDuration,

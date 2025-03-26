@@ -4,7 +4,12 @@ import BoardCanvas from "../BoardCanvas/BoardCanvas";
 import PieceDisplay from "../PieceDisplay/PieceDisplay";
 import PieceMoveButtons from "../PieceMoveButtons/PieceMoveButtons";
 import ZoomedOutOverview from "../ZoomedOutOverview/ZoomedOutOverview";
-import { clamp } from "../../utils";
+import {
+  clamp,
+  incrementPieceMove,
+  incrementPieceCapture,
+  pieceKey,
+} from "../../utils";
 import PanzoomBox from "../PanzoomBox/PanzoomBox";
 import BoardControls from "../BoardControls/BoardControls";
 
@@ -156,6 +161,20 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
   const [smallOpacity, setSmallOpacity] = React.useState(1);
   const [largeOpacity, setLargeOpacity] = React.useState(0);
   const largeBoardKillSwitch = React.useRef(false);
+  // CR nroyalty: DUPE PLEASE REMOVE
+  const piecesRef = React.useRef(pieceHandler.current.getPieces());
+
+  React.useEffect(() => {
+    pieceHandler.current.subscribe({
+      id: "board",
+      callback: (data) => {
+        piecesRef.current = data.pieces;
+      },
+    });
+    return () => {
+      pieceHandler.current.unsubscribe("board");
+    };
+  }, [pieceHandler]);
 
   const setShowLargeBoard = React.useCallback(
     (show) => {
@@ -238,6 +257,12 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
 
   const moveAndClear = React.useCallback(
     ({ piece, toX, toY }) => {
+      console.log(piece);
+      incrementPieceMove(piece.id);
+      const toKey = pieceKey(toX, toY);
+      if (piecesRef.current.has(toKey)) {
+        incrementPieceCapture(piece.id);
+      }
       submitMove({ piece, toX, toY });
       setSelectedPiece(null);
       setMoveableSquares(new Set());
