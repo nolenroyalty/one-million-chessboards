@@ -15,7 +15,9 @@ const Canvas = styled.canvas`
   transition: opacity 0.3s ease;
 `;
 
-const BOARD_BORDER_COLOR = "black";
+const BOARD_BORDER_COLOR = "#0a0a0a";
+const MOVEABLE_SQUARE_COLOR = "#3b82f6";
+const SELECTED_PIECE_COLOR = "#fbbf24";
 
 function BoardCanvas({
   coords,
@@ -60,7 +62,7 @@ function BoardCanvas({
         );
         if (moveableSquares.has(pieceKey(x, y))) {
           ctx.save();
-          ctx.fillStyle = "slateblue";
+          ctx.fillStyle = MOVEABLE_SQUARE_COLOR;
           ctx.globalAlpha = 0.7;
           ctx.fillRect(
             screenX * pixelsPerSquare,
@@ -75,7 +77,7 @@ function BoardCanvas({
           selectedPiece.y === y
         ) {
           ctx.save();
-          ctx.fillStyle = "gold";
+          ctx.fillStyle = SELECTED_PIECE_COLOR;
           ctx.globalAlpha = 0.7;
           ctx.fillRect(
             screenX * pixelsPerSquare,
