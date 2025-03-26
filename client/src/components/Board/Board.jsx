@@ -11,22 +11,18 @@ import BoardControls from "../BoardControls/BoardControls";
 const WIDTH = 23;
 const HEIGHT = 23;
 const PIXELS_PER_SQUARE = 24;
-const INNER_PADDING = 4;
 
 const BoardContainer = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background-color: var(--color-slate-400);
-  gap: 0.5rem;
 `;
 
 const Inner = styled.div`
-  width: ${WIDTH * PIXELS_PER_SQUARE + INNER_PADDING * 2}px;
-  height: ${HEIGHT * PIXELS_PER_SQUARE + INNER_PADDING * 2}px;
+  width: ${WIDTH * PIXELS_PER_SQUARE}px;
+  height: ${HEIGHT * PIXELS_PER_SQUARE}px;
   position: relative;
-  border: ${INNER_PADDING}px solid slategrey;
   overflow: hidden;
 `;
 
@@ -127,7 +123,6 @@ function useZoomedInParams({ innerSize }) {
   const [params, setParams] = React.useState({
     squareSize: PIXELS_PER_SQUARE,
     numSquares: WIDTH,
-    innerPadding: INNER_PADDING,
     borderHalfWidth: 1,
     initialized: false,
   });
@@ -141,7 +136,6 @@ function useZoomedInParams({ innerSize }) {
       setParams({
         squareSize: PIXELS_PER_SQUARE,
         numSquares: WIDTH,
-        innerPadding: INNER_PADDING,
         borderHalfWidth: 1,
         initialized: true,
       });

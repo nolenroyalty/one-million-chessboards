@@ -10,6 +10,21 @@
 * {
   margin: 0;
 }
+@font-face {
+  font-family: "Sunset Demi";
+  src: url("/static/fonts/Sunset-Demi.woff") format("woff");
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Apercu Regular Pro";
+  src:
+    url("/static/fonts/apercu-regular-pro.woff") format("woff"),
+    url("/static/fonts/apercu-regular-pro.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+}
 :root {
   --color-slate-50: #f8fafc;
   --color-slate-100: #f1f5f9;
@@ -257,12 +272,13 @@
 html,
 body {
   height: 100%;
-  background-color: var(--color-slate-400);
+  background-color: var(--color-neutral-950);
+  color: var(--color-slate-200);
+  font-family: "Apercu Regular Pro", sans-serif;
 }
 body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-  font-family: "Lato", sans-serif;
 }
 img,
 picture,
@@ -278,6 +294,16 @@ textarea,
 select {
   font: inherit;
 }
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "Sunset Demi", sans-serif;
+}
+
 p,
 h1,
 h2,

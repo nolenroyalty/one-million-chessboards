@@ -4,6 +4,7 @@ import { clamp } from "../../utils";
 import IconButton from "../IconButton/IconButton";
 import { CirclePlus, CircleMinus, Flame } from "lucide-react";
 import { imageForPieceType, TYPE_TO_NAME } from "../../utils";
+
 const Wrapper = styled.div`
   display: flex;
   flex-direction: row;
@@ -11,6 +12,10 @@ const Wrapper = styled.div`
   width: 100%;
   justify-content: space-between;
   gap: 0.5rem;
+  background-color: var(--color-neutral-900);
+  padding: 0.5rem;
+  border-radius: 0 0 0.25rem 0.25rem;
+  border-top: 4px solid var(--color-neutral-400);
 `;
 
 const PlusMinusControls = styled.div`
@@ -30,7 +35,7 @@ const AllBoardButtons = styled.div`
 const Middle = styled.div`
   flex-grow: 1;
   align-self: stretch;
-  background-color: var(--color-slate-500);
+  background-color: var(--color-neutral-800);
   padding: 0.25rem;
   display: flex;
   justify-content: space-between;
@@ -42,9 +47,9 @@ const MINIMAP_DOT_SIZE = 10;
 const MinimapWrapper = styled.div`
   width: ${MINIMAP_WRAPPER_SIZE + MINIMAP_BORDER_SIZE * 2}px;
   height: ${MINIMAP_WRAPPER_SIZE + MINIMAP_BORDER_SIZE * 2}px;
-  background-color: var(--color-slate-500);
-  border: ${MINIMAP_BORDER_SIZE}px solid var(--color-slate-600);
-  border-radius: 0.5rem;
+  background-color: var(--color-neutral-800);
+  border: ${MINIMAP_BORDER_SIZE}px solid var(--color-neutral-700);
+  border-radius: 0.125rem;
   position: relative;
   cursor: pointer;
 `;
@@ -112,6 +117,31 @@ const PieceImageWrapper = styled.div`
   justify-content: center;
 `;
 
+const PieceImageAndId = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+`;
+
+const PieceId = styled.p`
+  font-size: 0.625rem;
+`;
+
+const PieceInfo = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
+  flex-grow: 1;
+
+  & > p {
+    font-size: 0.875rem;
+  }
+`;
+
 function SelectedPiece({ selectedPiece }) {
   const imageSrc = React.useMemo(() => {
     if (!selectedPiece) {
@@ -122,16 +152,47 @@ function SelectedPiece({ selectedPiece }) {
       return null;
     }
     return `/pieces/frames/${name}.png`;
-    // return imageForPieceType({
-    //   pieceType: selectedPiece.type,
-    //   isWhite: selectedPiece.isWhite,
-    // });
   }, [selectedPiece]);
+
+  const pieceName = React.useMemo(() => {
+    if (!selectedPiece) {
+      return null;
+    }
+    const whiteText = selectedPiece.isWhite ? "White" : "Black";
+    const typeName = TYPE_TO_NAME[selectedPiece.type];
+    // capitalize first letter
+    const capitalizedTypeName =
+      typeName.charAt(0).toUpperCase() + typeName.slice(1);
+    return `${whiteText} ${capitalizedTypeName}`;
+  }, [selectedPiece]);
+
+  const pieceId = React.useMemo(() => {
+    if (!selectedPiece) {
+      return null;
+    }
+    return "#" + selectedPiece.id;
+  }, [selectedPiece]);
+
   return (
     <Middle>
-      <PieceImageWrapper>
-        {imageSrc && <PieceImage src={imageSrc} />}
-      </PieceImageWrapper>
+      <PieceImageAndId>
+        {selectedPiece && (
+          <>
+            <PieceImageWrapper>
+              {imageSrc && <PieceImage src={imageSrc} />}
+            </PieceImageWrapper>
+            <PieceId>{pieceId}</PieceId>
+          </>
+        )}
+      </PieceImageAndId>
+      <PieceInfo>
+        {selectedPiece && (
+          <>
+            <p>{pieceName}</p>
+            <p>moves: 0</p>
+          </>
+        )}
+      </PieceInfo>
     </Middle>
   );
 }

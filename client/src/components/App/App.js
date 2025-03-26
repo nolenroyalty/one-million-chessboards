@@ -3,8 +3,6 @@ import styled from "styled-components";
 import Board from "../Board/Board";
 import PieceHandler from "../../pieceHandler.js";
 import { createMoveRequest, keyToCoords } from "../../utils";
-import IconButton from "../IconButton/IconButton";
-import { Plus } from "lucide-react";
 
 const Main = styled.main`
   display: flex;
@@ -13,6 +11,20 @@ const Main = styled.main`
   justify-content: center;
   max-width: 1000px;
   margin: 0 auto;
+`;
+
+const Header = styled.header`
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+`;
+
+const HeaderTitle = styled.h1`
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--color-white);
 `;
 
 function useStartBot({ pieceHandler, submitMove, started }) {
@@ -199,16 +211,15 @@ function App() {
 
   return (
     <Main>
-      hello world
+      <Header>
+        <HeaderTitle>One Million Chessboards</HeaderTitle>
+      </Header>
       <Board
         coords={coords}
         submitMove={submitMove}
         setCoords={setCoords}
         pieceHandler={pieceHandler}
       />
-      <p>
-        {coords.x} {coords.y}
-      </p>
       <p>{runBot ? "running bot" : "not running bot"}</p>
     </Main>
   );
