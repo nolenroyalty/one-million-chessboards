@@ -2,7 +2,7 @@ import React from "react";
 import styled from "styled-components";
 import { clamp } from "../../utils";
 import IconButton from "../IconButton/IconButton";
-import { CirclePlus, CircleMinus, Flame } from "lucide-react";
+import { CirclePlus, CircleMinus, Flame, ArrowDownUp, Axe } from "lucide-react";
 import { imageForPieceType, TYPE_TO_NAME } from "../../utils";
 
 const Wrapper = styled.div`
@@ -39,6 +39,9 @@ const Middle = styled.div`
   padding: 0.25rem;
   display: flex;
   justify-content: space-between;
+`;
+const Spacer = styled.div`
+  flex-grow: 1;
 `;
 
 const MINIMAP_WRAPPER_SIZE = 80;
@@ -103,8 +106,8 @@ function Minimap({ coords, setCoords }) {
 }
 
 const PieceImage = styled.img`
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   object-fit: contain;
   filter: drop-shadow(0 0 4px var(--color-cyan-500))
     drop-shadow(0 0 8px var(--color-cyan-500));
@@ -117,31 +120,85 @@ const PieceImageWrapper = styled.div`
   justify-content: center;
 `;
 
-const PieceImageAndId = styled.div`
+const PieceImageAndStat = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 0.25rem;
+  align-self: center;
 `;
 
 const PieceId = styled.p`
   font-size: 0.625rem;
 `;
 
-const PieceInfo = styled.div`
+const PieceInfoOuter = styled.div`
   display: flex;
   flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  flex-grow: 4;
+`;
+
+const PieceName = styled.p`
+  font-size: 1rem;
+  line-height: 1.1;
+`;
+
+const PieceStat = styled.p`
+  font-size: 0.875rem;
+`;
+
+const YourStats = styled.div`
+  display: flex;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 0.125rem;
+  align-self: flex-start;
+  gap: 0.375rem;
   flex-grow: 1;
+`;
 
-  & > p {
-    font-size: 0.875rem;
+const YourStatSquare = styled.div`
+  --size: 2rem;
+  width: var(--size);
+  height: var(--size);
+  border: 2px solid var(--color-green-400);
+  border-radius: 0.25rem;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+
+  svg {
+    color: var(--color-gray-500);
+    width: var(--size);
+    height: var(--size);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0.5;
   }
 `;
 
+const YourStatSquareLabel = styled.p`
+  font-size: 0.75rem;
+  color: var(--color-gray-200);
+  text-align: right;
+  padding-right: 0.125rem;
+  line-height: 1;
+`;
+
+function StatSquare({ icon, getLabel }) {
+  return (
+    <YourStatSquare>
+      {icon}
+      <YourStatSquareLabel>{getLabel()}</YourStatSquareLabel>
+    </YourStatSquare>
+  );
+}
 function SelectedPiece({ selectedPiece }) {
   const imageSrc = React.useMemo(() => {
     if (!selectedPiece) {
@@ -166,6 +223,13 @@ function SelectedPiece({ selectedPiece }) {
     return `${whiteText} ${capitalizedTypeName}`;
   }, [selectedPiece]);
 
+  const pieceCoords = React.useMemo(() => {
+    if (!selectedPiece) {
+      return null;
+    }
+    return `${selectedPiece.x},${selectedPiece.y}`;
+  }, [selectedPiece]);
+
   const pieceId = React.useMemo(() => {
     if (!selectedPiece) {
       return null;
@@ -175,24 +239,30 @@ function SelectedPiece({ selectedPiece }) {
 
   return (
     <Middle>
-      <PieceImageAndId>
+      <PieceImageAndStat>
         {selectedPiece && (
           <>
             <PieceImageWrapper>
               {imageSrc && <PieceImage src={imageSrc} />}
             </PieceImageWrapper>
-            <PieceId>{pieceId}</PieceId>
+            <PieceId>{pieceCoords}</PieceId>
           </>
         )}
-      </PieceImageAndId>
-      <PieceInfo>
+      </PieceImageAndStat>
+      <Spacer />
+      <PieceInfoOuter>
         {selectedPiece && (
           <>
-            <p>{pieceName}</p>
-            <p>moves: 0</p>
+            <PieceName>{pieceName}</PieceName>
+            <PieceId>{pieceId}</PieceId>
+            <YourStats>
+              <StatSquare icon={<ArrowDownUp />} getLabel={() => "2"} />
+              <StatSquare icon={<Axe />} getLabel={() => "2"} />
+            </YourStats>
           </>
         )}
-      </PieceInfo>
+      </PieceInfoOuter>
+      <Spacer />
     </Middle>
   );
 }
