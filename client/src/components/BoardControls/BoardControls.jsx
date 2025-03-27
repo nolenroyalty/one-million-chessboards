@@ -2,25 +2,36 @@ import React from "react";
 import styled from "styled-components";
 import { clamp } from "../../utils";
 import IconButton from "../IconButton/IconButton";
-import { CirclePlus, CircleMinus, Flame, ArrowDownUp, Axe } from "lucide-react";
 import {
-  imageForPieceType,
-  TYPE_TO_NAME,
-  getPieceMoves,
-  getPieceCaptures,
-} from "../../utils";
+  CirclePlus,
+  CircleMinus,
+  Flame,
+  ArrowDownUp,
+  Axe,
+  SendHorizontal,
+  CircleArrowDown,
+  CircleArrowUp,
+  CircleArrowLeft,
+  CircleArrowRight,
+} from "lucide-react";
+import { TYPE_TO_NAME, getPieceMoves, getPieceCaptures } from "../../utils";
 
 const Wrapper = styled.div`
-  display: flex;
-  flex-direction: row;
-  align-items: start;
   width: 100%;
-  justify-content: space-between;
   gap: 0.5rem;
   background-color: var(--color-blue-800);
   padding: 0.5rem;
   border-radius: 0 0 0.25rem 0.25rem;
-  border-top: 4px solid var(--color-neutral-400);
+  border: 1px solid var(--color-sky-700);
+  max-width: 800px;
+
+  display: grid;
+  grid-template-areas: "minimap jump buttons" "minimap piece buttons";
+  grid-template-rows: auto 1fr;
+  grid-template-columns: auto minmax(150px, 250px) auto;
+  align-items: end;
+
+  justify-content: space-between;
 
   background-color: var(--color-gray-900);
 
@@ -32,44 +43,64 @@ const Wrapper = styled.div`
   background-size: 16px 16px;
 `;
 
-const PlusMinusControls = styled.div`
-  display: flex;
-  flex-direction: row;
-  gap: 0.25rem;
-  align-items: center;
-  justify-content: flex-end;
-`;
-
-const AllBoardButtons = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-`;
-
-const Middle = styled.div`
-  flex-grow: 1;
-  align-self: stretch;
+const PANEL_BORDER_SIZE = 4;
+const Panel = styled.div`
   background-color: var(--color-neutral-950);
-  padding: 0.25rem;
+  border: ${PANEL_BORDER_SIZE}px double var(--color-sky-700);
+`;
+
+const AllBoardButtonsWrapper = styled(Panel)`
+  display: grid;
+  grid-area: buttons;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 0.375rem;
+  padding: 0.75rem;
+  grid-template-areas:
+    "zoomout up zoomin"
+    "left . right"
+    "hot down .";
+  align-self: start;
+`;
+
+const JumpInput = styled.input`
+  background-color: var(--color-neutral-950);
+  border-radius: 0.25rem;
+  color: var(--color-stone-300);
+  border: none;
+  max-width: 12ch;
+
+  &:focus {
+    outline: none;
+  }
+`;
+
+const Middle = styled(Panel)`
+  flex-grow: 1;
   display: flex;
   justify-content: space-between;
-  border: 4px double var(--color-sky-700);
+  max-height: 120px;
+  height: 120px;
+  padding: 0.5rem 0 0;
+  grid-area: piece;
 `;
+
 const Spacer = styled.div`
   flex-grow: 1;
 `;
 
-const MINIMAP_WRAPPER_SIZE = 100;
-const MINIMAP_BORDER_SIZE = 4;
+const MINIMAP_WRAPPER_SIZE = 140;
+
 const MINIMAP_DOT_SIZE = 10;
-const MinimapWrapper = styled.div`
-  width: ${MINIMAP_WRAPPER_SIZE + MINIMAP_BORDER_SIZE * 2}px;
-  height: ${MINIMAP_WRAPPER_SIZE + MINIMAP_BORDER_SIZE * 2}px;
-  background-color: var(--color-neutral-950);
-  border: ${MINIMAP_BORDER_SIZE}px double var(--color-sky-700);
+const MinimapWrapper = styled(Panel)`
+  width: ${MINIMAP_WRAPPER_SIZE + PANEL_BORDER_SIZE * 2}px;
+  height: ${MINIMAP_WRAPPER_SIZE + PANEL_BORDER_SIZE * 2}px;
+  aspect-ratio: 1 / 1;
+  max-height: 100%;
   border-radius: 0.125rem;
   position: relative;
   cursor: pointer;
+  grid-area: minimap;
 `;
 
 const MinimapDot = styled.div`
@@ -96,8 +127,8 @@ function Minimap({ coords, setCoords }) {
   const handleClick = React.useCallback(
     (e) => {
       const rect = ref.current.getBoundingClientRect();
-      const x = e.clientX - MINIMAP_BORDER_SIZE - minPos - rect.left;
-      const y = e.clientY - MINIMAP_BORDER_SIZE - minPos - rect.top;
+      const x = e.clientX - PANEL_BORDER_SIZE - minPos - rect.left;
+      const y = e.clientY - PANEL_BORDER_SIZE - minPos - rect.top;
       const width = maxPos - minPos;
       const xPct = clamp(x / width, 0, 1);
       const yPct = clamp(y / width, 0, 1);
@@ -121,8 +152,8 @@ function Minimap({ coords, setCoords }) {
 }
 
 const PieceImage = styled.img`
-  width: 60px;
-  height: 60px;
+  width: 80px;
+  height: 80px;
   object-fit: contain;
   filter: drop-shadow(0 0 4px var(--color-cyan-500))
     drop-shadow(0 0 8px var(--color-cyan-500));
@@ -159,10 +190,6 @@ const PieceInfoOuter = styled.div`
 const PieceName = styled.p`
   font-size: 1rem;
   line-height: 1.1;
-`;
-
-const PieceStat = styled.p`
-  font-size: 0.875rem;
 `;
 
 const YourStats = styled.div`
@@ -227,6 +254,63 @@ const YourStatSquareLabel = styled.p`
   line-height: 1;
 `;
 
+function AllBoardButtons({ setShowLargeBoard, showLargeBoard, setCoords }) {
+  const delta = showLargeBoard ? 4 : 1;
+  return (
+    <AllBoardButtonsWrapper>
+      <IconButton
+        disabled={showLargeBoard}
+        style={{ gridArea: "zoomout" }}
+        onClick={() => setShowLargeBoard(true)}
+      >
+        <CircleMinus />
+      </IconButton>
+      <IconButton
+        style={{ gridArea: "zoomin" }}
+        disabled={!showLargeBoard}
+        onClick={() => setShowLargeBoard(false)}
+      >
+        <CirclePlus />
+      </IconButton>
+      <IconButton style={{ gridArea: "hot" }}>
+        <Flame />
+      </IconButton>
+      <IconButton
+        onClick={() => {
+          setCoords((prev) => ({ x: prev.x, y: prev.y - delta }));
+        }}
+        style={{ gridArea: "up" }}
+      >
+        <CircleArrowUp />
+      </IconButton>
+      <IconButton
+        onClick={() => {
+          setCoords((prev) => ({ x: prev.x - delta, y: prev.y }));
+        }}
+        style={{ gridArea: "left" }}
+      >
+        <CircleArrowLeft />
+      </IconButton>
+      <IconButton
+        onClick={() => {
+          setCoords((prev) => ({ x: prev.x + delta, y: prev.y }));
+        }}
+        style={{ gridArea: "right" }}
+      >
+        <CircleArrowRight />
+      </IconButton>
+      <IconButton
+        onClick={() => {
+          setCoords((prev) => ({ x: prev.x, y: prev.y + delta }));
+        }}
+        style={{ gridArea: "down" }}
+      >
+        <CircleArrowDown />
+      </IconButton>
+    </AllBoardButtonsWrapper>
+  );
+}
+
 function StatSquare({ icon, getLabel }) {
   return (
     <StatSquareOuter>
@@ -237,6 +321,7 @@ function StatSquare({ icon, getLabel }) {
     </StatSquareOuter>
   );
 }
+
 function SelectedPiece({ selectedPiece }) {
   const imageSrc = React.useMemo(() => {
     if (!selectedPiece) {
@@ -311,6 +396,76 @@ function SelectedPiece({ selectedPiece }) {
   );
 }
 
+const JumpWrapper = styled(Panel)`
+  justify-content: space-between;
+  padding: 0.25rem;
+  grid-area: jump;
+`;
+
+function JumpControl({ coords, setCoords }) {
+  const [currentInput, setCurrentInput] = React.useState({
+    value: "",
+    parsed: null,
+  });
+  const onChange = React.useCallback(
+    (e) => {
+      const s = e.target.value;
+      let parsed = null;
+      try {
+        let [x, y] = s.split(",");
+        x = parseInt(x);
+        y = parseInt(y);
+        if (isNaN(x) || isNaN(y)) {
+          parsed = null;
+        } else {
+          parsed = { x, y };
+        }
+      } catch (e) {
+        parsed = null;
+      }
+      console.log("parsed", parsed, "value", s);
+      setCurrentInput({ value: s, parsed });
+    },
+    [setCurrentInput]
+  );
+  const onSubmit = React.useCallback(
+    (e) => {
+      e.preventDefault();
+      if (currentInput.parsed === null) {
+        return;
+      }
+      setCoords(currentInput.parsed);
+      setCurrentInput({ value: "", parsed: null });
+      e.target[0].blur();
+    },
+    [currentInput, setCoords]
+  );
+  return (
+    <JumpWrapper>
+      <form
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          gap: "0.25rem",
+          justifyContent: "space-between",
+        }}
+        onSubmit={onSubmit}
+      >
+        <JumpInput
+          type="text"
+          placeholder={`${coords.x},${coords.y}`}
+          value={currentInput.value}
+          onChange={onChange}
+          // keypad for input on mobile
+        />
+        <IconButton type="submit" disabled={currentInput.parsed === null}>
+          <SendHorizontal />
+        </IconButton>
+      </form>
+    </JumpWrapper>
+  );
+}
+
 function BoardControls({
   coords,
   setCoords,
@@ -322,30 +477,13 @@ function BoardControls({
     <Wrapper>
       <Minimap coords={coords} setCoords={setCoords} />
       <SelectedPiece selectedPiece={selectedPiece} />
-      <AllBoardButtons>
-        <div>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              let [x, y] = e.target[0].value.split(",");
-              x = parseInt(x);
-              y = parseInt(y);
-              if (isNaN(x) || isNaN(y)) {
-                console.log("invalid coords");
-                return;
-              }
-              setCoords({ x, y });
-              e.target[0].value = "";
-            }}
-          >
-            <input
-              type="text"
-              placeholder={`${coords.x},${coords.y}`}
-              style={{ width: "10ch" }}
-            />
-            <button type="submit">jump</button>
-          </form>
-        </div>
+      <JumpControl coords={coords} setCoords={setCoords} />
+      <AllBoardButtons
+        setShowLargeBoard={setShowLargeBoard}
+        showLargeBoard={showLargeBoard}
+        setCoords={setCoords}
+      />
+      {/* <AllBoardButtons>
         <PlusMinusControls>
           <IconButton style={{ transform: "translate(10%, -3%)" }}>
             <Flame />
@@ -363,7 +501,8 @@ function BoardControls({
             <CircleMinus />
           </IconButton>
         </PlusMinusControls>
-      </AllBoardButtons>
+        <ManuverButtons setCoords={setCoords} />
+      </AllBoardButtons> */}
     </Wrapper>
   );
 }

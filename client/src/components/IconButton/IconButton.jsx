@@ -13,13 +13,13 @@ const Wrapper = styled.button`
   svg {
     width: 24px;
     height: 24px;
-    color: var(--color-stone-300);
+    color: var(--color-stone-400);
     transition: color 0.2s ease-in-out;
   }
 
   &:hover {
     svg {
-      color: var(--color-stone-100);
+      color: var(--color-yellow-300);
     }
   }
 

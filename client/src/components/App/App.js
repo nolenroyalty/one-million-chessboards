@@ -212,7 +212,13 @@ function App() {
   return (
     <Main>
       <Header>
-        <HeaderTitle>One Million Chessboards</HeaderTitle>
+        <HeaderTitle
+          style={{
+            color: runBot ? "var(--color-yellow-300)" : null,
+          }}
+        >
+          One Million Chessboards
+        </HeaderTitle>
       </Header>
       <Board
         coords={coords}
@@ -220,7 +226,6 @@ function App() {
         setCoords={setCoords}
         pieceHandler={pieceHandler}
       />
-      <p>{runBot ? "running bot" : "not running bot"}</p>
     </Main>
   );
 }
