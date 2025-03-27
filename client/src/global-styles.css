@@ -272,9 +272,19 @@
 html,
 body {
   height: 100%;
-  background-color: var(--color-neutral-950);
+  /* background-color: var(--color-neutral-950); */
   color: var(--color-slate-200);
   font-family: "Apercu Regular Pro", sans-serif;
+
+  background-color: var(--color-neutral-950);
+  /* opacity: 1; */
+  background: repeating-linear-gradient(
+    45deg,
+    var(--color-neutral-900),
+    var(--color-neutral-900) 17px,
+    var(--color-neutral-950) 17px,
+    var(--color-neutral-950) 85px
+  );
 }
 body {
   line-height: 1.5;

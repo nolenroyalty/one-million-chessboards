@@ -17,10 +17,19 @@ const Wrapper = styled.div`
   width: 100%;
   justify-content: space-between;
   gap: 0.5rem;
-  background-color: var(--color-neutral-900);
+  background-color: var(--color-blue-800);
   padding: 0.5rem;
   border-radius: 0 0 0.25rem 0.25rem;
   border-top: 4px solid var(--color-neutral-400);
+
+  background-color: var(--color-gray-900);
+
+  background-color: #0a0a0a;
+  opacity: 1;
+  background-image:
+    linear-gradient(#0c4a6e 0.8px, transparent 0.8px),
+    linear-gradient(to right, #0c4a6e 0.8px, #0a0a0a 0.8px);
+  background-size: 16px 16px;
 `;
 
 const PlusMinusControls = styled.div`
@@ -40,23 +49,24 @@ const AllBoardButtons = styled.div`
 const Middle = styled.div`
   flex-grow: 1;
   align-self: stretch;
-  background-color: var(--color-neutral-800);
+  background-color: var(--color-neutral-950);
   padding: 0.25rem;
   display: flex;
   justify-content: space-between;
+  border: 4px double var(--color-sky-700);
 `;
 const Spacer = styled.div`
   flex-grow: 1;
 `;
 
-const MINIMAP_WRAPPER_SIZE = 80;
+const MINIMAP_WRAPPER_SIZE = 100;
 const MINIMAP_BORDER_SIZE = 4;
 const MINIMAP_DOT_SIZE = 10;
 const MinimapWrapper = styled.div`
   width: ${MINIMAP_WRAPPER_SIZE + MINIMAP_BORDER_SIZE * 2}px;
   height: ${MINIMAP_WRAPPER_SIZE + MINIMAP_BORDER_SIZE * 2}px;
-  background-color: var(--color-neutral-800);
-  border: ${MINIMAP_BORDER_SIZE}px solid var(--color-neutral-700);
+  background-color: var(--color-neutral-950);
+  border: ${MINIMAP_BORDER_SIZE}px double var(--color-sky-700);
   border-radius: 0.125rem;
   position: relative;
   cursor: pointer;
@@ -68,7 +78,6 @@ const MinimapDot = styled.div`
   left: 0;
   width: ${MINIMAP_DOT_SIZE}px;
   height: ${MINIMAP_DOT_SIZE}px;
-  /* background-color: var(--color-green-400); */
   border: 1px solid var(--color-stone-300);
   border-radius: 2px;
   transform: translate(var(--x), var(--y));
@@ -112,8 +121,8 @@ function Minimap({ coords, setCoords }) {
 }
 
 const PieceImage = styled.img`
-  width: 40px;
-  height: 40px;
+  width: 60px;
+  height: 60px;
   object-fit: contain;
   filter: drop-shadow(0 0 4px var(--color-cyan-500))
     drop-shadow(0 0 8px var(--color-cyan-500));
@@ -131,7 +140,7 @@ const PieceImageAndStat = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.25rem;
+  /* gap: 0.25rem; */
   align-self: center;
 `;
 
@@ -166,11 +175,21 @@ const YourStats = styled.div`
   flex-grow: 1;
 `;
 
+const StatSquareOuter = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-blue-500);
+  border-radius: 0.25rem;
+  padding: 2px;
+`;
+
 const YourStatSquare = styled.div`
   --size: 2rem;
   width: var(--size);
   height: var(--size);
-  border: 1px solid var(--color-green-400);
+  border: 2px dashed var(--color-gray-600);
+
   border-radius: 0.25rem;
   position: relative;
   display: flex;
@@ -194,15 +213,28 @@ const YourStatSquareLabel = styled.p`
   color: var(--color-gray-200);
   text-align: right;
   padding-right: 0.125rem;
+  background-color: var(--color-neutral-800);
+  width: fit-content;
+  /* align-self: flex-end; */
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  border-top: 1px solid var(--color-blue-500);
+  border-left: 1px solid var(--color-blue-500);
+  border-radius: 2px;
+  padding: 1px 4px 1px 4px;
+  z-index: 2;
   line-height: 1;
 `;
 
 function StatSquare({ icon, getLabel }) {
   return (
-    <YourStatSquare>
-      {icon}
-      <YourStatSquareLabel>{getLabel()}</YourStatSquareLabel>
-    </YourStatSquare>
+    <StatSquareOuter>
+      <YourStatSquare>
+        {icon}
+        <YourStatSquareLabel>{getLabel()}</YourStatSquareLabel>
+      </YourStatSquare>
+    </StatSquareOuter>
   );
 }
 function SelectedPiece({ selectedPiece }) {

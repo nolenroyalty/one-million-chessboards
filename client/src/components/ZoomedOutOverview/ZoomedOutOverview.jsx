@@ -213,7 +213,6 @@ function ZoomedOutOverview({
     const loop = () => {
       const ctx = pieceCanvasRef.current.getContext("2d");
       ctx.clearRect(0, 0, pxWidth, pxHeight);
-      console.log("drawing non-animated pieces");
       for (const piece of piecesRef.current.values()) {
         const { x, y } = piece;
         if (x < startingX || x >= endingX || y < startingY || y >= endingY) {
