@@ -257,7 +257,6 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
 
   const moveAndClear = React.useCallback(
     ({ piece, toX, toY }) => {
-      console.log(piece);
       incrementPieceMove(piece.id);
       const toKey = pieceKey(toX, toY);
       if (piecesRef.current.has(toKey)) {

@@ -68,7 +68,8 @@ const MinimapDot = styled.div`
   left: 0;
   width: ${MINIMAP_DOT_SIZE}px;
   height: ${MINIMAP_DOT_SIZE}px;
-  background-color: var(--color-green-400);
+  /* background-color: var(--color-green-400); */
+  border: 1px solid var(--color-stone-300);
   border-radius: 2px;
   transform: translate(var(--x), var(--y));
 `;
@@ -169,7 +170,7 @@ const YourStatSquare = styled.div`
   --size: 2rem;
   width: var(--size);
   height: var(--size);
-  border: 2px solid var(--color-green-400);
+  border: 1px solid var(--color-green-400);
   border-radius: 0.25rem;
   position: relative;
   display: flex;
