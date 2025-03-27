@@ -15,7 +15,6 @@ const MAX_DMOVE = 25;
 const ZoomedOutOverviewWrapper = styled.div`
   position: absolute;
   inset: 0;
-  background-color: #2bb0557e;
   // longer than the small board, looks a little nicer
   transition: opacity 0.5s ease;
   opacity: var(--opacity);
@@ -91,8 +90,12 @@ function ZoomedOutOverview({
   const getBoardColor = React.useCallback(({ x, y }) => {
     const boardIdxX = Math.floor(x / 8);
     const boardIdxY = Math.floor(y / 8);
-    const color1 = "#6b7280";
-    const color2 = "#78716c";
+    // const color1 = "#6b7280";
+    // const color2 = "#78716c";
+    const color1 = "#171717";
+    const color2 = "#0a0a0a";
+    // const color2 = "#111827";
+
     if (boardIdxX % 2 === 0) {
       return boardIdxY % 2 === 0 ? color1 : color2;
     }

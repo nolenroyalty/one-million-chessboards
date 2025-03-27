@@ -11,6 +11,7 @@ const Main = styled.main`
   justify-content: center;
   max-width: 1000px;
   margin: 0 auto;
+  background-color: var(--color-neutral-950);
 `;
 
 const Header = styled.header`
