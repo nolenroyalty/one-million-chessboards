@@ -24,6 +24,7 @@ const BoardContainer = styled.div`
   width: 100%;
   flex-grow: 1;
   justify-content: space-between;
+  overflow: hidden;
 `;
 
 const Inner = styled.div`

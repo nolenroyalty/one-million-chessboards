@@ -16,12 +16,17 @@ const Main = styled.main`
   height: 100svh;
   max-height: 1500px;
   padding: 0 0.5rem;
+  border-left: 1px solid var(--color-sky-700);
+  border-right: 1px solid var(--color-sky-700);
+  /* box-shadow:
+    2px 0 8px var(--color-neutral-800),
+    -2px 0 8px var(--color-neutral-800); */
   /* background-color: #0a0a0a;
   opacity: 1;
-  background-image:
+  /* background-image:
     linear-gradient(#0c4a6e 0.8px, transparent 0.8px),
     linear-gradient(to right, #0c4a6e 0.8px, #0a0a0a 0.8px);
-  background-size: 16px 16px; */
+  background-size: 16px 16px; */ */
 `;
 
 function useStartBot({ pieceHandler, submitMove, started }) {
@@ -209,7 +214,7 @@ function App() {
   return (
     <Main>
       <Header runBot={runBot} />
-      <ChessPieceColorer />
+      {/* <ChessPieceColorer /> */}
       <Board
         coords={coords}
         submitMove={submitMove}

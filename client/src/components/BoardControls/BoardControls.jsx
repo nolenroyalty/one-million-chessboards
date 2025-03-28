@@ -537,18 +537,18 @@ function BoardControls({
   const [hide, setHide] = React.useState(false);
   // add hide functionality especially for mobile...
 
-  //   React.useEffect(() => {
-  //     const handleKeyDown = (e) => {
-  //       if (e.key === "Escape") {
-  //         console.log("hello");
-  //         setHide((prev) => !prev);
-  //       }
-  //     };
-  //     window.addEventListener("keydown", handleKeyDown);
-  //     return () => {
-  //       window.removeEventListener("keydown", handleKeyDown);
-  //     };
-  //   }, [setHide]);
+  React.useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        console.log("hello");
+        setHide((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [setHide]);
 
   return (
     <Wrapper style={{ "--translate-y": hide ? "100%" : "0%" }}>

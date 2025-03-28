@@ -37,6 +37,7 @@ function BoardCanvas({
 
     const canvas = ref.current;
     const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, pxWidth, pxHeight);
     const { startingX, startingY, endingX, endingY } =
       getStartingAndEndingCoords({
         coords,

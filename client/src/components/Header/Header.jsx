@@ -8,8 +8,10 @@ const Wrapper = styled.header`
   grid-template-areas: "by title count" "subheader subheader subheader";
   grid-template-columns: 1fr auto 1fr;
   align-items: baseline;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.125rem;
+  padding-bottom: 0.5rem;
   margin-top: 0.125rem;
+  border-bottom: 1px solid var(--color-sky-700);
 `;
 
 const Title = styled.h1`
@@ -32,6 +34,7 @@ const Subheader = styled.h2`
   align-items: center;
   justify-content: center;
   gap: 0.25rem;
+  color: var(--color-neutral-400);
 `;
 
 const Count = styled.p`
