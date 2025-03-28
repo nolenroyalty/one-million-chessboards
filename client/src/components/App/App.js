@@ -3,7 +3,8 @@ import styled from "styled-components";
 import Board from "../Board/Board";
 import PieceHandler from "../../pieceHandler.js";
 import { createMoveRequest, keyToCoords } from "../../utils";
-
+import ChessPieceColorer from "../ChessPieceColorer/ChessPieceColorer";
+import Header from "../Header/Header";
 const Main = styled.main`
   display: flex;
   flex-direction: column;
@@ -12,20 +13,14 @@ const Main = styled.main`
   max-width: 1000px;
   margin: 0 auto;
   background-color: var(--color-neutral-950);
-`;
-
-const Header = styled.header`
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-`;
-
-const HeaderTitle = styled.h1`
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--color-white);
+  height: 100svh;
+  max-height: 1500px;
+  /* background-color: #0a0a0a;
+  opacity: 1;
+  background-image:
+    linear-gradient(#0c4a6e 0.8px, transparent 0.8px),
+    linear-gradient(to right, #0c4a6e 0.8px, #0a0a0a 0.8px);
+  background-size: 16px 16px; */
 `;
 
 function useStartBot({ pieceHandler, submitMove, started }) {
@@ -212,15 +207,8 @@ function App() {
 
   return (
     <Main>
-      <Header>
-        <HeaderTitle
-          style={{
-            color: runBot ? "var(--color-yellow-300)" : null,
-          }}
-        >
-          One Million Chessboards
-        </HeaderTitle>
-      </Header>
+      <Header runBot={runBot} />
+      {/* <ChessPieceColorer /> */}
       <Board
         coords={coords}
         submitMove={submitMove}

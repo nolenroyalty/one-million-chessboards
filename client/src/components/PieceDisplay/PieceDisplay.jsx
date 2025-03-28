@@ -28,6 +28,7 @@ const PieceImg = styled.img`
   &:hover {
     transform: scale(1.12);
   }
+  filter: url(#colorRemap) url(#binaryRemap);
 `;
 
 const PieceButtonWrapper = styled.button`
@@ -136,7 +137,7 @@ const _Piece = React.forwardRef(
         onClick={onClick}
         ref={ref}
       >
-        <PieceImg src={src} style={imgStyle} />
+        <PieceImg className="chess-piece" src={src} style={imgStyle} />
       </PieceButtonWrapper>
     );
   }

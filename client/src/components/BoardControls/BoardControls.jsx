@@ -13,27 +13,28 @@ import {
   CircleArrowUp,
   CircleArrowLeft,
   CircleArrowRight,
+  DollarSign,
+  Mail,
+  Twitter,
 } from "lucide-react";
 import { TYPE_TO_NAME, getPieceMoves, getPieceCaptures } from "../../utils";
 
 const Wrapper = styled.div`
   width: 100%;
   gap: 0.5rem;
-  background-color: var(--color-blue-800);
   padding: 0.5rem;
   border-radius: 0 0 0.25rem 0.25rem;
   border: 1px solid var(--color-sky-700);
-  max-width: 800px;
 
   display: grid;
-  grid-template-areas: "minimap jump buttons" "minimap piece buttons";
-  grid-template-rows: auto 1fr;
+  grid-template-areas: "minimap jump buttons" "minimap piece buttons" "minimap piece by";
+  grid-template-rows: auto 1fr auto;
   grid-template-columns: auto minmax(150px, 250px) auto;
   align-items: end;
 
   justify-content: space-between;
 
-  background-color: var(--color-gray-900);
+  /* background-color: var(--color-gray-900); */
 
   background-color: #0a0a0a;
   opacity: 1;
@@ -61,6 +62,8 @@ const AllBoardButtonsWrapper = styled(Panel)`
     "left . right"
     "hot down .";
   align-self: start;
+  justify-self: end;
+  max-width: fit-content;
 `;
 
 const JumpInput = styled.input`
@@ -84,6 +87,62 @@ const Middle = styled(Panel)`
   padding: 0.5rem 0 0;
   grid-area: piece;
 `;
+
+const ByWrapper = styled(Panel)`
+  grid-area: by;
+  padding: 0.25rem;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const ByText = styled.p`
+  color: var(--color-stone-400);
+`;
+
+const SVGLink = styled.a`
+  color: var(--color-sky-400);
+  transform: translate(0, 1px);
+  transition: color 0.2s ease-in-out;
+
+  &:hover {
+    color: var(--color-sky-100);
+  }
+
+  & svg {
+    width: 16px;
+    height: 16px;
+  }
+`;
+
+const ByLinks = styled.div`
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.125rem;
+`;
+
+function By() {
+  return (
+    <ByWrapper>
+      <ByText>
+        by <a href="https://eieio.games">eieio</a>
+      </ByText>
+      <ByLinks>
+        <SVGLink href="https://eieio.substack.com/">
+          <Mail />
+        </SVGLink>
+        <SVGLink href="https://buymeacoffee.com/eieio">
+          <DollarSign />
+        </SVGLink>
+        <SVGLink href="https://x.com/itseieio">
+          <Twitter />
+        </SVGLink>
+      </ByLinks>
+    </ByWrapper>
+  );
+}
 
 const Spacer = styled.div`
   flex-grow: 1;
@@ -483,26 +542,7 @@ function BoardControls({
         showLargeBoard={showLargeBoard}
         setCoords={setCoords}
       />
-      {/* <AllBoardButtons>
-        <PlusMinusControls>
-          <IconButton style={{ transform: "translate(10%, -3%)" }}>
-            <Flame />
-          </IconButton>
-          <IconButton
-            disabled={!showLargeBoard}
-            onClick={() => setShowLargeBoard(false)}
-          >
-            <CirclePlus />
-          </IconButton>
-          <IconButton
-            disabled={showLargeBoard}
-            onClick={() => setShowLargeBoard(true)}
-          >
-            <CircleMinus />
-          </IconButton>
-        </PlusMinusControls>
-        <ManuverButtons setCoords={setCoords} />
-      </AllBoardButtons> */}
+      <By />
     </Wrapper>
   );
 }

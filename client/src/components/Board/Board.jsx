@@ -12,7 +12,6 @@ import {
 } from "../../utils";
 import PanzoomBox from "../PanzoomBox/PanzoomBox";
 import BoardControls from "../BoardControls/BoardControls";
-
 const WIDTH = 23;
 const HEIGHT = 23;
 const PIXELS_PER_SQUARE = 24;
@@ -23,6 +22,8 @@ const BoardContainer = styled.div`
   align-items: center;
   justify-content: center;
   width: 100%;
+  flex-grow: 1;
+  justify-content: space-between;
 `;
 
 const Inner = styled.div`

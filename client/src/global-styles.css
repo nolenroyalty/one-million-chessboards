@@ -273,7 +273,7 @@ html,
 body {
   height: 100%;
   /* background-color: var(--color-neutral-950); */
-  color: var(--color-slate-200);
+  color: var(--color-sky-100);
   font-family: "Apercu Regular Pro", sans-serif;
 
   background-color: var(--color-neutral-950);
@@ -326,4 +326,16 @@ h6 {
 #root,
 #__next {
   isolation: isolate;
+}
+
+a {
+  color: var(--color-sky-500);
+  text-decoration: underline;
+  text-decoration-style: dashed;
+  text-underline-offset: 0.2em;
+  transition: color 0.2s ease-in-out;
+}
+
+a:hover {
+  color: var(--color-sky-100);
 }
