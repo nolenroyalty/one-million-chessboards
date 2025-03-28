@@ -3,6 +3,7 @@ import {
   keyToCoords,
   getStartingAndEndingCoords,
   getScreenRelativeCoords,
+  getZoomedInScreenAbsoluteCoords,
 } from "../../utils";
 import styled from "styled-components";
 
@@ -24,16 +25,15 @@ const MoveButton = styled.button`
 function PieceMoveButtons({
   moveableSquares,
   coords,
-  numSquares,
+  zoomedInParams,
   selectedPiece,
   moveAndClear,
-  size,
   hidden,
 }) {
   const { startingX, startingY } = getStartingAndEndingCoords({
     coords,
-    width: numSquares,
-    height: numSquares,
+    width: zoomedInParams.squareWidth,
+    height: zoomedInParams.squareHeight,
   });
   return Array.from(moveableSquares.values()).map((key) => {
     const [x, y] = keyToCoords(key);
@@ -43,13 +43,18 @@ function PieceMoveButtons({
       startingX,
       startingY,
     });
+    const { x: absoluteX, y: absoluteY } = getZoomedInScreenAbsoluteCoords({
+      screenX,
+      screenY,
+      zoomedInParams,
+    });
     return (
       <MoveButton
         key={key}
         style={{
-          "--x": `${screenX * size}px`,
-          "--y": `${screenY * size}px`,
-          "--size": `${size}px`,
+          "--x": `${absoluteX}px`,
+          "--y": `${absoluteY}px`,
+          "--size": `${zoomedInParams.squarePx}px`,
           "--opacity": hidden ? 0 : 1,
           "--pointer-events": hidden ? "none" : "auto",
           "--cursor": hidden ? "none" : "pointer",

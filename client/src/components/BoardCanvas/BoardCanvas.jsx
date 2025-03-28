@@ -3,6 +3,7 @@ import styled from "styled-components";
 import {
   getStartingAndEndingCoords,
   getScreenRelativeCoords,
+  getZoomedInScreenAbsoluteCoords,
   pieceKey,
   getSquareColor,
 } from "../../utils";
@@ -23,9 +24,7 @@ function BoardCanvas({
   coords,
   pxWidth,
   pxHeight,
-  numSquares,
-  borderHalfWidth,
-  pixelsPerSquare,
+  zoomedInParams,
   moveableSquares,
   selectedPiece,
   opacity,
@@ -41,8 +40,8 @@ function BoardCanvas({
     const { startingX, startingY, endingX, endingY } =
       getStartingAndEndingCoords({
         coords,
-        width: numSquares,
-        height: numSquares,
+        width: zoomedInParams.squareWidth,
+        height: zoomedInParams.squareHeight,
       });
     for (let x = startingX; x < endingX; x++) {
       for (let y = startingY; y < endingY; y++) {
@@ -53,22 +52,27 @@ function BoardCanvas({
           startingX,
           startingY,
         });
+        const { x: absoluteX, y: absoluteY } = getZoomedInScreenAbsoluteCoords({
+          screenX,
+          screenY,
+          zoomedInParams,
+        });
         ctx.fillStyle = color;
         ctx.fillRect(
-          screenX * pixelsPerSquare,
-          screenY * pixelsPerSquare,
-          pixelsPerSquare,
-          pixelsPerSquare
+          absoluteX,
+          absoluteY,
+          zoomedInParams.squarePx,
+          zoomedInParams.squarePx
         );
         if (moveableSquares.has(pieceKey(x, y))) {
           ctx.save();
           ctx.fillStyle = MOVEABLE_SQUARE_COLOR;
           ctx.globalAlpha = 0.7;
           ctx.fillRect(
-            screenX * pixelsPerSquare,
-            screenY * pixelsPerSquare,
-            pixelsPerSquare,
-            pixelsPerSquare
+            absoluteX,
+            absoluteY,
+            zoomedInParams.squarePx,
+            zoomedInParams.squarePx
           );
           ctx.restore();
         } else if (
@@ -80,10 +84,10 @@ function BoardCanvas({
           ctx.fillStyle = SELECTED_PIECE_COLOR;
           ctx.globalAlpha = 0.7;
           ctx.fillRect(
-            screenX * pixelsPerSquare,
-            screenY * pixelsPerSquare,
-            pixelsPerSquare,
-            pixelsPerSquare
+            absoluteX,
+            absoluteY,
+            zoomedInParams.squarePx,
+            zoomedInParams.squarePx
           );
           ctx.restore();
         }
@@ -92,10 +96,10 @@ function BoardCanvas({
           ctx.save();
           ctx.fillStyle = BOARD_BORDER_COLOR;
           ctx.fillRect(
-            screenX * pixelsPerSquare - borderHalfWidth,
-            screenY * pixelsPerSquare,
-            borderHalfWidth * 2,
-            pixelsPerSquare
+            absoluteX - zoomedInParams.borderHalfWidth,
+            absoluteY,
+            zoomedInParams.borderHalfWidth * 2,
+            zoomedInParams.squarePx
           );
           ctx.restore();
         }
@@ -104,23 +108,16 @@ function BoardCanvas({
           ctx.save();
           ctx.fillStyle = BOARD_BORDER_COLOR;
           ctx.fillRect(
-            screenX * pixelsPerSquare,
-            screenY * pixelsPerSquare - borderHalfWidth,
-            pixelsPerSquare,
-            borderHalfWidth * 2
+            absoluteX,
+            absoluteY - zoomedInParams.borderHalfWidth,
+            zoomedInParams.squarePx,
+            zoomedInParams.borderHalfWidth * 2
           );
           ctx.restore();
         }
       }
     }
-  }, [
-    coords,
-    numSquares,
-    borderHalfWidth,
-    pixelsPerSquare,
-    moveableSquares,
-    selectedPiece,
-  ]);
+  }, [coords, zoomedInParams, moveableSquares, selectedPiece]);
 
   return (
     <Canvas

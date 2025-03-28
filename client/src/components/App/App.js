@@ -15,6 +15,7 @@ const Main = styled.main`
   background-color: var(--color-neutral-950);
   height: 100svh;
   max-height: 1500px;
+  padding: 0 0.5rem;
   /* background-color: #0a0a0a;
   opacity: 1;
   background-image:
@@ -208,7 +209,7 @@ function App() {
   return (
     <Main>
       <Header runBot={runBot} />
-      {/* <ChessPieceColorer /> */}
+      <ChessPieceColorer />
       <Board
         coords={coords}
         submitMove={submitMove}

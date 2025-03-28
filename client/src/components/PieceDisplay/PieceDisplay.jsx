@@ -6,6 +6,7 @@ import {
   getScreenRelativeCoords,
   easeInOutSquare,
   computeAnimationDuration,
+  getZoomedInScreenAbsoluteCoords,
 } from "../../utils";
 
 const MAX_ANIMATION_DURATION = 750;
@@ -90,7 +91,7 @@ function CapturedPiece({ id, x, y, src, piece, size }) {
     </CapturedPieceWrapper>
   );
 }
-const _Piece = React.forwardRef(
+const Piece = React.forwardRef(
   (
     {
       x,
@@ -104,13 +105,10 @@ const _Piece = React.forwardRef(
       hidden,
       opacity,
       selected,
+      translate,
     },
     ref
   ) => {
-    const translate = React.useMemo(() => {
-      return `translate(${x * size}px, ${y * size}px)`;
-    }, [x, y, size]);
-
     const style = React.useMemo(() => {
       return {
         "--size": `${size}px`,
@@ -143,7 +141,7 @@ const _Piece = React.forwardRef(
   }
 );
 
-const Piece = React.memo(_Piece, (prevProps, nextProps) => {
+const __Piece = React.memo(Piece, (prevProps, nextProps) => {
   return (
     prevProps.dataId === nextProps.dataId &&
     prevProps.piece.x === nextProps.piece.x &&
@@ -160,21 +158,22 @@ const Piece = React.memo(_Piece, (prevProps, nextProps) => {
 function PieceDisplay({
   pieceHandler,
   coords,
-  numSquares,
+  zoomedInParams,
   handlePieceClick,
-  pixelsPerSquare,
   selectedPiece,
   hidden,
   opacity,
   clearSelectedPieceAndSquares,
 }) {
   const { startingX, startingY, endingX, endingY } = React.useMemo(() => {
+    console.log("coords", coords);
+    console.log("zoomedInParams", zoomedInParams);
     return getStartingAndEndingCoords({
       coords,
-      width: numSquares,
-      height: numSquares,
+      width: zoomedInParams.squareWidth,
+      height: zoomedInParams.squareHeight,
     });
-  }, [coords, numSquares]);
+  }, [coords, zoomedInParams]);
 
   const piecesRefsMap = React.useRef(new Map());
   const recentMoveByPieceIdRef = React.useRef(
@@ -221,9 +220,23 @@ function PieceDisplay({
     },
     [isInvisibleNowAndViaMove]
   );
+
   const visiblePiecesAndIdsRef = React.useRef(
     getVisiblePiecesAndIds(pieceHandler.current.getPieces())
   );
+
+  React.useEffect(() => {
+    const visible = getVisiblePiecesAndIds(pieceHandler.current.getPieces());
+    visiblePiecesAndIdsRef.current = visible;
+    setForceUpdate((prev) => prev + 1);
+  }, [
+    endingX,
+    endingY,
+    getVisiblePiecesAndIds,
+    pieceHandler,
+    startingX,
+    startingY,
+  ]);
 
   React.useEffect(() => {
     pieceHandler.current.subscribe({
@@ -314,7 +327,13 @@ function PieceDisplay({
       const toKeep = new Map();
       const maybeSetRefTransform = (ref, x, y) => {
         if (ref) {
-          ref.style.transform = `translate(${x * pixelsPerSquare}px, ${y * pixelsPerSquare}px)`;
+          const { x: absoluteX, y: absoluteY } =
+            getZoomedInScreenAbsoluteCoords({
+              screenX: x,
+              screenY: y,
+              zoomedInParams,
+            });
+          ref.style.transform = `translate(${absoluteX}px, ${absoluteY}px)`;
         }
       };
 
@@ -348,7 +367,7 @@ function PieceDisplay({
     return () => {
       cancelAnimationFrame(frameId);
     };
-  }, [pixelsPerSquare, startingX, startingY, isNotVisible, getAnimatedCoords]);
+  }, [zoomedInParams, startingX, startingY, isNotVisible, getAnimatedCoords]);
 
   const createOnClickHandler = React.useCallback(
     (pieceId) => {
@@ -374,6 +393,7 @@ function PieceDisplay({
   );
 
   const memoizedPieces = React.useMemo(() => {
+    console.log("memoizedPieces", visiblePiecesAndIdsRef.current.pieces);
     const pieces = [];
     const shutUpError = forceUpdate;
     for (const piece of visiblePiecesAndIdsRef.current.pieces) {
@@ -397,6 +417,15 @@ function PieceDisplay({
         startingX,
         startingY,
       });
+
+      const { x: absoluteX, y: absoluteY } = getZoomedInScreenAbsoluteCoords({
+        screenX: x,
+        screenY: y,
+        zoomedInParams,
+      });
+
+      const translate = `translate(${absoluteX}px, ${absoluteY}px)`;
+
       pieces.push({
         piece,
         refFunc: createRefFunc(piece.id),
@@ -406,6 +435,7 @@ function PieceDisplay({
         }),
         x,
         y,
+        translate,
         onClick: createOnClickHandler(piece.id),
         selected: piece.id === selectedPiece?.id,
       });
@@ -420,25 +450,29 @@ function PieceDisplay({
     startingY,
     forceUpdate,
     selectedPiece,
+    zoomedInParams,
   ]);
 
-  return memoizedPieces.map(({ piece, refFunc, imageSrc, x, y, onClick }) => {
-    return (
-      <Piece
-        key={piece.id}
-        ref={refFunc}
-        piece={piece}
-        src={imageSrc}
-        x={x}
-        y={y}
-        size={pixelsPerSquare}
-        hidden={hidden}
-        opacity={opacity}
-        onClick={onClick}
-        selected={piece.id === selectedPiece?.id}
-      />
-    );
-  });
+  return memoizedPieces.map(
+    ({ piece, refFunc, imageSrc, x, y, translate, onClick }) => {
+      return (
+        <Piece
+          key={piece.id}
+          ref={refFunc}
+          piece={piece}
+          src={imageSrc}
+          x={x}
+          y={y}
+          translate={translate}
+          size={zoomedInParams.squarePx}
+          hidden={hidden}
+          opacity={opacity}
+          onClick={onClick}
+          selected={piece.id === selectedPiece?.id}
+        />
+      );
+    }
+  );
 }
 
 export default PieceDisplay;

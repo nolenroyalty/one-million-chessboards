@@ -142,6 +142,17 @@ export function getScreenRelativeCoords({ x, y, startingX, startingY }) {
   };
 }
 
+export function getZoomedInScreenAbsoluteCoords({
+  screenX,
+  screenY,
+  zoomedInParams,
+}) {
+  return {
+    x: screenX * zoomedInParams.squarePx + zoomedInParams.leftPadding,
+    y: screenY * zoomedInParams.squarePx + zoomedInParams.topPadding,
+  };
+}
+
 export function createMoveRequest(piece, toX, toY) {
   return {
     type: "move",

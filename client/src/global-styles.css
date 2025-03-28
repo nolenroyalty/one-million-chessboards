@@ -25,6 +25,16 @@
   font-weight: normal;
   font-style: normal;
 }
+
+@font-face {
+  font-family: "Apercu Italic Pro";
+  src:
+    url("/static/fonts/apercu-italic-pro.woff") format("woff"),
+    url("/static/fonts/apercu-italic-pro.ttf") format("truetype");
+  font-weight: normal;
+  font-style: italic;
+}
+
 :root {
   --color-slate-50: #f8fafc;
   --color-slate-100: #f1f5f9;
@@ -273,18 +283,18 @@ html,
 body {
   height: 100%;
   /* background-color: var(--color-neutral-950); */
-  color: var(--color-sky-100);
+  color: var(--color-slate-300);
   font-family: "Apercu Regular Pro", sans-serif;
 
   background-color: var(--color-neutral-950);
   /* opacity: 1; */
-  background: repeating-linear-gradient(
+  /* background: repeating-linear-gradient(
     45deg,
     var(--color-neutral-900),
     var(--color-neutral-900) 17px,
     var(--color-neutral-950) 17px,
     var(--color-neutral-950) 85px
-  );
+  ); */
 }
 body {
   line-height: 1.5;

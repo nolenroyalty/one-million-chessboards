@@ -25,6 +25,8 @@ const Wrapper = styled.div`
   padding: 0.5rem;
   border-radius: 0 0 0.25rem 0.25rem;
   border: 1px solid var(--color-sky-700);
+  transform: translate(0, var(--translate-y));
+  transition: transform 0.2s ease-in-out;
 
   display: grid;
   grid-template-areas: "minimap jump buttons" "minimap piece buttons" "minimap piece by";
@@ -532,8 +534,24 @@ function BoardControls({
   setShowLargeBoard,
   selectedPiece,
 }) {
+  const [hide, setHide] = React.useState(false);
+  // add hide functionality especially for mobile...
+
+  //   React.useEffect(() => {
+  //     const handleKeyDown = (e) => {
+  //       if (e.key === "Escape") {
+  //         console.log("hello");
+  //         setHide((prev) => !prev);
+  //       }
+  //     };
+  //     window.addEventListener("keydown", handleKeyDown);
+  //     return () => {
+  //       window.removeEventListener("keydown", handleKeyDown);
+  //     };
+  //   }, [setHide]);
+
   return (
-    <Wrapper>
+    <Wrapper style={{ "--translate-y": hide ? "100%" : "0%" }}>
       <Minimap coords={coords} setCoords={setCoords} />
       <SelectedPiece selectedPiece={selectedPiece} />
       <JumpControl coords={coords} setCoords={setCoords} />

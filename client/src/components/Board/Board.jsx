@@ -13,7 +13,7 @@ import {
 import PanzoomBox from "../PanzoomBox/PanzoomBox";
 import BoardControls from "../BoardControls/BoardControls";
 const WIDTH = 23;
-const HEIGHT = 23;
+const HEIGHT = 24;
 const PIXELS_PER_SQUARE = 24;
 
 const BoardContainer = styled.div`
@@ -27,8 +27,10 @@ const BoardContainer = styled.div`
 `;
 
 const Inner = styled.div`
-  width: ${WIDTH * PIXELS_PER_SQUARE}px;
-  height: ${HEIGHT * PIXELS_PER_SQUARE}px;
+  /* width: ${WIDTH * PIXELS_PER_SQUARE}px; */
+  /* height: ${HEIGHT * PIXELS_PER_SQUARE}px; */
+  width: 100%;
+  height: 100%;
   position: relative;
   overflow: hidden;
 `;
@@ -126,11 +128,15 @@ function useZoomedOutParams({ innerSize }) {
   return params;
 }
 
+const MIN_PIXELS_PER_SQUARE = 28;
+const MAX_NUM_ZOOMED_IN_SQUARES = 32;
+const MIN_NUM_ZOOMED_IN_SQUARES = 8;
 function useZoomedInParams({ innerSize }) {
   const [params, setParams] = React.useState({
-    squareSize: PIXELS_PER_SQUARE,
-    numSquares: WIDTH,
-    borderHalfWidth: 1,
+    squarePx: 0,
+    squareWidth: 0,
+    squareHeight: 0,
+    borderHalfWidth: 0,
     initialized: false,
   });
 
@@ -139,14 +145,75 @@ function useZoomedInParams({ innerSize }) {
     if (timeout.current) {
       clearTimeout(timeout.current);
     }
-    timeout.current = setTimeout(() => {
+
+    const calc = () => {
+      const minDist = Math.min(innerSize.width, innerSize.height);
+      const maxDist = Math.max(innerSize.width, innerSize.height);
+      let heightIsSmall = innerSize.height <= innerSize.width;
+      let squarePx;
+      let largeCount;
+      let smallCount;
+      if (minDist / MIN_PIXELS_PER_SQUARE < MIN_NUM_ZOOMED_IN_SQUARES) {
+        squarePx = MIN_PIXELS_PER_SQUARE;
+        largeCount = maxDist / squarePx;
+        smallCount = minDist / squarePx;
+      } else {
+        squarePx = MIN_PIXELS_PER_SQUARE;
+        largeCount = maxDist / squarePx;
+        smallCount = minDist / squarePx;
+        while (
+          largeCount > MAX_NUM_ZOOMED_IN_SQUARES &&
+          smallCount > MIN_NUM_ZOOMED_IN_SQUARES
+        ) {
+          squarePx += 2;
+          largeCount = maxDist / squarePx;
+          smallCount = minDist / squarePx;
+        }
+        largeCount = Math.min(
+          Math.floor(largeCount),
+          MAX_NUM_ZOOMED_IN_SQUARES
+        );
+        smallCount = Math.max(
+          Math.floor(smallCount),
+          MIN_NUM_ZOOMED_IN_SQUARES
+        );
+      }
+      let borderHalfWidth = 1;
+      if (squarePx > 26) {
+        borderHalfWidth = 2;
+      }
+      if (squarePx > 34) {
+        borderHalfWidth = 3;
+      }
+      let horizontalPadding, verticalPadding;
+      if (heightIsSmall) {
+        horizontalPadding = innerSize.width - largeCount * squarePx;
+        verticalPadding = innerSize.height - smallCount * squarePx;
+      } else {
+        horizontalPadding = innerSize.width - smallCount * squarePx;
+        verticalPadding = innerSize.height - largeCount * squarePx;
+      }
+      let leftPadding = Math.floor(horizontalPadding / 2);
+      let rightPadding = Math.ceil(horizontalPadding / 2);
+      let topPadding = Math.floor(verticalPadding / 2);
+      let bottomPadding = Math.ceil(verticalPadding / 2);
       setParams({
-        squareSize: PIXELS_PER_SQUARE,
-        numSquares: WIDTH,
-        borderHalfWidth: 1,
+        squarePx,
+        squareWidth: heightIsSmall ? largeCount : smallCount,
+        squareHeight: heightIsSmall ? smallCount : largeCount,
+        borderHalfWidth,
+        leftPadding,
+        rightPadding,
+        topPadding,
+        bottomPadding,
         initialized: true,
       });
-    }, 100);
+    };
+
+    timeout.current = setTimeout(calc, 100);
+    return () => {
+      clearTimeout(timeout.current);
+    };
   }, [innerSize]);
   return params;
 }
@@ -429,9 +496,7 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
             coords={coords}
             pxWidth={innerSize.width}
             pxHeight={innerSize.height}
-            numSquares={zoomedInParams.numSquares}
-            borderHalfWidth={zoomedInParams.borderHalfWidth}
-            pixelsPerSquare={zoomedInParams.squareSize}
+            zoomedInParams={zoomedInParams}
             moveableSquares={moveableSquares}
             selectedPiece={selectedPiece}
             opacity={smallOpacity}
@@ -458,8 +523,7 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
             <PieceDisplay
               coords={coords}
               handlePieceClick={handlePieceClick}
-              numSquares={zoomedInParams.numSquares}
-              pixelsPerSquare={zoomedInParams.squareSize}
+              zoomedInParams={zoomedInParams}
               pieceHandler={pieceHandler}
               opacity={smallOpacity}
               hidden={smallHidden}
@@ -471,10 +535,9 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
             <PieceMoveButtons
               moveableSquares={moveableSquares}
               coords={coords}
-              numSquares={zoomedInParams.numSquares}
+              zoomedInParams={zoomedInParams}
               moveAndClear={moveAndClear}
               selectedPiece={selectedPiece}
-              size={zoomedInParams.squareSize}
               opacity={smallOpacity}
             />
           </>
