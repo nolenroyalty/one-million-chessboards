@@ -451,6 +451,10 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
     };
   }, [showLargeBoard, zoomInOnBoard]);
 
+  // CR nroyalty: we need to create ANOTHER wrapper inside INNER
+  // that respects our padding calculations and also hides elements outside
+  // of its view so that you can't see pieces that have moved off of the visible
+  // board!!
   return (
     <BoardContainer ref={boardContainerRef}>
       <Inner ref={innerRef}>

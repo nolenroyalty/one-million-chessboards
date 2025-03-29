@@ -384,7 +384,7 @@ const StatSquareOuter = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--color-blue-500);
+  border: 1px solid var(--color-sky-700);
   border-radius: 0.25rem;
   padding: 2px;
 `;
@@ -424,8 +424,8 @@ const YourStatSquareLabel = styled.p`
   position: absolute;
   bottom: -4px;
   right: -4px;
-  border-top: 1px solid var(--color-blue-500);
-  border-left: 1px solid var(--color-blue-500);
+  border-top: 1px solid var(--color-sky-700);
+  border-left: 1px solid var(--color-sky-700);
   border-radius: 2px;
   padding: 1px 4px 1px 4px;
   z-index: 2;
