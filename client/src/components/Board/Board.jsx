@@ -94,6 +94,12 @@ function useZoomedOutParams({ innerSize }) {
 const MIN_PIXELS_PER_SQUARE = 28;
 const MAX_NUM_ZOOMED_IN_SQUARES = 36;
 const MIN_NUM_ZOOMED_IN_SQUARES = 8;
+// CR nroyalty:
+// compute ZoomedOutParams using same logic as useZoomedInParams
+// maybe just halve the number of squares, fitting 4 boards into each
+// board in the zoomed in view.
+// Doing this prevents us from needing to re-calculate the wrapper that
+// we're going to add when we swap between zoomed in and zoomed out
 function useZoomedInParams({ innerSize }) {
   const [params, setParams] = React.useState({
     squarePx: 0,
