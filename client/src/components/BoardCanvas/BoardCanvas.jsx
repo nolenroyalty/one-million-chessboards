@@ -16,7 +16,8 @@ const Canvas = styled.canvas`
   transition: opacity 0.3s ease;
 `;
 
-const BOARD_BORDER_COLOR = "#0a0a0a";
+// const BOARD_BORDER_COLOR = "#0a0a0a";
+const BOARD_BORDER_COLOR = "#171717";
 const MOVEABLE_SQUARE_COLOR = "#3b82f6";
 const SELECTED_PIECE_COLOR = "#fbbf24";
 

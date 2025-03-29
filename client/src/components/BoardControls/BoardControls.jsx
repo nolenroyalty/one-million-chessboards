@@ -18,31 +18,37 @@ import {
   Twitter,
 } from "lucide-react";
 import { TYPE_TO_NAME, getPieceMoves, getPieceCaptures } from "../../utils";
+import { useElementDimensions } from "../../hooks/use-element-dimensions";
 
 const Wrapper = styled.div`
   width: 100%;
+  --inner-height: 170px;
   gap: 0.5rem;
-  padding: 0.5rem;
+  --padding: 0.5rem;
+  // we set height manually and refer to it for our first column width
+  // because firefox has a bug with grid sizing otherwise :/
+  padding: var(--padding);
+  height: calc(var(--inner-height) + 2 * var(--padding));
   border-radius: 0 0 0.25rem 0.25rem;
   border: 1px solid var(--color-sky-700);
   transform: translate(0, var(--translate-y));
   transition: transform 0.2s ease-in-out;
 
   display: grid;
-  grid-template-areas: "minimap jump buttons" "minimap piece buttons" "minimap piece by";
+  grid-template-areas: "minimap jump stats buttons" "minimap piece stats buttons" "minimap piece stats by";
   grid-template-rows: auto 1fr auto;
-  grid-template-columns: auto minmax(150px, 250px) auto;
+  grid-template-columns: var(--inner-height) minmax(150px, 400px) auto auto;
   align-items: end;
 
   justify-content: space-between;
 
   /* background-color: var(--color-gray-900); */
 
-  background-color: #0a0a0a;
+  /* background-color: #0a0a0a; */
   opacity: 1;
   background-image:
-    linear-gradient(#0c4a6e 0.8px, transparent 0.8px),
-    linear-gradient(to right, #0c4a6e 0.8px, #0a0a0a 0.8px);
+    linear-gradient(#0c4a6ea6 0.8px, transparent 0.8px),
+    linear-gradient(to right, #0c4a6eab 0.8px, #0a0a0a 0.8px);
   background-size: 16px 16px;
 `;
 
@@ -150,12 +156,109 @@ const Spacer = styled.div`
   flex-grow: 1;
 `;
 
+const StatsWrapper = styled(Panel)`
+  grid-area: stats;
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  grid-template-rows: auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem 0.25rem;
+  justify-content: space-between;
+  padding: 0.25rem;
+
+  & p {
+    padding: 0 0.125rem;
+    /* font-family: monospace; */
+    font-size: 0.75rem;
+  }
+`;
+
+// const StatsLine = styled.div`
+//   display: flex;
+//   flex-direction: row;
+//   align-items: center;
+//   justify-content: space-between;
+//   gap: 0.5rem;
+//   width: 100%;
+
+//   & p {
+//   }
+// `;
+
+// CR nroyalty: replace this with a table. It should look something like this:
+/*
+         | black | white | you
+pieces   | 10mil | 10mil |
+kings    | 1mil  | 1mil  |
+captures | 10mil | 10mil | 2
+moves    | 10mil | 10mil | 50
+*/
+function GlobalStats() {
+  return (
+    <StatsWrapper>
+      <p></p>
+      <p>b</p>
+      <p>w</p>
+      <p>you</p>
+      <p>captures</p>
+      <p>10m</p>
+      <p>10m</p>
+      <p>2</p>
+      <p>moves</p>
+      <p>10m</p>
+      <p>10m</p>
+      <p>50</p>
+      <p>pieces</p>
+      <p>10m</p>
+      <p>10m</p>
+      <p></p>
+      <p>kings</p>
+      <p>1m</p>
+      <p>1m</p>
+      <p></p>
+      {/* <StatsLine>
+        <p></p>
+        <p>b</p>
+        <p>w</p>
+        <p>you</p>
+      </StatsLine>
+      <StatsLine>
+        <p>pieces</p>
+        <p>10mil</p>
+        <p>10mil</p>
+        <p></p>
+      </StatsLine>
+      <StatsLine>
+        <p>kings</p>
+        <p>1mil</p>
+        <p>1mil</p>
+        <p></p>
+      </StatsLine>
+      <StatsLine>
+        <p>captures</p>
+        <p>10mil</p>
+        <p>10mil</p>
+        <p>2</p>
+      </StatsLine>
+      <StatsLine>
+        <p>moves</p>
+        <p>10mil</p>
+        <p>10mil</p>
+        <p>50</p>
+      </StatsLine> */}
+    </StatsWrapper>
+  );
+}
+
 const MINIMAP_WRAPPER_SIZE = 140;
 
 const MINIMAP_DOT_SIZE = 10;
 const MinimapWrapper = styled(Panel)`
-  width: ${MINIMAP_WRAPPER_SIZE + PANEL_BORDER_SIZE * 2}px;
-  height: ${MINIMAP_WRAPPER_SIZE + PANEL_BORDER_SIZE * 2}px;
+  /* width: ${MINIMAP_WRAPPER_SIZE + PANEL_BORDER_SIZE * 2}px; */
+  /* height: ${MINIMAP_WRAPPER_SIZE + PANEL_BORDER_SIZE * 2}px; */
+  /* width: 100%; */
+  height: 100%;
   aspect-ratio: 1 / 1;
   max-height: 100%;
   border-radius: 0.125rem;
@@ -177,19 +280,23 @@ const MinimapDot = styled.div`
 
 function Minimap({ coords, setCoords }) {
   const ref = React.useRef(null);
+  const elementDimensions = useElementDimensions(ref);
   const minPos = React.useMemo(() => 2 + MINIMAP_DOT_SIZE / 2, []);
-  const maxPos = React.useMemo(() => MINIMAP_WRAPPER_SIZE - minPos, [minPos]);
-  const xPercent = coords.x / 8000;
-  const yPercent = coords.y / 8000;
-  const maxAdjust = maxPos - minPos;
-  const x = minPos + xPercent * maxAdjust;
-  const y = minPos + yPercent * maxAdjust;
+  const maxPos = React.useMemo(() => {
+    if (!elementDimensions) {
+      return null;
+    }
+    const width = elementDimensions.width - PANEL_BORDER_SIZE * 2 - minPos;
+    return width;
+  }, [elementDimensions, minPos]);
 
   const handleClick = React.useCallback(
     (e) => {
-      const rect = ref.current.getBoundingClientRect();
-      const x = e.clientX - PANEL_BORDER_SIZE - minPos - rect.left;
-      const y = e.clientY - PANEL_BORDER_SIZE - minPos - rect.top;
+      if (!elementDimensions) {
+        return;
+      }
+      const x = e.clientX - PANEL_BORDER_SIZE - minPos - elementDimensions.left;
+      const y = e.clientY - PANEL_BORDER_SIZE - minPos - elementDimensions.top;
       const width = maxPos - minPos;
       const xPct = clamp(x / width, 0, 1);
       const yPct = clamp(y / width, 0, 1);
@@ -197,8 +304,18 @@ function Minimap({ coords, setCoords }) {
       let yCoord = Math.floor(yPct * 8000);
       setCoords({ x: xCoord, y: yCoord });
     },
-    [maxPos, minPos, setCoords]
+    [elementDimensions, maxPos, minPos, setCoords]
   );
+
+  if (!elementDimensions) {
+    return <MinimapWrapper ref={ref} onClick={handleClick}></MinimapWrapper>;
+  }
+
+  const xPercent = coords.x / 8000;
+  const yPercent = coords.y / 8000;
+  const maxAdjust = maxPos - minPos;
+  const x = minPos + xPercent * maxAdjust;
+  const y = minPos + yPercent * maxAdjust;
 
   return (
     <MinimapWrapper ref={ref} onClick={handleClick}>
@@ -555,6 +672,7 @@ function BoardControls({
       <Minimap coords={coords} setCoords={setCoords} />
       <SelectedPiece selectedPiece={selectedPiece} />
       <JumpControl coords={coords} setCoords={setCoords} />
+      <GlobalStats />
       <AllBoardButtons
         setShowLargeBoard={setShowLargeBoard}
         showLargeBoard={showLargeBoard}

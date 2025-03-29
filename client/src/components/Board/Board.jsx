@@ -12,6 +12,7 @@ import {
 } from "../../utils";
 import PanzoomBox from "../PanzoomBox/PanzoomBox";
 import BoardControls from "../BoardControls/BoardControls";
+import { useElementDimensions } from "../../hooks/use-element-dimensions";
 const WIDTH = 23;
 const HEIGHT = 24;
 const PIXELS_PER_SQUARE = 24;
@@ -35,45 +36,6 @@ const Inner = styled.div`
   position: relative;
   overflow: hidden;
 `;
-
-function useElementSize(ref) {
-  const [size, setSize] = React.useState({
-    left: 0,
-    top: 0,
-    width: 0,
-    height: 0,
-  });
-
-  React.useEffect(() => {
-    if (!ref.current) {
-      return;
-    }
-    const elt = ref.current;
-    const bounds = elt.getBoundingClientRect();
-    // client width doesn't account for border etc, which is nice
-    setSize({
-      left: bounds.left,
-      top: bounds.top,
-      width: elt.clientWidth,
-      height: elt.clientHeight,
-    });
-    const handleResize = () => {
-      const bounds = elt.getBoundingClientRect();
-      setSize({
-        left: bounds.left,
-        top: bounds.top,
-        width: elt.clientWidth,
-        height: elt.clientHeight,
-      });
-    };
-    window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
-  }, [ref]);
-
-  return size;
-}
 
 function useZoomedOutParams({ innerSize }) {
   const MAX_VIEWPORT_WIDTH = 81;
@@ -130,7 +92,7 @@ function useZoomedOutParams({ innerSize }) {
 }
 
 const MIN_PIXELS_PER_SQUARE = 28;
-const MAX_NUM_ZOOMED_IN_SQUARES = 32;
+const MAX_NUM_ZOOMED_IN_SQUARES = 36;
 const MIN_NUM_ZOOMED_IN_SQUARES = 8;
 function useZoomedInParams({ innerSize }) {
   const [params, setParams] = React.useState({
@@ -258,7 +220,7 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
     [_setShowLargeBoard]
   );
 
-  const innerSize = useElementSize(innerRef);
+  const innerSize = useElementDimensions(innerRef);
   const zoomedOutParams = useZoomedOutParams({ innerSize });
   const zoomedInParams = useZoomedInParams({ innerSize });
   const clearSelectedPieceAndSquares = React.useCallback(() => {

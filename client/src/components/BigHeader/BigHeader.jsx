@@ -1,5 +1,14 @@
 import React from "react";
-import styled from "styled-components";
+import styled, { keyframes } from "styled-components";
+
+const moveUp = keyframes`
+  from {
+    transform: translate(-50%, 0);
+  }
+  to {
+    transform: translate(-50%, calc(-15px - 100%));
+  }
+`;
 
 const Wrapper = styled.header`
   gap: 0.25rem;
@@ -11,7 +20,27 @@ const Wrapper = styled.header`
   margin-bottom: 0.125rem;
   padding-bottom: 0.5rem;
   margin-top: 0.125rem;
-  border-bottom: 1px solid var(--color-sky-700);
+  /* border-bottom: 1px solid var(--color-sky-700); */
+  position: absolute;
+  z-index: 100;
+  top: -2px;
+  padding-top: 5px;
+  left: 50%;
+  transform: translate(-50%, 0);
+  background-color: var(--color-neutral-950);
+  animation: ${moveUp} 1s ease-in-out both;
+  animation-delay: 1s;
+  background-image:
+    linear-gradient(#0c4a6e55 0.8px, transparent 0.8px),
+    linear-gradient(to right, #0c4a6e55 0.8px, #0a0a0a 0.8px);
+  background-size: 16px 16px;
+  width: calc(min(100%, 1000px));
+  border-left: 1px solid var(--color-sky-700);
+  border-right: 1px solid var(--color-sky-700);
+  @media (max-width: 1000px) {
+    border-left: none;
+    border-right: none;
+  }
 `;
 
 const Title = styled.h1`
@@ -37,15 +66,7 @@ const Subheader = styled.h2`
   color: var(--color-neutral-400);
 `;
 
-const Count = styled.p`
-  grid-area: count;
-`;
-
-const By = styled.p`
-  grid-area: by;
-`;
-
-function Header({ runBot }) {
+function BigHeader({ runBot }) {
   return (
     <Wrapper>
       <Title style={{ color: runBot ? "var(--color-yellow-300)" : null }}>
@@ -56,4 +77,4 @@ function Header({ runBot }) {
   );
 }
 
-export default Header;
+export default BigHeader;

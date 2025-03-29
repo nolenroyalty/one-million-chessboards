@@ -26,6 +26,8 @@ type Server struct {
 	upgrader   websocket.Upgrader
 }
 
+/* CR nroyalty: remove clientsMu lock, rework to use channels */
+
 
 // ZoneMap tracks which clients are interested in which zones
 type ZoneMap struct {
