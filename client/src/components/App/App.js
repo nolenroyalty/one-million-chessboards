@@ -150,8 +150,9 @@ function App() {
             captures: data.captures,
           });
         } else if (data.type === "minimapUpdate") {
-          console.log("minimapUpdate", data);
           minimapHandler.current.setState({ state: data.aggregations });
+        } else if (data.type === "globalStats") {
+          console.log("globalStats", data);
         }
       });
 

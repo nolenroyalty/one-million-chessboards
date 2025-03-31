@@ -11,6 +11,11 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const (
+	aggregationInterval = time.Second * 30
+	statsUpdateInterval = time.Second * 10
+)
+
 // Server is the main game server coordinator
 type Server struct {
 	// Game state
@@ -176,6 +181,7 @@ func (s *Server) Run() {
 	go s.handleSubscriptions()
 	go s.minimapAggregator.Run()
 	go s.sendPeriodicAggregations()
+	go s.sendPeriodicStats()
 	// Main goroutine handles client registration/disconnection
 	for {
 		select {
@@ -190,7 +196,7 @@ func (s *Server) Run() {
 
 func (s *Server) sendPeriodicAggregations() {
 	log.Printf("beginning periodic aggregations")
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(aggregationInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -206,6 +212,59 @@ func (s *Server) sendPeriodicAggregations() {
 		}
 		s.clientsMu.RUnlock()
 	}
+}
+
+type StatsUpdate struct {
+	Type string `json:"type"`
+	TotalMoves uint64 `json:"totalMoves"`
+	WhitePiecesRemaining uint32 `json:"whitePiecesRemaining"`
+	BlackPiecesRemaining uint32 `json:"blackPiecesRemaining"`
+	WhiteKingsRemaining uint32 `json:"whiteKingsRemaining"`
+	BlackKingsRemaining uint32 `json:"blackKingsRemaining"`
+}
+
+func (s *Server) createStatsUpdate() StatsUpdate {
+	stats := s.board.GetStats()
+	return StatsUpdate{
+		Type: "globalStats",
+		TotalMoves: stats.TotalMoves,
+		WhitePiecesRemaining: stats.WhitePiecesRemaining,
+		BlackPiecesRemaining: stats.BlackPiecesRemaining,
+		WhiteKingsRemaining: stats.WhiteKingsRemaining,
+		BlackKingsRemaining: stats.BlackKingsRemaining,
+	}
+}
+
+func (s *Server) sendPeriodicStats() {
+	log.Printf("beginning periodic stats")
+	ticker := time.NewTicker(statsUpdateInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		log.Printf("Requesting stats")
+		statsUpdate := s.createStatsUpdate()
+		log.Printf("Sending stats")
+		statsJson, err := json.Marshal(statsUpdate)
+		if err != nil {
+			log.Printf("Error marshalling stats: %v", err)
+			continue
+		}
+		s.clientsMu.RLock()
+		for client := range s.clients {
+			client.SendGlobalStats(statsJson)
+		}
+		s.clientsMu.RUnlock()
+	}
+}
+
+func (s *Server) RequestStatsSnapshot() json.RawMessage {
+	stats := s.createStatsUpdate()
+	statsJson, err := json.Marshal(stats)
+	if err != nil {
+		log.Printf("Error marshalling stats: %v", err)
+		return nil
+	}
+	return statsJson
 }
 
 func (s *Server) RequestStaleAggregation() json.RawMessage {
@@ -374,7 +433,7 @@ func (s *Server) InitializeBoard() {
 	startY := uint16(0)
 	for dx := range 1000 {
 		for dy := range 1000 {
-			random := rand.Intn(1000)
+			random := rand.Intn(1500)
 			includeWhite := random > dy;
 			includeBlack := random > dx;
 			// includeWhite := random < 50

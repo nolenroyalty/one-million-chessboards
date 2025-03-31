@@ -6,6 +6,8 @@ import { clamp } from "../../utils";
 
 const WHITE_ADVANTAGE_COLORS_HEX = ["#9ca3af", "#d1d5db", "#e5e7eb"];
 const BLACK_ADVANTAGE_COLORS_HEX = ["#4b5563", "#374151", "#1f2937"];
+const MINIMAP_RECT_STROKE_OUTER_COLOR = "#0a0a0a";
+const MINIMAP_RECT_STROKE_INNER_COLOR = "#0a0a0a";
 
 function hexToRgb(hex) {
   return {
@@ -109,7 +111,6 @@ function MinimapCanvas({ coords, setCoords, minimapHandler }) {
   }, [minimapHandler]);
 
   React.useEffect(() => {
-    console.log("minimapState", minimapState);
     const minimapDataCanvas = minimapDataCanvasRef.current;
     const ctx = minimapDataCanvas.getContext("2d");
     ctx.clearRect(0, 0, minimapDataCanvas.width, minimapDataCanvas.height);
@@ -150,9 +151,17 @@ function MinimapCanvas({ coords, setCoords, minimapHandler }) {
     const yStart = Math.max(0, yCenter - MINIMAP_DOT_SIZE / 2);
     const xEnd = Math.min(ctx.canvas.width, xCenter + MINIMAP_DOT_SIZE / 2);
     const yEnd = Math.min(ctx.canvas.height, yCenter + MINIMAP_DOT_SIZE / 2);
-    ctx.strokeStyle = "#4a044e";
+    ctx.strokeStyle = MINIMAP_RECT_STROKE_OUTER_COLOR;
     ctx.lineWidth = 3;
     ctx.strokeRect(xStart, yStart, xEnd - xStart, yEnd - yStart);
+    ctx.strokeStyle = MINIMAP_RECT_STROKE_INNER_COLOR;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(
+      xStart + 1,
+      yStart + 1,
+      xEnd - xStart - 2,
+      yEnd - yStart - 2
+    );
   }, [coords]);
 
   const onClick = React.useCallback(

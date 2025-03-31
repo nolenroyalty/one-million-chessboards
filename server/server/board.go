@@ -10,16 +10,21 @@ type Board struct {
 	pieces   [BOARD_SIZE][BOARD_SIZE]atomic.Pointer[Piece]
 	nextID   uint64
 	seqNum   atomic.Uint64
-	stats    GameStats
+	// stats    GameStats
+	totalMoves atomic.Uint64
+	whitePiecesCaptured atomic.Uint32
+	blackPiecesCaptured atomic.Uint32
+	whiteKingsCaptured atomic.Uint32
+	blackKingsCaptured atomic.Uint32
 }
 
 // GameStats tracks global game statistics
 type GameStats struct {
-	TotalMoves          uint32
-	WhitePiecesCaptured uint32
-	BlackPiecesCaptured uint32
-	WhiteKingsCaptured  uint32
-	BlackKingsCaptured  uint32
+	TotalMoves          uint64
+	WhitePiecesRemaining uint32
+	BlackPiecesRemaining uint32
+	WhiteKingsRemaining  uint32
+	BlackKingsRemaining  uint32
 }
 
 // NewBoard creates a new empty board
@@ -27,13 +32,11 @@ func NewBoard() *Board {
 	return &Board{
 		nextID: 1,
 		seqNum: atomic.Uint64{},
-		stats: GameStats{
-			TotalMoves: 0,
-			WhitePiecesCaptured: 0,
-			BlackPiecesCaptured: 0,
-			WhiteKingsCaptured: 0,
-			BlackKingsCaptured: 0,
-		},
+		totalMoves: atomic.Uint64{},
+		whitePiecesCaptured: atomic.Uint32{},
+		blackPiecesCaptured: atomic.Uint32{},
+		whiteKingsCaptured: atomic.Uint32{},
+		blackKingsCaptured: atomic.Uint32{},
 	}
 }
 
@@ -97,20 +100,20 @@ func (b *Board) _ApplyMove(piece *Piece, move Move) ApplyMoveResult {
 		
 		// Update capture statistics
 		if capturedPiece.IsWhite {
-			b.stats.WhitePiecesCaptured++
+			b.whitePiecesCaptured.Add(1)
 			if capturedPiece.Type == King {
-				b.stats.WhiteKingsCaptured++
+				b.whiteKingsCaptured.Add(1)
 			}
 		} else {
-			b.stats.BlackPiecesCaptured++
+			b.blackPiecesCaptured.Add(1)
 			if capturedPiece.Type == King {
-				b.stats.BlackKingsCaptured++
+				b.blackKingsCaptured.Add(1)
 			}
 		}
 	}
 	
 	// Increment move counter
-	b.stats.TotalMoves++
+	b.totalMoves.Add(1)
 	
 	return ApplyMoveResult{CapturedPiece: capturedPiece, MovedPiece: piece, NoMove: false}
 }
@@ -256,7 +259,13 @@ func (b *Board) createPiece(pieceType PieceType, isWhite bool) *Piece {
 
 // GetStats returns a copy of the current game statistics
 func (b *Board) GetStats() GameStats {
-	return b.stats
+	return GameStats{
+		TotalMoves: b.totalMoves.Load(),
+		WhitePiecesRemaining: 32000000 - b.whitePiecesCaptured.Load(),
+		BlackPiecesRemaining: 32000000 - b.blackPiecesCaptured.Load(),
+		WhiteKingsRemaining: 1000000 - b.whiteKingsCaptured.Load(),
+		BlackKingsRemaining: 1000000 - b.blackKingsCaptured.Load(),
+	}
 }
 
 // GetStateForPosition returns all pieces in a window around the given position

@@ -35,9 +35,9 @@ const Wrapper = styled.div`
   transition: transform 0.2s ease-in-out;
 
   display: grid;
-  grid-template-areas: "minimap jump stats buttons" "minimap piece stats buttons" "minimap piece stats by";
+  grid-template-areas: "minimap . stats buttons" "minimap piece stats buttons" "minimap piece stats by";
   grid-template-rows: auto 1fr auto;
-  grid-template-columns: var(--inner-height) minmax(150px, 400px) auto auto;
+  grid-template-columns: var(--inner-height) minmax(150px, 2fr) 3fr auto;
   align-items: end;
 
   justify-content: space-between;
@@ -160,10 +160,10 @@ const StatsWrapper = styled(BoardControlsPanel)`
   gap: 0.125rem 0.25rem;
   justify-content: space-between;
   padding: 0.25rem;
+  height: 100%;
 
   & p {
     padding: 0 0.125rem;
-    /* font-family: monospace; */
     font-size: 0.75rem;
   }
 `;

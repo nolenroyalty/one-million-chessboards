@@ -143,11 +143,11 @@ func (m *MinimapAggregator) handleAggregationRequest(request AggregationRequest)
 		diff := max(whiteCount, blackCount) - min(whiteCount, blackCount)
 		percentage := float64(diff) / float64(whiteCount + blackCount)
 		amount := 0;
-		if (percentage > 0.2) {
+		if (percentage > 0.3 && diff > 50) {
 			amount = 3
-		} else if (percentage > 0.1) {
+		} else if (percentage > 0.15 && diff > 25) {
 			amount = 2
-		} else if (percentage > 0.02) {
+		} else if (percentage > 0.03 && diff > 2) {
 			amount = 1
 		}
 

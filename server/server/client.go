@@ -60,11 +60,17 @@ func (c *Client) Run() {
 	go c.SendPeriodicUpdates()
 	go c.ProcessMoveUpdates()
 	go c.ImmediatelySendStaleAggregation()
+	go c.ImmediatelySendGlobalStats()
 }
 
 func (c *Client) ImmediatelySendStaleAggregation() {
 	aggregation := c.server.RequestStaleAggregation()
 	c.SendMinimapUpdate(aggregation)
+}
+
+func (c *Client) ImmediatelySendGlobalStats() {
+	stats := c.server.RequestStatsSnapshot()
+	c.SendGlobalStats(stats)
 }
 
 // ReadPump handles incoming messages from the client
@@ -455,6 +461,16 @@ func (c *Client) SendMinimapUpdate(aggregation json.RawMessage) {
 		// Sent successfully
 	}
 }
+
+func (c *Client) SendGlobalStats(stats json.RawMessage) {
+	select {
+	case <-c.done:
+		return
+	case c.send <- stats:
+		// Sent successfully
+	}
+}
+
 // canRequestSnapshot checks if the client can request a snapshot (rate limiting)
 func (c *Client) canRequestSnapshot() bool {
 	return true
