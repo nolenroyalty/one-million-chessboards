@@ -243,6 +243,7 @@ function App() {
         setCoords={setCoords}
         pieceHandler={pieceHandler}
         minimapHandler={minimapHandler}
+        statsHandler={statsHandler}
       />
     </Main>
   );

@@ -26,6 +26,7 @@ const BoardContainer = styled.div`
   flex-grow: 1;
   justify-content: space-between;
   overflow: hidden;
+  gap: 0.5rem;
 `;
 
 const Inner = styled.div`
@@ -193,6 +194,7 @@ function Board({
   setCoords,
   pieceHandler,
   minimapHandler,
+  statsHandler,
 }) {
   const [selectedPiece, setSelectedPiece] = React.useState(null);
   const [moveableSquares, setMoveableSquares] = React.useState(new Set());
@@ -529,6 +531,7 @@ function Board({
         setShowLargeBoard={setShowLargeBoard}
         selectedPiece={selectedPiece}
         minimapHandler={minimapHandler}
+        statsHandler={statsHandler}
       />
     </BoardContainer>
   );

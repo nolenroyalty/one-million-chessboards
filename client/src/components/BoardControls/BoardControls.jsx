@@ -19,6 +19,7 @@ import {
 import { TYPE_TO_NAME, getPieceMoves, getPieceCaptures } from "../../utils";
 import BoardControlsPanel from "../BoardControlsPanel/BoardControlsPanel";
 import Minimap from "../Minimap/Minimap";
+import StatsDisplay from "../StatsDisplay/StatsDisplay";
 
 const Wrapper = styled.div`
   width: 100%;
@@ -567,6 +568,7 @@ function BoardControls({
   setShowLargeBoard,
   selectedPiece,
   minimapHandler,
+  statsHandler,
 }) {
   const [hide, setHide] = React.useState(false);
   // add hide functionality especially for mobile...
@@ -593,7 +595,7 @@ function BoardControls({
       />
       <SelectedPiece selectedPiece={selectedPiece} />
       {/* <JumpControl coords={coords} setCoords={setCoords} /> */}
-      <GlobalStats />
+      <StatsDisplay statsHandler={statsHandler} />
       <AllBoardButtons
         setShowLargeBoard={setShowLargeBoard}
         showLargeBoard={showLargeBoard}
