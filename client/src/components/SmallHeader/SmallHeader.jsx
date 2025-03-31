@@ -13,6 +13,8 @@ const Wrapper = styled.div`
   /* margin-left: calc(-1 * var(--main-side-padding)); */
   /* margin-right: calc(-1 * var(--main-side-padding)); */
   padding: 0 var(--main-side-padding);
+  border-bottom: 1px solid var(--color-sky-700);
+  margin-bottom: 0.25rem;
 `;
 
 const Stat = styled.span`

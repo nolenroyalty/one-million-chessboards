@@ -6,7 +6,7 @@ import { createMoveRequest, keyToCoords } from "../../utils";
 import ChessPieceColorer from "../ChessPieceColorer/ChessPieceColorer";
 import BigHeader from "../BigHeader/BigHeader.jsx";
 import SmallHeader from "../SmallHeader/SmallHeader.jsx";
-
+import MinimapHandler from "../../minimapHandler.js";
 const Main = styled.main`
   display: flex;
   flex-direction: column;
@@ -91,6 +91,7 @@ function App() {
   const [websocket, setWebsocket] = React.useState(null);
   const [coords, setCoords] = React.useState({ x: 500, y: 500 });
   const pieceHandler = React.useRef(new PieceHandler());
+  const minimapHandler = React.useRef(new MinimapHandler());
   const [runBot, setRunBot] = React.useState(false);
 
   const submitMove = React.useCallback(
@@ -150,6 +151,7 @@ function App() {
           });
         } else if (data.type === "minimapUpdate") {
           console.log("minimapUpdate", data);
+          minimapHandler.current.setState({ state: data.aggregations });
         }
       });
 
@@ -235,6 +237,7 @@ function App() {
         submitMove={submitMove}
         setCoords={setCoords}
         pieceHandler={pieceHandler}
+        minimapHandler={minimapHandler}
       />
     </Main>
   );

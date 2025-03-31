@@ -165,7 +165,7 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 }
 
 // ResetBoardSection initializes a standard 8x8 chess board at the given position
-func (b *Board) ResetBoardSection(boardX, boardY uint16, whiteOnly, blackOnly bool) []*PieceState {
+func (b *Board) ResetBoardSection(boardX, boardY uint16, includeWhite bool, includeBlack bool) []*PieceState {
 	
 	if boardX >= 1000 || boardY >= 1000 {
 		log.Printf("Board section is out of bounds")
@@ -198,12 +198,12 @@ func (b *Board) ResetBoardSection(boardX, boardY uint16, whiteOnly, blackOnly bo
 	// }
 	
 	// Place new pieces if we're not excluding their color
-	if !blackOnly {
+	if includeWhite {
 		// Place white pieces
 		b.setupPiecesForColor(baseX, baseY, true, &newPieces)
 	}
 	
-	if !whiteOnly {
+	if includeBlack {
 		// Place black pieces
 		b.setupPiecesForColor(baseX, baseY, false, &newPieces)
 	}

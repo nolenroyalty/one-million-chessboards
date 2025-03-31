@@ -187,7 +187,13 @@ function useZoomedInParams({ innerSize }) {
   return params;
 }
 
-function Board({ coords, submitMove, setCoords, pieceHandler }) {
+function Board({
+  coords,
+  submitMove,
+  setCoords,
+  pieceHandler,
+  minimapHandler,
+}) {
   const [selectedPiece, setSelectedPiece] = React.useState(null);
   const [moveableSquares, setMoveableSquares] = React.useState(new Set());
   const boardContainerRef = React.useRef(null);
@@ -522,6 +528,7 @@ function Board({ coords, submitMove, setCoords, pieceHandler }) {
         showLargeBoard={showLargeBoard}
         setShowLargeBoard={setShowLargeBoard}
         selectedPiece={selectedPiece}
+        minimapHandler={minimapHandler}
       />
     </BoardContainer>
   );

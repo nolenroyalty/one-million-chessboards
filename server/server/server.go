@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"log"
+	"math/rand"
 	"net/http"
 	"sync"
 	"time"
@@ -373,7 +374,12 @@ func (s *Server) InitializeBoard() {
 	startY := uint16(0)
 	for dx := range 1000 {
 		for dy := range 1000 {
-			s.board.ResetBoardSection(startX + uint16(dx), startY + uint16(dy), false, false)
+			random := rand.Intn(1000)
+			includeWhite := random > dy;
+			includeBlack := random > dx;
+			// includeWhite := random < 50
+			// includeBlack := random >= 50
+			s.board.ResetBoardSection(startX + uint16(dx), startY + uint16(dy), includeWhite, includeBlack)
 		}
 	}
 }

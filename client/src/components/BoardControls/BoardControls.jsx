@@ -1,6 +1,5 @@
 import React from "react";
 import styled from "styled-components";
-import { clamp } from "../../utils";
 import IconButton from "../IconButton/IconButton";
 import {
   CirclePlus,
@@ -18,7 +17,8 @@ import {
   Twitter,
 } from "lucide-react";
 import { TYPE_TO_NAME, getPieceMoves, getPieceCaptures } from "../../utils";
-import { useElementDimensions } from "../../hooks/use-element-dimensions";
+import BoardControlsPanel from "../BoardControlsPanel/BoardControlsPanel";
+import Minimap from "../Minimap/Minimap";
 
 const Wrapper = styled.div`
   width: 100%;
@@ -52,13 +52,7 @@ const Wrapper = styled.div`
   background-size: 16px 16px;
 `;
 
-const PANEL_BORDER_SIZE = 4;
-const Panel = styled.div`
-  background-color: var(--color-neutral-950);
-  border: ${PANEL_BORDER_SIZE}px double var(--color-sky-700);
-`;
-
-const AllBoardButtonsWrapper = styled(Panel)`
+const AllBoardButtonsWrapper = styled(BoardControlsPanel)`
   display: grid;
   grid-area: buttons;
   grid-template-columns: repeat(3, 1fr);
@@ -86,7 +80,7 @@ const JumpInput = styled.input`
   }
 `;
 
-const Middle = styled(Panel)`
+const Middle = styled(BoardControlsPanel)`
   flex-grow: 1;
   display: flex;
   justify-content: space-between;
@@ -96,7 +90,7 @@ const Middle = styled(Panel)`
   grid-area: piece;
 `;
 
-const ByWrapper = styled(Panel)`
+const ByWrapper = styled(BoardControlsPanel)`
   grid-area: by;
   padding: 0.25rem;
   display: flex;
@@ -156,7 +150,7 @@ const Spacer = styled.div`
   flex-grow: 1;
 `;
 
-const StatsWrapper = styled(Panel)`
+const StatsWrapper = styled(BoardControlsPanel)`
   grid-area: stats;
   display: grid;
   grid-template-columns: repeat(4, auto);
@@ -248,121 +242,6 @@ function GlobalStats() {
         <p>50</p>
       </StatsLine> */}
     </StatsWrapper>
-  );
-}
-
-const MINIMAP_WRAPPER_SIZE = 140;
-
-const MINIMAP_DOT_SIZE = 10;
-
-const MinimapWrapper = styled.div`
-  /* width: ${MINIMAP_WRAPPER_SIZE + PANEL_BORDER_SIZE * 2}px; */
-  /* height: ${MINIMAP_WRAPPER_SIZE + PANEL_BORDER_SIZE * 2}px; */
-  /* width: 100%; */
-  height: 100%;
-  aspect-ratio: 1 / 1;
-  max-height: 100%;
-  border-radius: 0.125rem;
-  position: relative;
-  cursor: pointer;
-  grid-area: minimap;
-  padding-top: 15px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-`;
-
-const MinimapDot = styled.div`
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: ${MINIMAP_DOT_SIZE}px;
-  height: ${MINIMAP_DOT_SIZE}px;
-  border: 1px solid var(--color-stone-300);
-  border-radius: 2px;
-  transform: translate(var(--x), var(--y));
-`;
-
-const MinimapCoordsDisplayWrapper = styled.div`
-  position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translate(-50%, calc(-50% - 2px));
-  font-size: 0.75rem;
-  padding: 0.125rem;
-  min-width: 9ch;
-  text-align: center;
-  border-radius: 0.25rem;
-  background-color: var(--color-neutral-950);
-  border: 1px solid var(--color-sky-700);
-`;
-
-function MinimapCoordsDisplay({ coords }) {
-  return (
-    <MinimapCoordsDisplayWrapper>
-      <p>
-        {coords.x},{coords.y}
-      </p>
-    </MinimapCoordsDisplayWrapper>
-  );
-}
-
-const MinimapTest = styled(Panel)`
-  /* background-color: var(--color-sky-900); */
-  height: 100%;
-  aspect-ratio: 1 / 1;
-`;
-
-function Minimap({ coords, setCoords }) {
-  const ref = React.useRef(null);
-  const elementDimensions = useElementDimensions(ref);
-  const minPos = React.useMemo(() => 2 + MINIMAP_DOT_SIZE / 2, []);
-  const maxPos = React.useMemo(() => {
-    if (!elementDimensions) {
-      return null;
-    }
-    const width = elementDimensions.width - PANEL_BORDER_SIZE * 2 - minPos;
-    return width;
-  }, [elementDimensions, minPos]);
-
-  const handleClick = React.useCallback(
-    (e) => {
-      if (!elementDimensions) {
-        return;
-      }
-      const x = e.clientX - PANEL_BORDER_SIZE - minPos - elementDimensions.left;
-      const y = e.clientY - PANEL_BORDER_SIZE - minPos - elementDimensions.top;
-      const width = maxPos - minPos;
-      const xPct = clamp(x / width, 0, 1);
-      const yPct = clamp(y / width, 0, 1);
-      let xCoord = Math.floor(xPct * 8000);
-      let yCoord = Math.floor(yPct * 8000);
-      setCoords({ x: xCoord, y: yCoord });
-    },
-    [elementDimensions, maxPos, minPos, setCoords]
-  );
-
-  if (!elementDimensions) {
-    return <MinimapWrapper ref={ref} onClick={handleClick}></MinimapWrapper>;
-  }
-
-  const xPercent = coords.x / 8000;
-  const yPercent = coords.y / 8000;
-  const maxAdjust = maxPos - minPos;
-  const x = minPos + xPercent * maxAdjust;
-  const y = minPos + yPercent * maxAdjust;
-
-  return (
-    <MinimapWrapper ref={ref} onClick={handleClick}>
-      <MinimapCoordsDisplay coords={coords} />
-      <MinimapTest />
-      <MinimapDot
-        style={{
-          "--x": `calc(${x}px - 50%)`,
-          "--y": `calc(${y}px - 50%)`,
-        }}
-      />
-    </MinimapWrapper>
   );
 }
 
@@ -611,7 +490,7 @@ function SelectedPiece({ selectedPiece }) {
   );
 }
 
-const JumpWrapper = styled(Panel)`
+const JumpWrapper = styled(BoardControlsPanel)`
   justify-content: space-between;
   padding: 0.25rem;
   grid-area: jump;
@@ -687,6 +566,7 @@ function BoardControls({
   showLargeBoard,
   setShowLargeBoard,
   selectedPiece,
+  minimapHandler,
 }) {
   const [hide, setHide] = React.useState(false);
   // add hide functionality especially for mobile...
@@ -706,7 +586,11 @@ function BoardControls({
 
   return (
     <Wrapper style={{ "--translate-y": hide ? "100%" : "0%" }}>
-      <Minimap coords={coords} setCoords={setCoords} />
+      <Minimap
+        coords={coords}
+        setCoords={setCoords}
+        minimapHandler={minimapHandler}
+      />
       <SelectedPiece selectedPiece={selectedPiece} />
       {/* <JumpControl coords={coords} setCoords={setCoords} /> */}
       <GlobalStats />
