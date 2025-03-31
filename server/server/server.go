@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"sync"
@@ -173,7 +174,7 @@ func (s *Server) Run() {
 	go s.processMoves()
 	go s.handleSubscriptions()
 	go s.minimapAggregator.Run()
-	go s.SendPeriodicAggregations()
+	go s.sendPeriodicAggregations()
 	// Main goroutine handles client registration/disconnection
 	for {
 		select {
@@ -186,7 +187,7 @@ func (s *Server) Run() {
 	}
 }
 
-func (s *Server) SendPeriodicAggregations() {
+func (s *Server) sendPeriodicAggregations() {
 	log.Printf("beginning periodic aggregations")
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
@@ -204,6 +205,11 @@ func (s *Server) SendPeriodicAggregations() {
 		}
 		s.clientsMu.RUnlock()
 	}
+}
+
+func (s *Server) RequestStaleAggregation() json.RawMessage {
+	resp := s.minimapAggregator.GetCachedAggregation()
+	return resp
 }
 
 // processMoves handles move validation and application
@@ -285,7 +291,10 @@ func (s *Server) handleSubscriptions() {
 		
 		// Update the client's record of its zones
 		sub.Client.currentZones = zones
-		
+
+		// CR nroyalty: only send a new snapshot if the client has moved a lot?
+		// maybe we can handle this with client-side logic...
+
 		// Send an initial state snapshot
 		snapshot := s.board.GetStateForPosition(sub.Client.position)
 		sub.Client.SendStateSnapshot(snapshot)

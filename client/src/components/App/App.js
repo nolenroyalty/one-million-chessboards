@@ -148,6 +148,8 @@ function App() {
             moves: data.moves,
             captures: data.captures,
           });
+        } else if (data.type === "minimapUpdate") {
+          console.log("minimapUpdate", data);
         }
       });
 

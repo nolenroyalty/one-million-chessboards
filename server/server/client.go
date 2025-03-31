@@ -59,6 +59,12 @@ func (c *Client) Run() {
 	go c.WritePump()
 	go c.SendPeriodicUpdates()
 	go c.ProcessMoveUpdates()
+	go c.ImmediatelySendStaleAggregation()
+}
+
+func (c *Client) ImmediatelySendStaleAggregation() {
+	aggregation := c.server.RequestStaleAggregation()
+	c.SendMinimapUpdate(aggregation)
 }
 
 // ReadPump handles incoming messages from the client

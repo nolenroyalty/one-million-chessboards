@@ -32,16 +32,24 @@ type AggregationRequest struct {
 	Response chan json.RawMessage
 }
 
+type CachedAggregationRequest struct {
+	Response chan json.RawMessage
+}
+
 type MinimapAggregator struct {
 	cells [NUMBER_OF_CELLS][NUMBER_OF_CELLS]MinimapCell
 	moveUpdates chan MoveAndMaybeCapture
 	aggregationRequests chan AggregationRequest
+	cachedAggregationRequests chan CachedAggregationRequest
+	lastAggregation json.RawMessage
 }
 
 func NewMinimapAggregator() *MinimapAggregator {
 	return &MinimapAggregator{
 		moveUpdates: make(chan MoveAndMaybeCapture),
 		aggregationRequests: make(chan AggregationRequest),
+		cachedAggregationRequests: make(chan CachedAggregationRequest),
+		lastAggregation: json.RawMessage{},
 	}
 }
 
@@ -82,6 +90,10 @@ func (m *MinimapAggregator) Initialize(board *Board) {
 			}
 		}
 	}
+	// just make sure we always have an initial aggregation
+	aggregationRequest := AggregationRequest{Response: make(chan json.RawMessage, 1)}
+	m.handleAggregationRequest(aggregationRequest)
+	m.lastAggregation = <-aggregationRequest.Response
 }
 
 
@@ -150,6 +162,7 @@ func (m *MinimapAggregator) handleAggregationRequest(request AggregationRequest)
 		request.Response <- nil
 		return
 	}
+	m.lastAggregation = jsonResponse
 	request.Response <- jsonResponse
 }
 
@@ -157,20 +170,18 @@ func (m *MinimapAggregator) Run() {
 	for {
 		select {
 		case request := <-m.aggregationRequests:
-			log.Printf("Requesting aggregation5")
 			m.handleAggregationRequest(request)
 		case moveUpdate := <-m.moveUpdates:
 			m.processMoveUpdate(moveUpdate.Move, moveUpdate.Capture)
+		case request := <-m.cachedAggregationRequests:
+			m.handleCachedAggregationRequest(request)
 		}
 	}
 }
 
 func (m *MinimapAggregator) RequestAggregation() <-chan json.RawMessage {
-	log.Printf("Requesting aggregation2")
 	response := make(chan json.RawMessage, 1)
-	log.Printf("Requesting aggregation3")
 	m.aggregationRequests <- AggregationRequest{Response: response}
-	log.Printf("Requesting aggregation4")
 	return response;
 }
 
@@ -178,3 +189,12 @@ func (m *MinimapAggregator) UpdateForMove(move *PieceMove, capture *PieceCapture
 	m.moveUpdates <- MoveAndMaybeCapture{Move: move, Capture: capture}
 }
 
+func (m *MinimapAggregator) GetCachedAggregation() json.RawMessage {
+	response := make(chan json.RawMessage, 1)
+	m.cachedAggregationRequests <- CachedAggregationRequest{Response: response}
+	return <-response;
+}
+
+func (m *MinimapAggregator) handleCachedAggregationRequest(request CachedAggregationRequest) {
+	request.Response <- m.lastAggregation
+}
