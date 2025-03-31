@@ -393,7 +393,6 @@ function PieceDisplay({
   );
 
   const memoizedPieces = React.useMemo(() => {
-    console.log("memoizedPieces", visiblePiecesAndIdsRef.current.pieces);
     const pieces = [];
     const shutUpError = forceUpdate;
     for (const piece of visiblePiecesAndIdsRef.current.pieces) {

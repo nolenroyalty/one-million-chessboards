@@ -254,7 +254,8 @@ function GlobalStats() {
 const MINIMAP_WRAPPER_SIZE = 140;
 
 const MINIMAP_DOT_SIZE = 10;
-const MinimapWrapper = styled(Panel)`
+
+const MinimapWrapper = styled.div`
   /* width: ${MINIMAP_WRAPPER_SIZE + PANEL_BORDER_SIZE * 2}px; */
   /* height: ${MINIMAP_WRAPPER_SIZE + PANEL_BORDER_SIZE * 2}px; */
   /* width: 100%; */
@@ -265,6 +266,10 @@ const MinimapWrapper = styled(Panel)`
   position: relative;
   cursor: pointer;
   grid-area: minimap;
+  padding-top: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 `;
 
 const MinimapDot = styled.div`
@@ -276,6 +281,36 @@ const MinimapDot = styled.div`
   border: 1px solid var(--color-stone-300);
   border-radius: 2px;
   transform: translate(var(--x), var(--y));
+`;
+
+const MinimapCoordsDisplayWrapper = styled.div`
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, calc(-50% - 2px));
+  font-size: 0.75rem;
+  padding: 0.125rem;
+  min-width: 9ch;
+  text-align: center;
+  border-radius: 0.25rem;
+  background-color: var(--color-neutral-950);
+  border: 1px solid var(--color-sky-700);
+`;
+
+function MinimapCoordsDisplay({ coords }) {
+  return (
+    <MinimapCoordsDisplayWrapper>
+      <p>
+        {coords.x},{coords.y}
+      </p>
+    </MinimapCoordsDisplayWrapper>
+  );
+}
+
+const MinimapTest = styled(Panel)`
+  /* background-color: var(--color-sky-900); */
+  height: 100%;
+  aspect-ratio: 1 / 1;
 `;
 
 function Minimap({ coords, setCoords }) {
@@ -319,6 +354,8 @@ function Minimap({ coords, setCoords }) {
 
   return (
     <MinimapWrapper ref={ref} onClick={handleClick}>
+      <MinimapCoordsDisplay coords={coords} />
+      <MinimapTest />
       <MinimapDot
         style={{
           "--x": `calc(${x}px - 50%)`,
@@ -654,24 +691,24 @@ function BoardControls({
   const [hide, setHide] = React.useState(false);
   // add hide functionality especially for mobile...
 
-  React.useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === "Escape") {
-        console.log("hello");
-        setHide((prev) => !prev);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [setHide]);
+  //   React.useEffect(() => {
+  //     const handleKeyDown = (e) => {
+  //       if (e.key === "Escape") {
+  //         console.log("hello");
+  //         setHide((prev) => !prev);
+  //       }
+  //     };
+  //     window.addEventListener("keydown", handleKeyDown);
+  //     return () => {
+  //       window.removeEventListener("keydown", handleKeyDown);
+  //     };
+  //   }, [setHide]);
 
   return (
     <Wrapper style={{ "--translate-y": hide ? "100%" : "0%" }}>
       <Minimap coords={coords} setCoords={setCoords} />
       <SelectedPiece selectedPiece={selectedPiece} />
-      <JumpControl coords={coords} setCoords={setCoords} />
+      {/* <JumpControl coords={coords} setCoords={setCoords} /> */}
       <GlobalStats />
       <AllBoardButtons
         setShowLargeBoard={setShowLargeBoard}

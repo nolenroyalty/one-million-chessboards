@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -13,6 +14,7 @@ type Server struct {
 	// Game state
 	board      *Board
 	zoneMap    *ZoneMap
+	minimapAggregator *MinimapAggregator
 	clients    map[*Client]struct{}
 	clientsMu  sync.RWMutex
 	
@@ -147,6 +149,7 @@ func NewServer() *Server {
 	return &Server{
 		board:         NewBoard(),
 		zoneMap:       NewZoneMap(),
+		minimapAggregator: NewMinimapAggregator(),
 		clients:       make(map[*Client]struct{}),
 		register:      make(chan *Client),
 		unregister:    make(chan *Client),
@@ -164,11 +167,13 @@ func NewServer() *Server {
 
 // Run starts all server processes
 func (s *Server) Run() {
-	
+
+	s.minimapAggregator.Initialize(s.board)
 	// Start the specialized processing goroutines
 	go s.processMoves()
 	go s.handleSubscriptions()
-	
+	go s.minimapAggregator.Run()
+	go s.SendPeriodicAggregations()
 	// Main goroutine handles client registration/disconnection
 	for {
 		select {
@@ -178,6 +183,26 @@ func (s *Server) Run() {
 		case client := <-s.unregister:
 			s.unregisterClient(client)
 		}
+	}
+}
+
+func (s *Server) SendPeriodicAggregations() {
+	log.Printf("beginning periodic aggregations")
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		log.Printf("Requesting aggregation")
+		aggregation := s.minimapAggregator.RequestAggregation()
+		log.Printf("Sending periodic aggregation")
+		response := <-aggregation
+		s.clientsMu.RLock()
+		if (response != nil) {
+			for client := range s.clients {
+				client.SendMinimapUpdate(response)
+			}
+		}
+		s.clientsMu.RUnlock()
 	}
 }
 
@@ -225,6 +250,8 @@ func (s *Server) processMoves() {
 				SeqNum:           moveResult.SeqNum,
 			}
 		}
+
+		s.minimapAggregator.UpdateForMove(&pieceMove, captureMove)
 		
 		// Run client notifications in a separate goroutine
 		go func(clients map[*Client]struct{}, move PieceMove, capture *PieceCapture) {

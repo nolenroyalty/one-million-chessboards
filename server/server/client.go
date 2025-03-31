@@ -71,7 +71,6 @@ func (c *Client) ReadPump() {
 	c.conn.SetReadLimit(8192) // 8KB max message size
 	c.conn.SetReadDeadline(time.Now().Add(120 * time.Second))
 	c.conn.SetPongHandler(func(string) error {
-		log.Printf("Received pong")
 		c.conn.SetReadDeadline(time.Now().Add(120 * time.Second))
 		return nil
 	})
@@ -168,7 +167,6 @@ func (c *Client) handleMessage(message []byte) {
 		}
 
 	case "app-ping":
-		log.Printf("Received app ping")
 		type AppPong struct {
 			Type string `json:"type"`
 			Time int64 `json:"time"`
@@ -215,7 +213,6 @@ func (c *Client) WritePump() {
 				return
 			}
 		case <-pingTicker.C:
-			log.Printf("Sending ping")
 			pingData := []byte(fmt.Sprintf("ping-%d", time.Now().UnixNano()))
 			c.conn.WriteMessage(websocket.PingMessage, pingData)
 		case <-c.done:
@@ -444,6 +441,14 @@ func (c *Client) SendError(errorMessage string) {
 	}
 }
 
+func (c *Client) SendMinimapUpdate(aggregation json.RawMessage) {
+	select {
+	case <-c.done:
+		return
+	case c.send <- aggregation:
+		// Sent successfully
+	}
+}
 // canRequestSnapshot checks if the client can request a snapshot (rate limiting)
 func (c *Client) canRequestSnapshot() bool {
 	return true
