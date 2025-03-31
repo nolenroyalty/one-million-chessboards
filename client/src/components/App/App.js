@@ -7,6 +7,8 @@ import ChessPieceColorer from "../ChessPieceColorer/ChessPieceColorer";
 import BigHeader from "../BigHeader/BigHeader.jsx";
 import SmallHeader from "../SmallHeader/SmallHeader.jsx";
 import MinimapHandler from "../../minimapHandler.js";
+import StatsHandler from "../../statsHandler.js";
+
 const Main = styled.main`
   display: flex;
   flex-direction: column;
@@ -92,6 +94,7 @@ function App() {
   const [coords, setCoords] = React.useState({ x: 500, y: 500 });
   const pieceHandler = React.useRef(new PieceHandler());
   const minimapHandler = React.useRef(new MinimapHandler());
+  const statsHandler = React.useRef(new StatsHandler());
   const [runBot, setRunBot] = React.useState(false);
 
   const submitMove = React.useCallback(
@@ -153,6 +156,7 @@ function App() {
           minimapHandler.current.setState({ state: data.aggregations });
         } else if (data.type === "globalStats") {
           console.log("globalStats", data);
+          statsHandler.current.setState({ stats: data });
         }
       });
 
