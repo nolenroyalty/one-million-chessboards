@@ -63,12 +63,16 @@ class StatsHandler {
       dBlackPieces = 0,
       dWhiteKings = 0,
       dBlackKings = 0,
+      incrLocalMoves = false,
+      incrLocalCaptures = false,
     } = {
       dMoves: 0,
       dWhitePieces: 0,
       dBlackPieces: 0,
       dWhiteKings: 0,
       dBlackKings: 0,
+      incrLocalMoves: false,
+      incrLocalCaptures: false,
     }
   ) {
     this.localDelta.totalMoves += dMoves;
@@ -76,19 +80,23 @@ class StatsHandler {
     this.localDelta.blackPiecesRemaining += dBlackPieces;
     this.localDelta.whiteKingsRemaining += dWhiteKings;
     this.localDelta.blackKingsRemaining += dBlackKings;
+    if (incrLocalMoves) {
+      this._incrementMoves();
+    }
+    if (incrLocalCaptures) {
+      this._incrementCaptures();
+    }
     this.broadcast();
   }
 
-  incrementMoves() {
+  _incrementMoves() {
     this.yourMoves++;
     localStorage.setItem(YOUR_MOVES_KEY, this.yourMoves);
-    this.broadcast();
   }
 
-  incrementCaptures() {
+  _incrementCaptures() {
     this.yourCaptures++;
     localStorage.setItem(YOUR_CAPTURES_KEY, this.yourCaptures);
-    this.broadcast();
   }
 
   broadcast() {

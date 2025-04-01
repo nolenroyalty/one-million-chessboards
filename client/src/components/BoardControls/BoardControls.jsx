@@ -7,7 +7,6 @@ import {
   Flame,
   ArrowDownUp,
   Axe,
-  SendHorizontal,
   CircleArrowDown,
   CircleArrowUp,
   CircleArrowLeft,
@@ -36,8 +35,8 @@ const Wrapper = styled.div`
   transition: transform 0.2s ease-in-out;
 
   display: grid;
-  grid-template-areas: "minimap . stats buttons" "minimap piece stats buttons" "minimap piece stats by";
-  grid-template-rows: auto 1fr auto;
+  grid-template-areas: "minimap . . buttons" "minimap piece stats buttons" "minimap piece stats by";
+  grid-template-rows: 1fr 2fr auto;
   grid-template-columns: var(--inner-height) minmax(150px, 2fr) 3fr auto;
   align-items: end;
 
@@ -69,24 +68,11 @@ const AllBoardButtonsWrapper = styled(BoardControlsPanel)`
   max-width: fit-content;
 `;
 
-const JumpInput = styled.input`
-  background-color: var(--color-neutral-950);
-  border-radius: 0.25rem;
-  color: var(--color-stone-300);
-  border: none;
-  max-width: 12ch;
-
-  &:focus {
-    outline: none;
-  }
-`;
-
 const Middle = styled(BoardControlsPanel)`
   flex-grow: 1;
   display: flex;
   justify-content: space-between;
-  max-height: 120px;
-  height: 120px;
+  height: 100%;
   padding: 0.5rem 0 0;
   grid-area: piece;
 `;
@@ -150,101 +136,6 @@ function By() {
 const Spacer = styled.div`
   flex-grow: 1;
 `;
-
-const StatsWrapper = styled(BoardControlsPanel)`
-  grid-area: stats;
-  display: grid;
-  grid-template-columns: repeat(4, auto);
-  grid-template-rows: auto;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.125rem 0.25rem;
-  justify-content: space-between;
-  padding: 0.25rem;
-  height: 100%;
-
-  & p {
-    padding: 0 0.125rem;
-    font-size: 0.75rem;
-  }
-`;
-
-// const StatsLine = styled.div`
-//   display: flex;
-//   flex-direction: row;
-//   align-items: center;
-//   justify-content: space-between;
-//   gap: 0.5rem;
-//   width: 100%;
-
-//   & p {
-//   }
-// `;
-
-// CR nroyalty: replace this with a table. It should look something like this:
-/*
-         | black | white | you
-pieces   | 10mil | 10mil |
-kings    | 1mil  | 1mil  |
-captures | 10mil | 10mil | 2
-moves    | 10mil | 10mil | 50
-*/
-function GlobalStats() {
-  return (
-    <StatsWrapper>
-      <p></p>
-      <p>b</p>
-      <p>w</p>
-      <p>you</p>
-      <p>captures</p>
-      <p>10m</p>
-      <p>10m</p>
-      <p>2</p>
-      <p>moves</p>
-      <p>10m</p>
-      <p>10m</p>
-      <p>50</p>
-      <p>pieces</p>
-      <p>10m</p>
-      <p>10m</p>
-      <p></p>
-      <p>kings</p>
-      <p>1m</p>
-      <p>1m</p>
-      <p></p>
-      {/* <StatsLine>
-        <p></p>
-        <p>b</p>
-        <p>w</p>
-        <p>you</p>
-      </StatsLine>
-      <StatsLine>
-        <p>pieces</p>
-        <p>10mil</p>
-        <p>10mil</p>
-        <p></p>
-      </StatsLine>
-      <StatsLine>
-        <p>kings</p>
-        <p>1mil</p>
-        <p>1mil</p>
-        <p></p>
-      </StatsLine>
-      <StatsLine>
-        <p>captures</p>
-        <p>10mil</p>
-        <p>10mil</p>
-        <p>2</p>
-      </StatsLine>
-      <StatsLine>
-        <p>moves</p>
-        <p>10mil</p>
-        <p>10mil</p>
-        <p>50</p>
-      </StatsLine> */}
-    </StatsWrapper>
-  );
-}
 
 const PieceImage = styled.img`
   width: 80px;
@@ -488,76 +379,6 @@ function SelectedPiece({ selectedPiece }) {
       </PieceInfoOuter>
       <Spacer />
     </Middle>
-  );
-}
-
-const JumpWrapper = styled(BoardControlsPanel)`
-  justify-content: space-between;
-  padding: 0.25rem;
-  grid-area: jump;
-`;
-
-function JumpControl({ coords, setCoords }) {
-  const [currentInput, setCurrentInput] = React.useState({
-    value: "",
-    parsed: null,
-  });
-  const onChange = React.useCallback(
-    (e) => {
-      const s = e.target.value;
-      let parsed = null;
-      try {
-        let [x, y] = s.split(",");
-        x = parseInt(x);
-        y = parseInt(y);
-        if (isNaN(x) || isNaN(y)) {
-          parsed = null;
-        } else {
-          parsed = { x, y };
-        }
-      } catch (e) {
-        parsed = null;
-      }
-      console.log("parsed", parsed, "value", s);
-      setCurrentInput({ value: s, parsed });
-    },
-    [setCurrentInput]
-  );
-  const onSubmit = React.useCallback(
-    (e) => {
-      e.preventDefault();
-      if (currentInput.parsed === null) {
-        return;
-      }
-      setCoords(currentInput.parsed);
-      setCurrentInput({ value: "", parsed: null });
-      e.target[0].blur();
-    },
-    [currentInput, setCoords]
-  );
-  return (
-    <JumpWrapper>
-      <form
-        style={{
-          display: "flex",
-          flexDirection: "row",
-          gap: "0.25rem",
-          justifyContent: "space-between",
-        }}
-        onSubmit={onSubmit}
-      >
-        <JumpInput
-          type="text"
-          placeholder={`${coords.x},${coords.y}`}
-          value={currentInput.value}
-          onChange={onChange}
-          // keypad for input on mobile
-        />
-        <IconButton type="submit" disabled={currentInput.parsed === null}>
-          <SendHorizontal />
-        </IconButton>
-      </form>
-    </JumpWrapper>
   );
 }
 

@@ -9,6 +9,7 @@ import {
   incrementPieceMove,
   incrementPieceCapture,
   pieceKey,
+  TYPE_TO_NAME,
 } from "../../utils";
 import PanzoomBox from "../PanzoomBox/PanzoomBox";
 import BoardControls from "../BoardControls/BoardControls";
@@ -303,16 +304,49 @@ function Board({
 
   const moveAndClear = React.useCallback(
     ({ piece, toX, toY }) => {
+      let dMoves = 1;
+      let dWhitePieces = 0;
+      let dBlackPieces = 0;
+      let dWhiteKings = 0;
+      let dBlackKings = 0;
+      let incrLocalMoves = true;
+      let incrLocalCaptures = false;
       incrementPieceMove(piece.id);
       const toKey = pieceKey(toX, toY);
       if (piecesRef.current.has(toKey)) {
         incrementPieceCapture(piece.id);
+        incrLocalCaptures = true;
+        const capturedPiece = piecesRef.current.get(toKey);
+        if (capturedPiece) {
+          const pieceType = TYPE_TO_NAME[capturedPiece.type];
+          const isKing = pieceType === "king";
+          if (capturedPiece.color === "white") {
+            dWhitePieces--;
+            if (isKing) {
+              dWhiteKings--;
+            }
+          } else {
+            dBlackPieces--;
+            if (isKing) {
+              dBlackKings--;
+            }
+          }
+        }
       }
+      statsHandler.current.applyLocalDelta({
+        dMoves,
+        dWhitePieces,
+        dBlackPieces,
+        dWhiteKings,
+        dBlackKings,
+        incrLocalMoves,
+        incrLocalCaptures,
+      });
       submitMove({ piece, toX, toY });
       setSelectedPiece(null);
       setMoveableSquares(new Set());
     },
-    [submitMove]
+    [statsHandler, submitMove]
   );
 
   const handlePieceClick = React.useCallback(
