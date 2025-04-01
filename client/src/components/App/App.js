@@ -92,9 +92,11 @@ function useStartBot({ pieceHandler, submitMove, started }) {
 function App() {
   const [websocket, setWebsocket] = React.useState(null);
   const [coords, setCoords] = React.useState({ x: 500, y: 500 });
-  const pieceHandler = React.useRef(new PieceHandler());
-  const minimapHandler = React.useRef(new MinimapHandler());
   const statsHandler = React.useRef(new StatsHandler());
+  const pieceHandler = React.useRef(
+    new PieceHandler({ statsHandler: statsHandler.current })
+  );
+  const minimapHandler = React.useRef(new MinimapHandler());
   const [runBot, setRunBot] = React.useState(false);
 
   const submitMove = React.useCallback(
@@ -155,7 +157,6 @@ function App() {
         } else if (data.type === "minimapUpdate") {
           minimapHandler.current.setState({ state: data.aggregations });
         } else if (data.type === "globalStats") {
-          console.log("globalStats", data);
           statsHandler.current.setGlobalStats({ stats: data });
         }
       });

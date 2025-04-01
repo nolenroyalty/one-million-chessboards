@@ -208,20 +208,6 @@ function Board({
   const [smallOpacity, setSmallOpacity] = React.useState(1);
   const [largeOpacity, setLargeOpacity] = React.useState(0);
   const largeBoardKillSwitch = React.useRef(false);
-  // CR nroyalty: DUPE PLEASE REMOVE
-  const piecesRef = React.useRef(pieceHandler.current.getPieces());
-
-  React.useEffect(() => {
-    pieceHandler.current.subscribe({
-      id: "board",
-      callback: (data) => {
-        piecesRef.current = data.pieces;
-      },
-    });
-    return () => {
-      pieceHandler.current.unsubscribe("board");
-    };
-  }, [pieceHandler]);
 
   const setShowLargeBoard = React.useCallback(
     (show) => {
@@ -313,14 +299,15 @@ function Board({
       let incrLocalCaptures = false;
       incrementPieceMove(piece.id);
       const toKey = pieceKey(toX, toY);
-      if (piecesRef.current.has(toKey)) {
+      const pieces = pieceHandler.current.getPieces();
+      if (pieces.has(toKey)) {
         incrementPieceCapture(piece.id);
         incrLocalCaptures = true;
-        const capturedPiece = piecesRef.current.get(toKey);
+        const capturedPiece = pieces.get(toKey);
         if (capturedPiece) {
           const pieceType = TYPE_TO_NAME[capturedPiece.type];
           const isKing = pieceType === "king";
-          if (capturedPiece.color === "white") {
+          if (capturedPiece.isWhite) {
             dWhitePieces--;
             if (isKing) {
               dWhiteKings--;
@@ -346,7 +333,7 @@ function Board({
       setSelectedPiece(null);
       setMoveableSquares(new Set());
     },
-    [statsHandler, submitMove]
+    [statsHandler, submitMove, pieceHandler]
   );
 
   const handlePieceClick = React.useCallback(

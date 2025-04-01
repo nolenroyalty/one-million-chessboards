@@ -147,14 +147,14 @@ function TextLines({ stats }) {
       <WhiteBlackDisplay
         label="Pieces"
         blackValue={stats.blackPiecesRemaining}
-        whiteValue={2000000}
-        maxValue={32000000}
+        whiteValue={stats.whitePiecesRemaining}
+        maxValue={(stats.whitePiecesRemaining + stats.blackPiecesRemaining) / 2}
       />
       <WhiteBlackDisplay
         label="Kings"
-        blackValue={500210}
+        blackValue={stats.blackKingsRemaining}
         whiteValue={stats.whiteKingsRemaining}
-        maxValue={1000000}
+        maxValue={(stats.whiteKingsRemaining + stats.blackKingsRemaining) / 2}
       />
     </TextLinesWrapper>
   );
@@ -162,7 +162,6 @@ function TextLines({ stats }) {
 
 function StatsDisplay({ statsHandler }) {
   const [stats, setStats] = React.useState(statsHandler.current.getStats());
-  console.log("stats", stats);
   React.useEffect(() => {
     statsHandler.current.subscribe({
       id: "stats",
@@ -181,4 +180,4 @@ function StatsDisplay({ statsHandler }) {
   );
 }
 
-export default StatsDisplay;
+export default React.memo(StatsDisplay);

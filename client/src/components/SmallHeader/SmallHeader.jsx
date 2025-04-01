@@ -17,18 +17,6 @@ const Wrapper = styled.div`
   margin-bottom: 0.25rem;
 `;
 
-const Stat = styled.span`
-  color: var(--color-neutral-400);
-`;
-
-const Stats = styled.div`
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 1rem;
-`;
-
 const Title = styled.span`
   color: var(--color-neutral-400);
   font-family: "Sunset Demi";
@@ -38,11 +26,6 @@ function SmallHeader() {
   return (
     <Wrapper>
       <Title>One Million Chessboards</Title>
-      <Stats>
-        <Stat>1000</Stat>
-        <Stat>1000</Stat>
-        <Stat>1000</Stat>
-      </Stats>
     </Wrapper>
   );
 }

@@ -152,16 +152,8 @@ function MinimapCanvas({ coords, setCoords, minimapHandler }) {
     const xEnd = Math.min(ctx.canvas.width, xCenter + MINIMAP_DOT_SIZE / 2);
     const yEnd = Math.min(ctx.canvas.height, yCenter + MINIMAP_DOT_SIZE / 2);
     ctx.strokeStyle = MINIMAP_RECT_STROKE_OUTER_COLOR;
-    ctx.lineWidth = 3;
-    ctx.strokeRect(xStart, yStart, xEnd - xStart, yEnd - yStart);
-    ctx.strokeStyle = MINIMAP_RECT_STROKE_INNER_COLOR;
     ctx.lineWidth = 2;
-    ctx.strokeRect(
-      xStart + 1,
-      yStart + 1,
-      xEnd - xStart - 2,
-      yEnd - yStart - 2
-    );
+    ctx.strokeRect(xStart, yStart, xEnd - xStart, yEnd - yStart);
   }, [coords]);
 
   const onClick = React.useCallback(

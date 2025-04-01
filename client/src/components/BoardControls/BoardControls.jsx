@@ -19,7 +19,7 @@ import { TYPE_TO_NAME, getPieceMoves, getPieceCaptures } from "../../utils";
 import BoardControlsPanel from "../BoardControlsPanel/BoardControlsPanel";
 import Minimap from "../Minimap/Minimap";
 import StatsDisplay from "../StatsDisplay/StatsDisplay";
-
+import ColorYouArePlaying from "../ColorYouArePlaying/ColorYouArePlaying";
 const Wrapper = styled.div`
   width: 100%;
   --inner-height: 170px;
@@ -35,16 +35,13 @@ const Wrapper = styled.div`
   transition: transform 0.2s ease-in-out;
 
   display: grid;
-  grid-template-areas: "minimap . . buttons" "minimap piece stats buttons" "minimap piece stats by";
+  grid-template-areas: "minimap you-are-playing you-are-playing buttons" "minimap piece stats buttons" "minimap piece stats by";
   grid-template-rows: 1fr 2fr auto;
   grid-template-columns: var(--inner-height) minmax(150px, 2fr) 3fr auto;
   align-items: end;
 
   justify-content: space-between;
 
-  /* background-color: var(--color-gray-900); */
-
-  /* background-color: #0a0a0a; */
   opacity: 1;
   background-image:
     linear-gradient(#0c4a6ea6 0.8px, transparent 0.8px),
@@ -415,8 +412,8 @@ function BoardControls({
         minimapHandler={minimapHandler}
       />
       <SelectedPiece selectedPiece={selectedPiece} />
-      {/* <JumpControl coords={coords} setCoords={setCoords} /> */}
       <StatsDisplay statsHandler={statsHandler} />
+      <ColorYouArePlaying />
       <AllBoardButtons
         setShowLargeBoard={setShowLargeBoard}
         showLargeBoard={showLargeBoard}

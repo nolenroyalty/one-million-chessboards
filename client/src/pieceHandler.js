@@ -1,7 +1,8 @@
-import { pieceKey, getMoveableSquares } from "./utils";
+import { pieceKey, getMoveableSquares, TYPE_TO_NAME } from "./utils";
 
 class PieceHandler {
-  constructor() {
+  constructor({ statsHandler }) {
+    this.statsHandler = statsHandler;
     this.pieces = new Map();
     this.subscribers = [];
     this.moves = [];
@@ -121,6 +122,11 @@ class PieceHandler {
   }
 
   handleMoves({ moves, captures }) {
+    let dTotalMoves = 0;
+    let dWhitePieces = 0;
+    let dBlackPieces = 0;
+    let dWhiteKings = 0;
+    let dBlackKings = 0;
     moves.forEach((move) => {
       const { skip } = this._applyMove({
         pieces: this.pieces,
@@ -130,6 +136,7 @@ class PieceHandler {
       if (!skip) {
         this.addReceivedAt(move);
         this.moves.push(move);
+        dTotalMoves++;
       } else {
         console.log("skipping move", move);
       }
@@ -142,7 +149,27 @@ class PieceHandler {
         this.addReceivedAt(capture);
         recentCaptures.push(capture);
         this.captures.push(capture);
+        const pieceType = TYPE_TO_NAME[capture.capturedType];
+        const wasKing = pieceType === "king";
+        if (capture.wasWhite) {
+          dWhitePieces--;
+          if (wasKing) {
+            dWhiteKings--;
+          }
+        } else {
+          dBlackPieces--;
+          if (wasKing) {
+            dBlackKings--;
+          }
+        }
       }
+    });
+    this.statsHandler.applyPieceHandlerDelta({
+      dTotalMoves,
+      dWhitePieces,
+      dBlackPieces,
+      dWhiteKings,
+      dBlackKings,
     });
     this.broadcast({ recentMoves: moves, recentCaptures });
   }

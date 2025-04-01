@@ -249,7 +249,6 @@ function PieceDisplay({
           recentMoveByPieceIdRef.current.set(move.pieceId, move);
         });
         data.recentCaptures.forEach((capture) => {
-          console.log("capture", capture);
           if (capture.capturedPieceId === selectedPiece?.id) {
             clearSelectedPieceAndSquares();
           }

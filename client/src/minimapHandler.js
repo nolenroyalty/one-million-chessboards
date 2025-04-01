@@ -9,7 +9,6 @@ class MinimapHandler {
   }
 
   broadcast({ state }) {
-    console.log("broadcasting state", state);
     this.state = state;
     this.subscribers.forEach(({ callback }) => {
       callback({ state });

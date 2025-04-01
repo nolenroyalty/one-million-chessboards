@@ -24,6 +24,13 @@ class StatsHandler {
     }
     this.hasReceivedUpdate = false;
 
+    this.resetLocalDelta();
+    this.resetPieceHandlerDelta();
+
+    this.subscribers = [];
+  }
+
+  resetLocalDelta() {
     this.localDelta = {
       totalMoves: 0,
       whitePiecesRemaining: 0,
@@ -31,8 +38,16 @@ class StatsHandler {
       whiteKingsRemaining: 0,
       blackKingsRemaining: 0,
     };
+  }
 
-    this.subscribers = [];
+  resetPieceHandlerDelta() {
+    this.pieceHandlerDelta = {
+      totalMoves: 0,
+      whitePiecesRemaining: 0,
+      blackPiecesRemaining: 0,
+      whiteKingsRemaining: 0,
+      blackKingsRemaining: 0,
+    };
   }
 
   subscribe({ id, callback }) {
@@ -41,15 +56,26 @@ class StatsHandler {
 
   getStats() {
     return {
-      totalMoves: this.totalMoves + this.localDelta.totalMoves,
+      totalMoves:
+        this.totalMoves +
+        this.localDelta.totalMoves +
+        this.pieceHandlerDelta.totalMoves,
       whitePiecesRemaining:
-        this.whitePiecesRemaining + this.localDelta.whitePiecesRemaining,
+        this.whitePiecesRemaining +
+        this.localDelta.whitePiecesRemaining +
+        this.pieceHandlerDelta.whitePiecesRemaining,
       blackPiecesRemaining:
-        this.blackPiecesRemaining + this.localDelta.blackPiecesRemaining,
+        this.blackPiecesRemaining +
+        this.localDelta.blackPiecesRemaining +
+        this.pieceHandlerDelta.blackPiecesRemaining,
       whiteKingsRemaining:
-        this.whiteKingsRemaining + this.localDelta.whiteKingsRemaining,
+        this.whiteKingsRemaining +
+        this.localDelta.whiteKingsRemaining +
+        this.pieceHandlerDelta.whiteKingsRemaining,
       blackKingsRemaining:
-        this.blackKingsRemaining + this.localDelta.blackKingsRemaining,
+        this.blackKingsRemaining +
+        this.localDelta.blackKingsRemaining +
+        this.pieceHandlerDelta.blackKingsRemaining,
       hasReceivedUpdate: this.hasReceivedUpdate,
       yourMoves: this.yourMoves,
       yourCaptures: this.yourCaptures,
@@ -89,6 +115,22 @@ class StatsHandler {
     this.broadcast();
   }
 
+  applyPieceHandlerDelta({
+    dTotalMoves = 0,
+    dWhitePieces = 0,
+    dBlackPieces = 0,
+    dWhiteKings = 0,
+    dBlackKings = 0,
+  }) {
+    this.pieceHandlerDelta.totalMoves += dTotalMoves;
+    this.pieceHandlerDelta.whitePiecesRemaining += dWhitePieces;
+    this.pieceHandlerDelta.blackPiecesRemaining += dBlackPieces;
+    this.pieceHandlerDelta.whiteKingsRemaining += dWhiteKings;
+    this.pieceHandlerDelta.blackKingsRemaining += dBlackKings;
+    this.resetLocalDelta();
+    this.broadcast();
+  }
+
   _incrementMoves() {
     this.yourMoves++;
     localStorage.setItem(YOUR_MOVES_KEY, this.yourMoves);
@@ -113,13 +155,8 @@ class StatsHandler {
     this.whiteKingsRemaining = stats.whiteKingsRemaining;
     this.blackKingsRemaining = stats.blackKingsRemaining;
     this.hasReceivedUpdate = true;
-    this.localDelta = {
-      totalMoves: 0,
-      whitePiecesRemaining: 0,
-      blackPiecesRemaining: 0,
-      whiteKingsRemaining: 0,
-      blackKingsRemaining: 0,
-    };
+    this.resetLocalDelta();
+    this.resetPieceHandlerDelta();
     this.broadcast();
   }
 }
