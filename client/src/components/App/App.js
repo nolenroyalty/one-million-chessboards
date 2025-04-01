@@ -156,7 +156,7 @@ function App() {
           minimapHandler.current.setState({ state: data.aggregations });
         } else if (data.type === "globalStats") {
           console.log("globalStats", data);
-          statsHandler.current.setState({ stats: data });
+          statsHandler.current.setGlobalStats({ stats: data });
         }
       });
 

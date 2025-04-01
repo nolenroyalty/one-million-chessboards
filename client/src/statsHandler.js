@@ -1,3 +1,6 @@
+const YOUR_MOVES_KEY = "yourMoves";
+const YOUR_CAPTURES_KEY = "yourCaptures";
+
 class StatsHandler {
   constructor() {
     this.totalMoves = 0;
@@ -5,6 +8,20 @@ class StatsHandler {
     this.blackPiecesRemaining = 0;
     this.whiteKingsRemaining = 0;
     this.blackKingsRemaining = 0;
+    try {
+      const yourMoves = localStorage.getItem(YOUR_MOVES_KEY);
+      this.yourMoves = yourMoves ? parseInt(yourMoves) : 0;
+    } catch (e) {
+      console.error("Error getting moves from localStorage", e);
+      this.yourMoves = 0;
+    }
+    try {
+      const yourCaptures = localStorage.getItem(YOUR_CAPTURES_KEY);
+      this.yourCaptures = yourCaptures ? parseInt(yourCaptures) : 0;
+    } catch (e) {
+      console.error("Error getting captures from localStorage", e);
+      this.yourCaptures = 0;
+    }
     this.hasReceivedUpdate = false;
 
     this.localDelta = {
@@ -34,6 +51,8 @@ class StatsHandler {
       blackKingsRemaining:
         this.blackKingsRemaining + this.localDelta.blackKingsRemaining,
       hasReceivedUpdate: this.hasReceivedUpdate,
+      yourMoves: this.yourMoves,
+      yourCaptures: this.yourCaptures,
     };
   }
 
@@ -60,6 +79,18 @@ class StatsHandler {
     this.broadcast();
   }
 
+  incrementMoves() {
+    this.yourMoves++;
+    localStorage.setItem(YOUR_MOVES_KEY, this.yourMoves);
+    this.broadcast();
+  }
+
+  incrementCaptures() {
+    this.yourCaptures++;
+    localStorage.setItem(YOUR_CAPTURES_KEY, this.yourCaptures);
+    this.broadcast();
+  }
+
   broadcast() {
     const stats = this.getStats();
     this.subscribers.forEach(({ callback }) => {
@@ -67,7 +98,7 @@ class StatsHandler {
     });
   }
 
-  setState({ stats }) {
+  setGlobalStats({ stats }) {
     this.totalMoves = stats.totalMoves;
     this.whitePiecesRemaining = stats.whitePiecesRemaining;
     this.blackPiecesRemaining = stats.blackPiecesRemaining;
