@@ -33,6 +33,8 @@ const WhiteBlackDisplayWrapper = styled.div`
   grid-template-columns: 50% 50%;
   height: 100%;
   align-items: center;
+  border-radius: 0.25rem;
+  overflow: hidden;
 `;
 
 const WhiteValueOuter = styled.div`
@@ -44,7 +46,6 @@ const WhiteValueOuter = styled.div`
   grid-template-areas: "single";
   align-items: center;
   background-color: var(--color-gray-400);
-  border-radius: 0.25rem 0 0 0.25rem;
   overflow: hidden;
 `;
 
@@ -52,13 +53,11 @@ const BlackValueOuter = styled.div`
   justify-self: flex-start;
   width: 100%;
   height: 1.2em;
-  align-items: center;
-
   position: relative;
   display: grid;
+  align-items: center;
   grid-template-areas: "single";
   background-color: var(--color-gray-500);
-  border-radius: 0 0.25rem 0.25rem 0;
   overflow: hidden;
 `;
 

@@ -3,6 +3,7 @@ import styled from "styled-components";
 import BoardControlsPanel from "../BoardControlsPanel/BoardControlsPanel";
 import { useElementDimensions } from "../../hooks/use-element-dimensions";
 import { clamp } from "../../utils";
+import { QUERY } from "../../constants";
 
 const WHITE_ADVANTAGE_COLORS_HEX = ["#9ca3af", "#d1d5db", "#e5e7eb"];
 const BLACK_ADVANTAGE_COLORS_HEX = ["#4b5563", "#374151", "#1f2937"];
@@ -35,6 +36,10 @@ const Wrapper = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
+
+  @media (${QUERY.VERY_SMALL}) {
+    align-items: flex-start;
+  }
 `;
 
 const CoordsWrapper = styled.div`
@@ -65,6 +70,11 @@ const CanvasWrapper = styled(BoardControlsPanel)`
   height: 100%;
   aspect-ratio: 1 / 1;
   position: relative;
+
+  @media (${QUERY.VERY_SMALL}) {
+    height: auto;
+    width: 100%;
+  }
 `;
 
 const CoordsCanvas = styled.canvas`

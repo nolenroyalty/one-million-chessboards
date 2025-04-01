@@ -459,6 +459,9 @@ func (c *Client) SendMinimapUpdate(aggregation json.RawMessage) {
 		return
 	case c.send <- aggregation:
 		// Sent successfully
+	default:
+		// Buffer full, client might be slow or disconnected
+		c.server.unregister <- c
 	}
 }
 
@@ -468,6 +471,9 @@ func (c *Client) SendGlobalStats(stats json.RawMessage) {
 		return
 	case c.send <- stats:
 		// Sent successfully
+	default:
+		// Buffer full, client might be slow or disconnected
+		c.server.unregister <- c
 	}
 }
 

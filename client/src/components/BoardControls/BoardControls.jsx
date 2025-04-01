@@ -20,25 +20,42 @@ import BoardControlsPanel from "../BoardControlsPanel/BoardControlsPanel";
 import Minimap from "../Minimap/Minimap";
 import StatsDisplay from "../StatsDisplay/StatsDisplay";
 import ColorYouArePlaying from "../ColorYouArePlaying/ColorYouArePlaying";
+import { QUERY } from "../../constants";
+
 const Wrapper = styled.div`
   width: 100%;
   --inner-height: 170px;
   gap: 0.5rem;
   --padding: 0.5rem;
+  @media (${QUERY.VERY_SMALL}) {
+    --padding: 0.25rem;
+  }
   // we set height manually and refer to it for our first column width
   // because firefox has a bug with grid sizing otherwise :/
   padding: var(--padding);
+  padding-top: 0.5rem;
   height: calc(var(--inner-height) + 2 * var(--padding));
-  border-radius: 0 0 0.25rem 0.25rem;
+  border-radius: 0.25rem;
   border: 1px solid var(--color-sky-700);
   transform: translate(0, var(--translate-y));
   transition: transform 0.2s ease-in-out;
+  margin-bottom: 0.25rem;
 
   display: grid;
   grid-template-areas: "minimap you-are-playing you-are-playing buttons" "minimap piece stats buttons" "minimap piece stats by";
   grid-template-rows: 1fr 2fr auto;
   grid-template-columns: var(--inner-height) minmax(150px, 2fr) 3fr auto;
   align-items: end;
+
+  @media (${QUERY.NO_PORTRAIT}) {
+    grid-template-columns: var(--inner-height) auto 3fr auto;
+  }
+
+  @media (${QUERY.VERY_SMALL}) {
+    grid-template-areas: "minimap buttons buttons" "minimap stats stats" "by stats stats";
+    grid-template-rows: auto auto auto;
+    grid-template-columns: auto auto auto;
+  }
 
   justify-content: space-between;
 
@@ -63,6 +80,15 @@ const AllBoardButtonsWrapper = styled(BoardControlsPanel)`
   align-self: start;
   justify-self: end;
   max-width: fit-content;
+
+  @media (${QUERY.VERY_SMALL}) {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: none;
+    padding: 0.25rem 0.5rem;
+  }
 `;
 
 const Middle = styled(BoardControlsPanel)`
@@ -72,6 +98,11 @@ const Middle = styled(BoardControlsPanel)`
   height: 100%;
   padding: 0.5rem 0 0;
   grid-area: piece;
+
+  @media (${QUERY.NO_PORTRAIT}) {
+    flex-grow: 0;
+    display: none;
+  }
 `;
 
 const ByWrapper = styled(BoardControlsPanel)`
@@ -81,6 +112,11 @@ const ByWrapper = styled(BoardControlsPanel)`
   flex-direction: row;
   align-items: center;
   gap: 0.5rem;
+  width: max-content;
+
+  @media (${QUERY.VERY_SMALL}) {
+    font-size: 0.75rem;
+  }
 `;
 
 const ByText = styled.p`
@@ -99,6 +135,13 @@ const SVGLink = styled.a`
   & svg {
     width: 16px;
     height: 16px;
+  }
+
+  @media (${QUERY.VERY_SMALL}) {
+    & svg {
+      width: 12px;
+      height: 12px;
+    }
   }
 `;
 

@@ -27,6 +27,12 @@ const Main = styled.main`
     border-left: none;
     border-right: none;
   }
+
+  @media (min-height: 1510px) {
+    border-bottom: 1px solid var(--color-sky-700);
+    padding-bottom: 0.5rem;
+    border-radius: 0 0 0.25rem 0.25rem;
+  }
   /* box-shadow:
     2px 0 8px var(--color-neutral-800),
     -2px 0 8px var(--color-neutral-800); */

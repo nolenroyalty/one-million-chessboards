@@ -11,8 +11,8 @@ const Wrapper = styled.button`
   justify-content: center;
 
   svg {
-    width: 24px;
-    height: 24px;
+    width: var(--size);
+    height: var(--size);
     color: var(--color-stone-400);
     transition: color 0.2s ease-in-out;
   }
@@ -31,9 +31,13 @@ const Wrapper = styled.button`
   }
 `;
 
-function IconButton({ children, onClick, disabled, style }) {
+function IconButton({ children, onClick, disabled, style, size = 24 }) {
   return (
-    <Wrapper disabled={disabled} onClick={onClick} style={style}>
+    <Wrapper
+      disabled={disabled}
+      onClick={onClick}
+      style={{ ...style, "--size": size + "px" }}
+    >
       {children}
     </Wrapper>
   );
