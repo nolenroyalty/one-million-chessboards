@@ -43,7 +43,7 @@ const WhiteBlackDisplayWrapper = styled.div`
   display: grid;
   grid-template-columns: 50% 50%;
   height: 100%;
-  background-color: var(--color-neutral-800);
+  background-color: var(--color-gray-500);
 `;
 
 const WhiteValueOuter = styled.div`
@@ -67,7 +67,7 @@ const BlackValueOuter = styled.div`
 
 const WhiteValue = styled.div`
   grid-area: single;
-  color: var(--color-neutral-700);
+  color: var(--color-gray-800);
   text-align: right;
   padding-right: 0.25rem;
   z-index: 1;
@@ -77,13 +77,13 @@ const BlackValue = styled.div`
   grid-area: single;
   text-align: left;
   padding-left: 0.25rem;
-  color: var(--color-neutral-100);
+  color: var(--color-gray-200);
   z-index: 1;
 `;
 
 const WhiteValueBar = styled.div`
   grid-area: single;
-  background-color: var(--color-gray-400);
+  background-color: var(--color-gray-200);
   height: 100%;
   width: 100%;
   transform: scaleX(var(--scale-x));
@@ -93,7 +93,7 @@ const WhiteValueBar = styled.div`
 
 const BlackValueBar = styled.div`
   grid-area: single;
-  background-color: var(--color-gray-600);
+  background-color: var(--color-gray-700);
   height: 100%;
   width: 100%;
   transform: scaleX(var(--scale-x));
@@ -150,7 +150,7 @@ function TextLines({ stats }) {
       />
       <WhiteBlackDisplay
         label="Kings Remaining"
-        blackValue={stats.blackKingsRemaining}
+        blackValue={99231}
         whiteValue={stats.whiteKingsRemaining}
         maxValue={1000000}
       />
