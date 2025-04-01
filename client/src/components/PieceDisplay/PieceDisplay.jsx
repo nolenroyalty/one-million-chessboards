@@ -158,7 +158,7 @@ const __Piece = React.memo(Piece, (prevProps, nextProps) => {
 function PieceDisplay({
   pieceHandler,
   coords,
-  zoomedInParams,
+  boardSizeParams,
   handlePieceClick,
   selectedPiece,
   hidden,
@@ -168,10 +168,10 @@ function PieceDisplay({
   const { startingX, startingY, endingX, endingY } = React.useMemo(() => {
     return getStartingAndEndingCoords({
       coords,
-      width: zoomedInParams.squareWidth,
-      height: zoomedInParams.squareHeight,
+      width: boardSizeParams.squareWidth,
+      height: boardSizeParams.squareHeight,
     });
-  }, [coords, zoomedInParams]);
+  }, [coords, boardSizeParams]);
 
   const piecesRefsMap = React.useRef(new Map());
   const recentMoveByPieceIdRef = React.useRef(
@@ -328,7 +328,7 @@ function PieceDisplay({
             getZoomedInScreenAbsoluteCoords({
               screenX: x,
               screenY: y,
-              zoomedInParams,
+              boardSizeParams,
             });
           ref.style.transform = `translate(${absoluteX}px, ${absoluteY}px)`;
         }
@@ -364,7 +364,7 @@ function PieceDisplay({
     return () => {
       cancelAnimationFrame(frameId);
     };
-  }, [zoomedInParams, startingX, startingY, isNotVisible, getAnimatedCoords]);
+  }, [boardSizeParams, startingX, startingY, isNotVisible, getAnimatedCoords]);
 
   const createOnClickHandler = React.useCallback(
     (pieceId) => {
@@ -417,7 +417,7 @@ function PieceDisplay({
       const { x: absoluteX, y: absoluteY } = getZoomedInScreenAbsoluteCoords({
         screenX: x,
         screenY: y,
-        zoomedInParams,
+        boardSizeParams,
       });
 
       const translate = `translate(${absoluteX}px, ${absoluteY}px)`;
@@ -446,7 +446,7 @@ function PieceDisplay({
     startingY,
     forceUpdate,
     selectedPiece,
-    zoomedInParams,
+    boardSizeParams,
   ]);
 
   return memoizedPieces.map(
@@ -460,7 +460,7 @@ function PieceDisplay({
           x={x}
           y={y}
           translate={translate}
-          size={zoomedInParams.squarePx}
+          size={boardSizeParams.squarePx}
           hidden={hidden}
           opacity={opacity}
           onClick={onClick}

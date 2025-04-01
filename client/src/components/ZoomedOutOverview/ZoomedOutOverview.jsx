@@ -11,6 +11,9 @@ import {
 const MAX_ANIMATION_DURATION = 1200;
 const MIN_ANIMATION_DURATION = 500;
 const MAX_DMOVE = 25;
+const BORDER_COLOR = "#0a0a0a";
+const DARK_STROKE_COLOR = "#171717";
+const LIGHT_STROKE_COLOR = "#f5f5f5";
 
 const ZoomedOutOverviewWrapper = styled.div`
   position: absolute;
@@ -31,12 +34,10 @@ const ZoomCanvas = styled.canvas`
 `;
 
 function ZoomedOutOverview({
-  pxWidth,
-  pxHeight,
   coords,
   pieceHandler,
   opacity,
-  sizeParams,
+  boardSizeParams,
   largeBoardKillSwitch,
 }) {
   const pieceCanvasRef = React.useRef(null);
@@ -45,6 +46,7 @@ function ZoomedOutOverview({
   const piecesRef = React.useRef(new Map(pieceHandler.current.getPieces()));
   const [forcePieceRerender, setForcePieceRerender] = React.useState(0);
   const recentMovesRef = React.useRef(new Map());
+  console.log("render");
 
   React.useEffect(() => {
     pieceHandler.current.subscribe({
@@ -68,33 +70,23 @@ function ZoomedOutOverview({
     };
   }, [pieceHandler]);
 
-  const {
-    squareSize,
-    numSquares,
-    pieceSize,
-    halfBoardLineWidth,
-    leftPadding,
-    topPadding,
-    rightPadding,
-    bottomPadding,
-  } = sizeParams;
+  const { squaresWide, squaresHigh, squarePx, borderHalfWidth, pieceSize } =
+    boardSizeParams.zoomedOut;
 
   const { startingX, startingY, endingX, endingY } = getStartingAndEndingCoords(
     {
       coords,
-      width: numSquares,
-      height: numSquares,
+      width: squaresWide,
+      height: squaresHigh,
     }
   );
 
   const getBoardColor = React.useCallback(({ x, y }) => {
     const boardIdxX = Math.floor(x / 8);
     const boardIdxY = Math.floor(y / 8);
-    // const color1 = "#6b7280";
-    // const color2 = "#78716c";
-    const color1 = "#171717";
-    const color2 = "#0a0a0a";
-    // const color2 = "#111827";
+
+    const color1 = "#334155";
+    const color2 = "#A1A1AA";
 
     if (boardIdxX % 2 === 0) {
       return boardIdxY % 2 === 0 ? color1 : color2;
@@ -112,14 +104,8 @@ function ZoomedOutOverview({
     }
     const ctx = boardCanvasRef.current.getContext("2d");
     ctx.fillStyle = "slategrey"; //  CR nroyalty: fix colors
-    ctx.fillRect(0, 0, pxWidth, pxHeight);
-    ctx.fillStyle = "black";
-    ctx.fillRect(
-      leftPadding,
-      topPadding,
-      pxWidth - leftPadding - rightPadding,
-      pxHeight - topPadding - bottomPadding
-    );
+    ctx.fillRect(0, 0, boardSizeParams.pxWidth, boardSizeParams.pxHeight);
+    ctx.fillStyle = BORDER_COLOR;
 
     let xMod = startingX % 8;
     let yMod = startingY % 8;
@@ -138,15 +124,15 @@ function ZoomedOutOverview({
         screenY = Math.max(0, screenY);
         ctx.fillStyle = getBoardColor({ x, y });
         ctx.fillRect(
-          leftPadding + screenX * squareSize,
-          topPadding + screenY * squareSize,
-          squareSize * 8,
-          squareSize * 8
+          screenX * squarePx,
+          screenY * squarePx,
+          squarePx * 8,
+          squarePx * 8
         );
       }
     }
 
-    ctx.fillStyle = "black"; // CR nroyalty: fix colors
+    ctx.fillStyle = BORDER_COLOR;
     for (let x = startingX + xOff; x < endingX; x += 8) {
       const { x: screenX } = getScreenRelativeCoords({
         x,
@@ -154,9 +140,9 @@ function ZoomedOutOverview({
         startingX,
         startingY,
       });
-      const starting = leftPadding + screenX * squareSize - halfBoardLineWidth;
-      const ending = starting + halfBoardLineWidth * 2;
-      ctx.fillRect(starting, 0, ending - starting, pxHeight);
+      const starting = screenX * squarePx - borderHalfWidth;
+      const ending = starting + borderHalfWidth * 2;
+      ctx.fillRect(starting, 0, ending - starting, ctx.canvas.height);
     }
     for (let y = startingY + yOff; y < endingY; y += 8) {
       const { y: screenY } = getScreenRelativeCoords({
@@ -165,46 +151,44 @@ function ZoomedOutOverview({
         startingX,
         startingY,
       });
-      const starting = topPadding + screenY * squareSize - halfBoardLineWidth;
-      const ending = starting + halfBoardLineWidth * 2;
-      ctx.fillRect(0, starting, pxWidth, ending - starting);
+      const starting = screenY * squarePx - borderHalfWidth;
+      const ending = starting + borderHalfWidth * 2;
+      ctx.fillRect(0, starting, ctx.canvas.width, ending - starting);
     }
   }, [
-    pxWidth,
-    pxHeight,
-    leftPadding,
-    topPadding,
-    rightPadding,
-    bottomPadding,
     startingX,
     startingY,
     endingX,
     endingY,
-    halfBoardLineWidth,
-    squareSize,
     getBoardColor,
     largeBoardKillSwitch,
+    boardSizeParams.pxWidth,
+    boardSizeParams.pxHeight,
+    squarePx,
+    borderHalfWidth,
   ]);
 
   const drawPiece = React.useCallback(
     ({ screenX, screenY, ctx, pieceType, isWhite }) => {
       ctx.save();
       ctx.fillStyle = colorForPieceType({ pieceType, isWhite });
-      let x = screenX * squareSize;
-      let y = screenY * squareSize;
-      x += leftPadding;
-      y += topPadding;
-      const upperLeftX = x + (squareSize - pieceSize) / 2;
-      const upperLeftY = y + (squareSize - pieceSize) / 2;
+      let x = screenX * squarePx;
+      let y = screenY * squarePx;
+      const upperLeftX = Math.floor(x + (squarePx - pieceSize) / 2);
+      const upperLeftY = Math.ceil(y + (squarePx - pieceSize) / 2);
       ctx.fillRect(upperLeftX, upperLeftY, pieceSize, pieceSize);
+      //   if (isWhite) {
+      //   }
+      //   ctx.lineWidth = 2;
+      //   ctx.strokeRect(upperLeftX, upperLeftY, pieceSize, pieceSize);
       ctx.restore();
     },
-    [squareSize, pieceSize, leftPadding, topPadding]
+    [squarePx, pieceSize]
   );
 
-  // Draw on the non-animated pieces
-  // It's kinda nice to use RAF here because it gives us a debounce-esque mechanic,
-  // but we don't need a loop since we only want to trigger this when the pieces change.
+  //   Draw on the non-animated pieces
+  //   It's kinda nice to use RAF here because it gives us a debounce-esque mechanic,
+  //   but we don't need a loop since we only want to trigger this when the pieces change.
   React.useEffect(() => {
     if (!pieceCanvasRef.current) {
       return;
@@ -215,7 +199,7 @@ function ZoomedOutOverview({
 
     const loop = () => {
       const ctx = pieceCanvasRef.current.getContext("2d");
-      ctx.clearRect(0, 0, pxWidth, pxHeight);
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
       for (const piece of piecesRef.current.values()) {
         const { x, y } = piece;
         if (x < startingX || x >= endingX || y < startingY || y >= endingY) {
@@ -251,8 +235,6 @@ function ZoomedOutOverview({
     drawPiece,
     endingX,
     endingY,
-    pxHeight,
-    pxWidth,
     startingX,
     startingY,
     forcePieceRerender,
@@ -275,7 +257,7 @@ function ZoomedOutOverview({
       }
       rafId = requestAnimationFrame(loop);
       const ctx = animationCanvasRef.current.getContext("2d");
-      ctx.clearRect(0, 0, pxWidth, pxHeight);
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
       for (const move of recentMovesRef.current.values()) {
         const { fromX, fromY, toX, toY, receivedAt } = move;
         const piece = piecesRef.current.get(move.pieceId);
@@ -332,14 +314,7 @@ function ZoomedOutOverview({
     return () => {
       cancelAnimationFrame(rafId);
     };
-  }, [
-    drawPiece,
-    largeBoardKillSwitch,
-    pxHeight,
-    pxWidth,
-    startingX,
-    startingY,
-  ]);
+  }, [drawPiece, largeBoardKillSwitch, startingX, startingY]);
 
   return (
     <ZoomedOutOverviewWrapper
@@ -347,9 +322,21 @@ function ZoomedOutOverview({
         "--opacity": opacity,
       }}
     >
-      <ZoomCanvas width={pxWidth} height={pxHeight} ref={boardCanvasRef} />
-      <ZoomCanvas width={pxWidth} height={pxHeight} ref={pieceCanvasRef} />
-      <ZoomCanvas width={pxWidth} height={pxHeight} ref={animationCanvasRef} />
+      <ZoomCanvas
+        width={boardSizeParams.pxWidth}
+        height={boardSizeParams.pxHeight}
+        ref={boardCanvasRef}
+      />
+      <ZoomCanvas
+        width={boardSizeParams.pxWidth}
+        height={boardSizeParams.pxHeight}
+        ref={pieceCanvasRef}
+      />
+      <ZoomCanvas
+        width={boardSizeParams.pxWidth}
+        height={boardSizeParams.pxHeight}
+        ref={animationCanvasRef}
+      />
     </ZoomedOutOverviewWrapper>
   );
 }

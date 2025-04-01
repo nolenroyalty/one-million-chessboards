@@ -12,7 +12,20 @@ function useBoardSizeParams({ outerRef }) {
     squareWidth: 0,
     squareHeight: 0,
     borderHalfWidth: 0,
+    pxWidth: 0,
+    pxHeight: 0,
     initialized: false,
+    left: 0,
+    top: 0,
+    right: 0,
+    bottom: 0,
+    zoomedOut: {
+      squaresWide: 0,
+      squaresHigh: 0,
+      squarePx: 0,
+      borderHalfWidth: 0,
+      pieceSize: 0,
+    },
   });
 
   const timeout = React.useRef(null);
@@ -72,20 +85,27 @@ function useBoardSizeParams({ outerRef }) {
       let rightPadding = Math.ceil(horizontalPadding / 2);
       let topPadding = Math.floor(verticalPadding / 2);
       let bottomPadding = Math.ceil(verticalPadding / 2);
+      const squareWidth = heightIsSmall ? largeCount : smallCount;
+      const squareHeight = heightIsSmall ? smallCount : largeCount;
       setParams({
         squarePx: squarePx,
-        squareWidth: heightIsSmall ? largeCount : smallCount,
-        squareHeight: heightIsSmall ? smallCount : largeCount,
+        squareWidth,
+        squareHeight,
         borderHalfWidth,
-        leftPadding,
-        rightPadding,
-        topPadding,
-        bottomPadding,
+        pxWidth: squarePx * squareWidth,
+        pxHeight: squarePx * squareHeight,
         left: outerSize.left + leftPadding,
         top: outerSize.top + topPadding,
         right: outerSize.right - rightPadding,
         bottom: outerSize.bottom - bottomPadding,
         initialized: true,
+        zoomedOut: {
+          squaresWide: squareWidth * 2,
+          squaresHigh: squareHeight * 2,
+          squarePx: squarePx / 2,
+          borderHalfWidth: Math.ceil(borderHalfWidth / 2),
+          pieceSize: Math.floor(squarePx / 4),
+        },
       });
     };
 

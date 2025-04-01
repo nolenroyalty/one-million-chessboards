@@ -25,15 +25,15 @@ const MoveButton = styled.button`
 function PieceMoveButtons({
   moveableSquares,
   coords,
-  zoomedInParams,
+  boardSizeParams,
   selectedPiece,
   moveAndClear,
   hidden,
 }) {
   const { startingX, startingY } = getStartingAndEndingCoords({
     coords,
-    width: zoomedInParams.squareWidth,
-    height: zoomedInParams.squareHeight,
+    width: boardSizeParams.squareWidth,
+    height: boardSizeParams.squareHeight,
   });
   return Array.from(moveableSquares.values()).map((key) => {
     const [x, y] = keyToCoords(key);
@@ -46,7 +46,7 @@ function PieceMoveButtons({
     const { x: absoluteX, y: absoluteY } = getZoomedInScreenAbsoluteCoords({
       screenX,
       screenY,
-      zoomedInParams,
+      boardSizeParams,
     });
     return (
       <MoveButton
@@ -54,7 +54,7 @@ function PieceMoveButtons({
         style={{
           "--x": `${absoluteX}px`,
           "--y": `${absoluteY}px`,
-          "--size": `${zoomedInParams.squarePx}px`,
+          "--size": `${boardSizeParams.squarePx}px`,
           "--opacity": hidden ? 0 : 1,
           "--pointer-events": hidden ? "none" : "auto",
           "--cursor": hidden ? "none" : "pointer",

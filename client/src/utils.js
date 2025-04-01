@@ -145,11 +145,11 @@ export function getScreenRelativeCoords({ x, y, startingX, startingY }) {
 export function getZoomedInScreenAbsoluteCoords({
   screenX,
   screenY,
-  zoomedInParams,
+  boardSizeParams,
 }) {
   return {
-    x: screenX * zoomedInParams.squarePx,
-    y: screenY * zoomedInParams.squarePx,
+    x: screenX * boardSizeParams.squarePx,
+    y: screenY * boardSizeParams.squarePx,
   };
 }
 
@@ -178,23 +178,28 @@ export function imageForPieceType({ pieceType, isWhite }) {
   return `/pieces/${isWhite ? "white" : "black"}/${name}.png`;
 }
 
-const defaultWhiteColor = "#3B82F6";
+// const defaultWhiteColor = "#3B82F6";
+const defaultWhiteColor = "#0284c7";
 const WHITE_PIECE_COLORS = {
-  pawn: "#94A3B8",
+  pawn: "#fafafa",
   bishop: defaultWhiteColor,
   rook: defaultWhiteColor,
-  queen: "#A78BFA",
-  king: "#FDE047",
+  // queen: "#c4b5fd",
+  queen: "#0ea5e9",
+  // king: "#FDE047",
+  king: "#7dd3fc",
   knight: defaultWhiteColor,
 };
 
-const defaultBlackColor = "#1E3A8A";
+const defaultBlackColor = "#115e59";
 const BLACK_PIECE_COLORS = {
-  pawn: "#334155",
+  pawn: "#0a0a0a",
   bishop: defaultBlackColor,
   rook: defaultBlackColor,
-  queen: "#5B21B6",
-  king: "#CA8A04",
+  // queen: "#5B21B6",
+  queen: "#0d9488",
+  // king: "#CA8A04",
+  king: "#2dd4bf",
   knight: defaultBlackColor,
 };
 

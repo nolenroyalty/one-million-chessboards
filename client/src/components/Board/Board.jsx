@@ -13,7 +13,6 @@ import {
 } from "../../utils";
 import PanzoomBox from "../PanzoomBox/PanzoomBox";
 import BoardControls from "../BoardControls/BoardControls";
-import { useElementDimensions } from "../../hooks/use-element-dimensions";
 import useBoardSizeParams from "../../hooks/use-board-size-params";
 
 const BoardContainer = styled.div`
@@ -56,67 +55,6 @@ const SizedInner = styled.div`
   position: relative;
 `;
 
-function useZoomedOutParams({ outerSize }) {
-  const MAX_VIEWPORT_WIDTH = 81;
-  const MAX_VIEWPORT_HEIGHT = 81;
-  const MIN_PX_PER_SQUARE = 12;
-  const timeout = React.useRef(null);
-  const [params, setParams] = React.useState({
-    squareSize: MIN_PX_PER_SQUARE,
-    numSquares: 0,
-    pieceSize: 0,
-    halfBoardLineWidth: 0,
-    leftPadding: 0,
-    topPadding: 0,
-    rightPadding: 0,
-    bottomPadding: 0,
-    initialized: false,
-  });
-  React.useEffect(() => {
-    if (timeout.current) {
-      clearTimeout(timeout.current);
-    }
-    timeout.current = setTimeout(() => {
-      console.log("calculating zoomed out params", outerSize);
-      const minDist = Math.min(outerSize.width, outerSize.height);
-      let candidateSize = MIN_PX_PER_SQUARE;
-      while (minDist / candidateSize > MAX_VIEWPORT_WIDTH) {
-        candidateSize += 2;
-      }
-      const numSquares = Math.floor(minDist / candidateSize);
-      const horizontalPadding = outerSize.width - numSquares * candidateSize;
-      const verticalPadding = outerSize.height - numSquares * candidateSize;
-      let pieceSize = candidateSize / 2;
-      let halfBoardLineWidth = 1;
-      if (candidateSize > 24) {
-        halfBoardLineWidth = 2;
-      }
-      if (candidateSize > 30) {
-        halfBoardLineWidth = 3;
-      }
-      setParams({
-        squareSize: candidateSize,
-        numSquares,
-        pieceSize,
-        halfBoardLineWidth,
-        leftPadding: Math.floor(horizontalPadding / 2),
-        topPadding: Math.floor(verticalPadding / 2),
-        rightPadding: Math.ceil(horizontalPadding / 2),
-        bottomPadding: Math.ceil(verticalPadding / 2),
-        initialized: true,
-      });
-    }, 100);
-  }, [outerSize]);
-  return params;
-}
-
-// CR nroyalty:
-// compute ZoomedOutParams using same logic as useZoomedInParams
-// maybe just halve the number of squares, fitting 4 boards into each
-// board in the zoomed in view.
-// Doing this prevents us from needing to re-calculate the wrapper that
-// we're going to add when we swap between zoomed in and zoomed out
-
 function Board({
   coords,
   submitMove,
@@ -150,26 +88,11 @@ function Board({
     [_setShowLargeBoard]
   );
 
-  const outerSize = useElementDimensions(outerRef);
-  const zoomedOutParams = useZoomedOutParams({ outerSize });
-  const zoomedInParams = useBoardSizeParams({ outerRef });
+  const boardSizeParams = useBoardSizeParams({ outerRef });
   const clearSelectedPieceAndSquares = React.useCallback(() => {
     setSelectedPiece(null);
     setMoveableSquares(new Set());
   }, []);
-
-  const { sizedInnerWidth, sizedInnerHeight } = React.useMemo(() => {
-    if (!zoomedInParams.initialized) {
-      return {
-        sizedInnerWidth: 0,
-        sizedInnerHeight: 0,
-      };
-    }
-    return {
-      sizedInnerWidth: zoomedInParams.squareWidth * zoomedInParams.squarePx,
-      sizedInnerHeight: zoomedInParams.squareHeight * zoomedInParams.squarePx,
-    };
-  }, [zoomedInParams]);
 
   React.useEffect(() => {
     if (showLargeBoard) {
@@ -300,10 +223,10 @@ function Board({
       const deltaY = e.clientY - eltRect.top;
       const clampedX = clamp(deltaX, 0, eltRect.width);
       const clampedY = clamp(deltaY, 0, eltRect.height);
-      const xPos = clampedX / zoomedOutParams.squareSize;
-      const yPos = clampedY / zoomedOutParams.squareSize;
-      const centerXPos = Math.floor(zoomedOutParams.numSquares / 2);
-      const centerYPos = Math.floor(zoomedOutParams.numSquares / 2);
+      const xPos = clampedX / boardSizeParams.zoomedOut.squarePx;
+      const yPos = clampedY / boardSizeParams.zoomedOut.squarePx;
+      const centerXPos = Math.floor(boardSizeParams.zoomedOut.squaresWide / 2);
+      const centerYPos = Math.floor(boardSizeParams.zoomedOut.squaresHigh / 2);
       const xOffset = Math.floor(xPos - centerXPos);
       const yOffset = Math.floor(yPos - centerYPos);
       setCoords((coords) => {
@@ -317,7 +240,7 @@ function Board({
         };
       });
     },
-    [setCoords, zoomedOutParams]
+    [setCoords, boardSizeParams]
   );
 
   // zoom in on double click if we're zoomed out
@@ -350,13 +273,7 @@ function Board({
     };
     elt.addEventListener("wheel", handleWheel, { passive: false });
     return () => elt.removeEventListener("wheel", handleWheel);
-  }, [
-    setCoords,
-    setShowLargeBoard,
-    showLargeBoard,
-    zoomInOnBoard,
-    zoomedOutParams,
-  ]);
+  }, [setCoords, setShowLargeBoard, showLargeBoard, zoomInOnBoard]);
 
   const touchStartState = React.useRef({
     touchStartDist: null,
@@ -427,17 +344,17 @@ function Board({
       <Outer ref={outerRef}>
         <SizedInner
           style={{
-            "--width": `${sizedInnerWidth}px`,
-            "--height": `${sizedInnerHeight}px`,
+            "--width": `${boardSizeParams.pxWidth}px`,
+            "--height": `${boardSizeParams.pxHeight}px`,
           }}
           ref={sizedInnerRef}
         >
           {smallMounted && (
             <BoardCanvas
               coords={coords}
-              pxWidth={sizedInnerWidth}
-              pxHeight={sizedInnerHeight}
-              zoomedInParams={zoomedInParams}
+              pxWidth={boardSizeParams.pxWidth}
+              pxHeight={boardSizeParams.pxHeight}
+              boardSizeParams={boardSizeParams}
               moveableSquares={moveableSquares}
               selectedPiece={selectedPiece}
               opacity={smallOpacity}
@@ -445,12 +362,10 @@ function Board({
           )}
           {largeMounted && (
             <ZoomedOutOverview
-              pxWidth={sizedInnerWidth}
-              pxHeight={sizedInnerHeight}
               coords={coords}
               pieceHandler={pieceHandler}
               opacity={largeOpacity}
-              sizeParams={zoomedOutParams}
+              boardSizeParams={boardSizeParams}
               largeBoardKillSwitch={largeBoardKillSwitch}
             />
           )}
@@ -464,7 +379,7 @@ function Board({
               <PieceDisplay
                 coords={coords}
                 handlePieceClick={handlePieceClick}
-                zoomedInParams={zoomedInParams}
+                boardSizeParams={boardSizeParams}
                 pieceHandler={pieceHandler}
                 opacity={smallOpacity}
                 hidden={smallHidden}
@@ -475,7 +390,7 @@ function Board({
               <PieceMoveButtons
                 moveableSquares={moveableSquares}
                 coords={coords}
-                zoomedInParams={zoomedInParams}
+                boardSizeParams={boardSizeParams}
                 moveAndClear={moveAndClear}
                 selectedPiece={selectedPiece}
                 opacity={smallOpacity}
