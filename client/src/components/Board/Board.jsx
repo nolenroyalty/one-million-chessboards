@@ -1,5 +1,5 @@
 import React from "react";
-import styled from "styled-components";
+import styled, { keyframes } from "styled-components";
 import BoardCanvas from "../BoardCanvas/BoardCanvas";
 import PieceDisplay from "../PieceDisplay/PieceDisplay";
 import PieceMoveButtons from "../PieceMoveButtons/PieceMoveButtons";
@@ -14,9 +14,7 @@ import {
 import PanzoomBox from "../PanzoomBox/PanzoomBox";
 import BoardControls from "../BoardControls/BoardControls";
 import { useElementDimensions } from "../../hooks/use-element-dimensions";
-const WIDTH = 23;
-const HEIGHT = 24;
-const PIXELS_PER_SQUARE = 24;
+import useBoardSizeParams from "../../hooks/use-board-size-params";
 
 const BoardContainer = styled.div`
   display: flex;
@@ -30,16 +28,35 @@ const BoardContainer = styled.div`
   gap: 0.5rem;
 `;
 
-const Inner = styled.div`
-  /* width: ${WIDTH * PIXELS_PER_SQUARE}px; */
-  /* height: ${HEIGHT * PIXELS_PER_SQUARE}px; */
+const Outer = styled.div`
   width: 100%;
   height: 100%;
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 `;
 
-function useZoomedOutParams({ innerSize }) {
+const fadeIn = keyframes`
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+`;
+
+const SizedInner = styled.div`
+  width: var(--width);
+  height: var(--height);
+  overflow: hidden;
+  animation: ${fadeIn} 0.5s ease-in-out both;
+  position: relative;
+`;
+
+function useZoomedOutParams({ outerSize }) {
   const MAX_VIEWPORT_WIDTH = 81;
   const MAX_VIEWPORT_HEIGHT = 81;
   const MIN_PX_PER_SQUARE = 12;
@@ -60,15 +77,15 @@ function useZoomedOutParams({ innerSize }) {
       clearTimeout(timeout.current);
     }
     timeout.current = setTimeout(() => {
-      console.log("calculating zoomed out params", innerSize);
-      const minDist = Math.min(innerSize.width, innerSize.height);
+      console.log("calculating zoomed out params", outerSize);
+      const minDist = Math.min(outerSize.width, outerSize.height);
       let candidateSize = MIN_PX_PER_SQUARE;
       while (minDist / candidateSize > MAX_VIEWPORT_WIDTH) {
         candidateSize += 2;
       }
       const numSquares = Math.floor(minDist / candidateSize);
-      const horizontalPadding = innerSize.width - numSquares * candidateSize;
-      const verticalPadding = innerSize.height - numSquares * candidateSize;
+      const horizontalPadding = outerSize.width - numSquares * candidateSize;
+      const verticalPadding = outerSize.height - numSquares * candidateSize;
       let pieceSize = candidateSize / 2;
       let halfBoardLineWidth = 1;
       if (candidateSize > 24) {
@@ -89,105 +106,16 @@ function useZoomedOutParams({ innerSize }) {
         initialized: true,
       });
     }, 100);
-  }, [innerSize]);
+  }, [outerSize]);
   return params;
 }
 
-const MIN_PIXELS_PER_SQUARE = 28;
-const MAX_NUM_ZOOMED_IN_SQUARES = 36;
-const MIN_NUM_ZOOMED_IN_SQUARES = 8;
 // CR nroyalty:
 // compute ZoomedOutParams using same logic as useZoomedInParams
 // maybe just halve the number of squares, fitting 4 boards into each
 // board in the zoomed in view.
 // Doing this prevents us from needing to re-calculate the wrapper that
 // we're going to add when we swap between zoomed in and zoomed out
-function useZoomedInParams({ innerSize }) {
-  const [params, setParams] = React.useState({
-    squarePx: 0,
-    squareWidth: 0,
-    squareHeight: 0,
-    borderHalfWidth: 0,
-    initialized: false,
-  });
-
-  const timeout = React.useRef(null);
-  React.useEffect(() => {
-    if (timeout.current) {
-      clearTimeout(timeout.current);
-    }
-
-    const calc = () => {
-      const minDist = Math.min(innerSize.width, innerSize.height);
-      const maxDist = Math.max(innerSize.width, innerSize.height);
-      let heightIsSmall = innerSize.height <= innerSize.width;
-      let squarePx;
-      let largeCount;
-      let smallCount;
-      if (minDist / MIN_PIXELS_PER_SQUARE < MIN_NUM_ZOOMED_IN_SQUARES) {
-        squarePx = MIN_PIXELS_PER_SQUARE;
-        largeCount = maxDist / squarePx;
-        smallCount = minDist / squarePx;
-      } else {
-        squarePx = MIN_PIXELS_PER_SQUARE;
-        largeCount = maxDist / squarePx;
-        smallCount = minDist / squarePx;
-        while (
-          largeCount > MAX_NUM_ZOOMED_IN_SQUARES &&
-          smallCount > MIN_NUM_ZOOMED_IN_SQUARES
-        ) {
-          squarePx += 2;
-          largeCount = maxDist / squarePx;
-          smallCount = minDist / squarePx;
-        }
-        largeCount = Math.min(
-          Math.floor(largeCount),
-          MAX_NUM_ZOOMED_IN_SQUARES
-        );
-        smallCount = Math.max(
-          Math.floor(smallCount),
-          MIN_NUM_ZOOMED_IN_SQUARES
-        );
-      }
-      let borderHalfWidth = 1;
-      if (squarePx > 26) {
-        borderHalfWidth = 2;
-      }
-      if (squarePx > 34) {
-        borderHalfWidth = 3;
-      }
-      let horizontalPadding, verticalPadding;
-      if (heightIsSmall) {
-        horizontalPadding = innerSize.width - largeCount * squarePx;
-        verticalPadding = innerSize.height - smallCount * squarePx;
-      } else {
-        horizontalPadding = innerSize.width - smallCount * squarePx;
-        verticalPadding = innerSize.height - largeCount * squarePx;
-      }
-      let leftPadding = Math.floor(horizontalPadding / 2);
-      let rightPadding = Math.ceil(horizontalPadding / 2);
-      let topPadding = Math.floor(verticalPadding / 2);
-      let bottomPadding = Math.ceil(verticalPadding / 2);
-      setParams({
-        squarePx,
-        squareWidth: heightIsSmall ? largeCount : smallCount,
-        squareHeight: heightIsSmall ? smallCount : largeCount,
-        borderHalfWidth,
-        leftPadding,
-        rightPadding,
-        topPadding,
-        bottomPadding,
-        initialized: true,
-      });
-    };
-
-    timeout.current = setTimeout(calc, 100);
-    return () => {
-      clearTimeout(timeout.current);
-    };
-  }, [innerSize]);
-  return params;
-}
 
 function Board({
   coords,
@@ -200,7 +128,8 @@ function Board({
   const [selectedPiece, setSelectedPiece] = React.useState(null);
   const [moveableSquares, setMoveableSquares] = React.useState(new Set());
   const boardContainerRef = React.useRef(null);
-  const innerRef = React.useRef(null);
+  const outerRef = React.useRef(null);
+  const sizedInnerRef = React.useRef(null);
   const [showLargeBoard, _setShowLargeBoard] = React.useState(false);
   const [smallHidden, setSmallHidden] = React.useState(false);
   const [smallMounted, setSmallMounted] = React.useState(true);
@@ -221,25 +150,27 @@ function Board({
     [_setShowLargeBoard]
   );
 
-  const innerSize = useElementDimensions(innerRef);
-  const zoomedOutParams = useZoomedOutParams({ innerSize });
-  const zoomedInParams = useZoomedInParams({ innerSize });
+  const outerSize = useElementDimensions(outerRef);
+  const zoomedOutParams = useZoomedOutParams({ outerSize });
+  const zoomedInParams = useBoardSizeParams({ outerRef });
   const clearSelectedPieceAndSquares = React.useCallback(() => {
     setSelectedPiece(null);
     setMoveableSquares(new Set());
   }, []);
 
-  const makeCoordsRelativeToInner = React.useCallback(
-    (coords) => {
-      let x = coords.x - innerSize.left;
-      let y = coords.y - innerSize.top;
+  const { sizedInnerWidth, sizedInnerHeight } = React.useMemo(() => {
+    if (!zoomedInParams.initialized) {
       return {
-        x: clamp(x, 0, innerSize.width),
-        y: clamp(y, 0, innerSize.height),
+        sizedInnerWidth: 0,
+        sizedInnerHeight: 0,
       };
-    },
-    [innerSize]
-  );
+    }
+    return {
+      sizedInnerWidth: zoomedInParams.squareWidth * zoomedInParams.squarePx,
+      sizedInnerHeight: zoomedInParams.squareHeight * zoomedInParams.squarePx,
+    };
+  }, [zoomedInParams]);
+
   React.useEffect(() => {
     if (showLargeBoard) {
       if (!largeMounted) {
@@ -360,7 +291,7 @@ function Board({
 
   const zoomInOnBoard = React.useCallback(
     (e) => {
-      const elt = innerRef.current;
+      const elt = sizedInnerRef.current;
       if (!elt) {
         return;
       }
@@ -391,7 +322,7 @@ function Board({
 
   // zoom in on double click if we're zoomed out
   React.useEffect(() => {
-    const elt = innerRef.current;
+    const elt = sizedInnerRef.current;
     const handleDoubleClick = (e) => {
       if (showLargeBoard) {
         setShowLargeBoard(false);
@@ -400,11 +331,11 @@ function Board({
     };
     elt.addEventListener("dblclick", handleDoubleClick);
     return () => elt.removeEventListener("dblclick", handleDoubleClick);
-  }, [showLargeBoard, zoomInOnBoard]);
+  }, [setShowLargeBoard, showLargeBoard, zoomInOnBoard]);
 
   // handler for desktop zoom
   React.useEffect(() => {
-    const elt = innerRef.current;
+    const elt = sizedInnerRef.current;
     const handleWheel = (e) => {
       const doScroll = e.ctrlKey || e.metaKey;
       if (doScroll && e.deltaY > 0 && !showLargeBoard) {
@@ -419,17 +350,22 @@ function Board({
     };
     elt.addEventListener("wheel", handleWheel, { passive: false });
     return () => elt.removeEventListener("wheel", handleWheel);
-  }, [setCoords, showLargeBoard, zoomInOnBoard, zoomedOutParams]);
+  }, [
+    setCoords,
+    setShowLargeBoard,
+    showLargeBoard,
+    zoomInOnBoard,
+    zoomedOutParams,
+  ]);
 
   const touchStartState = React.useRef({
     touchStartDist: null,
     changed: false,
   });
   React.useEffect(() => {
-    const elt = innerRef.current;
+    const elt = sizedInnerRef.current;
 
     const handleTouchStart = (e) => {
-      console.log(e);
       if (e.touches.length !== 2) {
         touchStartState.current.touchStartDist = null;
         touchStartState.current.changed = false;
@@ -484,67 +420,70 @@ function Board({
       elt.removeEventListener("touchend", handleTouchEnd);
       elt.removeEventListener("touchmove", handleTouchMove);
     };
-  }, [showLargeBoard, zoomInOnBoard]);
+  }, [setShowLargeBoard, showLargeBoard, zoomInOnBoard]);
 
-  // CR nroyalty: we need to create ANOTHER wrapper inside INNER
-  // that respects our padding calculations and also hides elements outside
-  // of its view so that you can't see pieces that have moved off of the visible
-  // board!!
   return (
     <BoardContainer ref={boardContainerRef}>
-      <Inner ref={innerRef}>
-        {smallMounted && (
-          <BoardCanvas
-            coords={coords}
-            pxWidth={innerSize.width}
-            pxHeight={innerSize.height}
-            zoomedInParams={zoomedInParams}
-            moveableSquares={moveableSquares}
-            selectedPiece={selectedPiece}
-            opacity={smallOpacity}
-          />
-        )}
-        {largeMounted && (
-          <ZoomedOutOverview
-            pxWidth={innerSize.width}
-            pxHeight={innerSize.height}
-            coords={coords}
-            pieceHandler={pieceHandler}
-            opacity={largeOpacity}
-            sizeParams={zoomedOutParams}
-            largeBoardKillSwitch={largeBoardKillSwitch}
-          />
-        )}
-        <PanzoomBox
-          setCoords={setCoords}
-          clearSelectedPieceAndSquares={clearSelectedPieceAndSquares}
-          showLargeBoard={showLargeBoard}
-        />
-        {smallMounted && (
-          <>
-            <PieceDisplay
+      <Outer ref={outerRef}>
+        <SizedInner
+          style={{
+            "--width": `${sizedInnerWidth}px`,
+            "--height": `${sizedInnerHeight}px`,
+          }}
+          ref={sizedInnerRef}
+        >
+          {smallMounted && (
+            <BoardCanvas
               coords={coords}
-              handlePieceClick={handlePieceClick}
+              pxWidth={sizedInnerWidth}
+              pxHeight={sizedInnerHeight}
               zoomedInParams={zoomedInParams}
-              pieceHandler={pieceHandler}
-              opacity={smallOpacity}
-              hidden={smallHidden}
-              selectedPiece={selectedPiece}
-              setSelectedPiece={setSelectedPiece}
-              makeCoordsRelativeToInner={makeCoordsRelativeToInner}
-              clearSelectedPieceAndSquares={clearSelectedPieceAndSquares}
-            />
-            <PieceMoveButtons
               moveableSquares={moveableSquares}
-              coords={coords}
-              zoomedInParams={zoomedInParams}
-              moveAndClear={moveAndClear}
               selectedPiece={selectedPiece}
               opacity={smallOpacity}
             />
-          </>
-        )}
-      </Inner>
+          )}
+          {largeMounted && (
+            <ZoomedOutOverview
+              pxWidth={sizedInnerWidth}
+              pxHeight={sizedInnerHeight}
+              coords={coords}
+              pieceHandler={pieceHandler}
+              opacity={largeOpacity}
+              sizeParams={zoomedOutParams}
+              largeBoardKillSwitch={largeBoardKillSwitch}
+            />
+          )}
+          <PanzoomBox
+            setCoords={setCoords}
+            clearSelectedPieceAndSquares={clearSelectedPieceAndSquares}
+            showLargeBoard={showLargeBoard}
+          />
+          {smallMounted && (
+            <>
+              <PieceDisplay
+                coords={coords}
+                handlePieceClick={handlePieceClick}
+                zoomedInParams={zoomedInParams}
+                pieceHandler={pieceHandler}
+                opacity={smallOpacity}
+                hidden={smallHidden}
+                selectedPiece={selectedPiece}
+                setSelectedPiece={setSelectedPiece}
+                clearSelectedPieceAndSquares={clearSelectedPieceAndSquares}
+              />
+              <PieceMoveButtons
+                moveableSquares={moveableSquares}
+                coords={coords}
+                zoomedInParams={zoomedInParams}
+                moveAndClear={moveAndClear}
+                selectedPiece={selectedPiece}
+                opacity={smallOpacity}
+              />
+            </>
+          )}
+        </SizedInner>
+      </Outer>
       <BoardControls
         coords={coords}
         setCoords={setCoords}

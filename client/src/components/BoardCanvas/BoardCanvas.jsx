@@ -14,6 +14,8 @@ const Canvas = styled.canvas`
   left: 0;
   opacity: var(--opacity);
   transition: opacity 0.3s ease;
+  width: 100%;
+  height: 100%;
 `;
 
 // const BOARD_BORDER_COLOR = "#0a0a0a";
@@ -119,7 +121,14 @@ function BoardCanvas({
         }
       }
     }
-  }, [coords, zoomedInParams, moveableSquares, selectedPiece]);
+  }, [
+    coords,
+    zoomedInParams,
+    moveableSquares,
+    selectedPiece,
+    pxWidth,
+    pxHeight,
+  ]);
 
   return (
     <Canvas

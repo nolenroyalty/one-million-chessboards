@@ -13,25 +13,32 @@ export function useElementDimensions(ref) {
       return;
     }
     const elt = ref.current;
-    const bounds = elt.getBoundingClientRect();
-    setSize({
-      width: bounds.width,
-      height: bounds.height,
-      left: bounds.left,
-      top: bounds.top,
-    });
-    const handleResize = () => {
-      const bounds = elt.getBoundingClientRect();
-      setSize({
-        width: bounds.width,
-        height: bounds.height,
-        left: bounds.left,
-        top: bounds.top,
-      });
+    let timeout;
+
+    const updateDimensions = () => {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+      timeout = setTimeout(() => {
+        const bounds = elt.getBoundingClientRect();
+        setSize({
+          width: bounds.width,
+          height: bounds.height,
+          left: bounds.left,
+          top: bounds.top,
+        });
+      }, 50);
     };
-    window.addEventListener("resize", handleResize);
+
+    updateDimensions();
+    const resizeObserver = new ResizeObserver(updateDimensions);
+    resizeObserver.observe(elt);
+
+    window.addEventListener("resize", updateDimensions);
+
     return () => {
-      window.removeEventListener("resize", handleResize);
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateDimensions);
     };
   }, [ref]);
 

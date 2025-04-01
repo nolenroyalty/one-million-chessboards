@@ -148,8 +148,8 @@ export function getZoomedInScreenAbsoluteCoords({
   zoomedInParams,
 }) {
   return {
-    x: screenX * zoomedInParams.squarePx + zoomedInParams.leftPadding,
-    y: screenY * zoomedInParams.squarePx + zoomedInParams.topPadding,
+    x: screenX * zoomedInParams.squarePx,
+    y: screenY * zoomedInParams.squarePx,
   };
 }
 

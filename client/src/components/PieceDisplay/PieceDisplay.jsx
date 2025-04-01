@@ -166,8 +166,6 @@ function PieceDisplay({
   clearSelectedPieceAndSquares,
 }) {
   const { startingX, startingY, endingX, endingY } = React.useMemo(() => {
-    console.log("coords", coords);
-    console.log("zoomedInParams", zoomedInParams);
     return getStartingAndEndingCoords({
       coords,
       width: zoomedInParams.squareWidth,
