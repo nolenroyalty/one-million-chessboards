@@ -12,7 +12,6 @@ import {
   TYPE_TO_NAME,
 } from "../../utils";
 import PanzoomBox from "../PanzoomBox/PanzoomBox";
-import BoardControls from "../BoardControls/BoardControls";
 import useBoardSizeParams from "../../hooks/use-board-size-params";
 import HandlersContext from "../HandlersContext/HandlersContext";
 import CoordsContext from "../CoordsContext/CoordsContext";
@@ -349,7 +348,6 @@ function Board({ submitMove }) {
           )}
         </SizedInner>
       </Outer>
-      <BoardControls />
     </BoardContainer>
   );
 }

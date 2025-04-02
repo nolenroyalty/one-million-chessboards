@@ -1,6 +1,7 @@
 import React from "react";
 import styled from "styled-components";
 import Board from "../Board/Board";
+import BoardControls from "../BoardControls/BoardControls";
 import PieceHandler from "../../pieceHandler.js";
 import { createMoveRequest, keyToCoords } from "../../utils";
 import ChessPieceColorer from "../ChessPieceColorer/ChessPieceColorer";
@@ -12,6 +13,7 @@ import { HandlersContextProvider } from "../HandlersContext/HandlersContext";
 import { CoordsContextProvider } from "../CoordsContext/CoordsContext";
 import { ShowLargeBoardContextProvider } from "../ShowLargeBoardContext/ShowLargeBoardContext";
 import { SelectedPieceAndSquaresContextProvider } from "../SelectedPieceAndSquaresContext/SelectedPieceAndSquaresContext";
+
 const Main = styled.main`
   display: flex;
   flex-direction: column;
@@ -247,6 +249,7 @@ function App() {
               <BigHeader runBot={runBot} />
               {/* <ChessPieceColorer /> */}
               <Board submitMove={submitMove} />
+              <BoardControls />
             </Main>
           </SelectedPieceAndSquaresContextProvider>
         </ShowLargeBoardContextProvider>
