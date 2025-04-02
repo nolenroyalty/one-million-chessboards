@@ -9,6 +9,8 @@ import {
   computeAnimationDuration,
 } from "../../utils";
 import CoordsContext from "../CoordsContext/CoordsContext";
+import ShowLargeBoardContext from "../ShowLargeBoardContext/ShowLargeBoardContext";
+
 const MAX_ANIMATION_DURATION = 1200;
 const MIN_ANIMATION_DURATION = 500;
 const MAX_DMOVE = 25;
@@ -34,7 +36,7 @@ const ZoomCanvas = styled.canvas`
   image-rendering: pixelated;
 `;
 
-function ZoomedOutOverview({ opacity, boardSizeParams, largeBoardKillSwitch }) {
+function ZoomedOutOverview({ opacity, boardSizeParams }) {
   const { pieceHandler } = React.useContext(HandlersContext);
   const { coords } = React.useContext(CoordsContext);
   const pieceCanvasRef = React.useRef(null);
@@ -43,7 +45,7 @@ function ZoomedOutOverview({ opacity, boardSizeParams, largeBoardKillSwitch }) {
   const piecesRef = React.useRef(new Map(pieceHandler.current.getPieces()));
   const [forcePieceRerender, setForcePieceRerender] = React.useState(0);
   const recentMovesRef = React.useRef(new Map());
-  console.log("render");
+  const { largeBoardKillSwitch } = React.useContext(ShowLargeBoardContext);
 
   React.useEffect(() => {
     pieceHandler.current.subscribe({

@@ -10,6 +10,7 @@ import MinimapHandler from "../../minimapHandler.js";
 import StatsHandler from "../../statsHandler.js";
 import { HandlersContextProvider } from "../HandlersContext/HandlersContext";
 import { CoordsContextProvider } from "../CoordsContext/CoordsContext";
+import { ShowLargeBoardContextProvider } from "../ShowLargeBoardContext/ShowLargeBoardContext";
 
 const Main = styled.main`
   display: flex;
@@ -239,12 +240,14 @@ function App() {
         initialY={500}
         websocket={websocket}
       >
-        <Main>
-          <SmallHeader />
-          <BigHeader runBot={runBot} />
-          {/* <ChessPieceColorer /> */}
-          <Board submitMove={submitMove} />
-        </Main>
+        <ShowLargeBoardContextProvider>
+          <Main>
+            <SmallHeader />
+            <BigHeader runBot={runBot} />
+            {/* <ChessPieceColorer /> */}
+            <Board submitMove={submitMove} />
+          </Main>
+        </ShowLargeBoardContextProvider>
       </CoordsContextProvider>
     </HandlersContextProvider>
   );

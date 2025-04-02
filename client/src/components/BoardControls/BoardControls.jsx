@@ -22,6 +22,8 @@ import StatsDisplay from "../StatsDisplay/StatsDisplay";
 import ColorYouArePlaying from "../ColorYouArePlaying/ColorYouArePlaying";
 import { QUERY } from "../../constants";
 import CoordsContext from "../CoordsContext/CoordsContext";
+import ShowLargeBoardContext from "../ShowLargeBoardContext/ShowLargeBoardContext";
+
 const Wrapper = styled.div`
   width: 100%;
   --inner-height: 170px;
@@ -280,8 +282,11 @@ const YourStatSquareLabel = styled.p`
   line-height: 1;
 `;
 
-function AllBoardButtons({ setShowLargeBoard, showLargeBoard }) {
+function AllBoardButtons() {
   const { setCoords } = React.useContext(CoordsContext);
+  const { showLargeBoard, setShowLargeBoard } = React.useContext(
+    ShowLargeBoardContext
+  );
   const delta = showLargeBoard ? 4 : 1;
   return (
     <AllBoardButtonsWrapper>
@@ -423,7 +428,7 @@ function SelectedPiece({ selectedPiece }) {
   );
 }
 
-function BoardControls({ showLargeBoard, setShowLargeBoard, selectedPiece }) {
+function BoardControls({ selectedPiece }) {
   const [hide, setHide] = React.useState(false);
   // add hide functionality especially for mobile...
 
@@ -446,10 +451,7 @@ function BoardControls({ showLargeBoard, setShowLargeBoard, selectedPiece }) {
       <SelectedPiece selectedPiece={selectedPiece} />
       <StatsDisplay />
       <ColorYouArePlaying />
-      <AllBoardButtons
-        setShowLargeBoard={setShowLargeBoard}
-        showLargeBoard={showLargeBoard}
-      />
+      <AllBoardButtons />
       <By />
     </Wrapper>
   );

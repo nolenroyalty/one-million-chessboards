@@ -16,6 +16,8 @@ import BoardControls from "../BoardControls/BoardControls";
 import useBoardSizeParams from "../../hooks/use-board-size-params";
 import HandlersContext from "../HandlersContext/HandlersContext";
 import CoordsContext from "../CoordsContext/CoordsContext";
+import ShowLargeBoardContext from "../ShowLargeBoardContext/ShowLargeBoardContext";
+
 const BoardContainer = styled.div`
   display: flex;
   flex-direction: column;
@@ -62,27 +64,16 @@ function Board({ submitMove }) {
   const boardContainerRef = React.useRef(null);
   const outerRef = React.useRef(null);
   const sizedInnerRef = React.useRef(null);
-  const [showLargeBoard, _setShowLargeBoard] = React.useState(false);
   const [smallHidden, setSmallHidden] = React.useState(false);
   const [smallMounted, setSmallMounted] = React.useState(true);
   const [largeMounted, setLargeMounted] = React.useState(false);
   const [smallOpacity, setSmallOpacity] = React.useState(1);
   const [largeOpacity, setLargeOpacity] = React.useState(0);
-  const largeBoardKillSwitch = React.useRef(false);
   const { pieceHandler, statsHandler } = React.useContext(HandlersContext);
   const { coords, setCoords } = React.useContext(CoordsContext);
-  const setShowLargeBoard = React.useCallback(
-    (show) => {
-      _setShowLargeBoard(show);
-      if (show) {
-        largeBoardKillSwitch.current = false;
-      } else {
-        largeBoardKillSwitch.current = true;
-      }
-    },
-    [_setShowLargeBoard]
+  const { showLargeBoard, setShowLargeBoard } = React.useContext(
+    ShowLargeBoardContext
   );
-
   const boardSizeParams = useBoardSizeParams({ outerRef });
   const clearSelectedPieceAndSquares = React.useCallback(() => {
     setSelectedPiece(null);
@@ -358,12 +349,10 @@ function Board({ submitMove }) {
             <ZoomedOutOverview
               opacity={largeOpacity}
               boardSizeParams={boardSizeParams}
-              largeBoardKillSwitch={largeBoardKillSwitch}
             />
           )}
           <PanzoomBox
             clearSelectedPieceAndSquares={clearSelectedPieceAndSquares}
-            showLargeBoard={showLargeBoard}
           />
           {smallMounted && (
             <>
@@ -387,11 +376,7 @@ function Board({ submitMove }) {
           )}
         </SizedInner>
       </Outer>
-      <BoardControls
-        showLargeBoard={showLargeBoard}
-        setShowLargeBoard={setShowLargeBoard}
-        selectedPiece={selectedPiece}
-      />
+      <BoardControls selectedPiece={selectedPiece} />
     </BoardContainer>
   );
 }
