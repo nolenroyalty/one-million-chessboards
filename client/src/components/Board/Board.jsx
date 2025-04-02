@@ -17,17 +17,6 @@ import HandlersContext from "../HandlersContext/HandlersContext";
 import CoordsContext from "../CoordsContext/CoordsContext";
 import ShowLargeBoardContext from "../ShowLargeBoardContext/ShowLargeBoardContext";
 import SelectedPieceAndSquaresContext from "../SelectedPieceAndSquaresContext/SelectedPieceAndSquaresContext";
-const BoardContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  flex-grow: 1;
-  justify-content: space-between;
-  overflow: hidden;
-  gap: 0.5rem;
-`;
 
 const Outer = styled.div`
   width: 100%;
@@ -38,6 +27,7 @@ const Outer = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  flex-grow: 1;
 `;
 
 const fadeIn = keyframes`
@@ -62,7 +52,6 @@ function Board({ submitMove }) {
     SelectedPieceAndSquaresContext
   );
 
-  const boardContainerRef = React.useRef(null);
   const outerRef = React.useRef(null);
   const sizedInnerRef = React.useRef(null);
   const [smallHidden, setSmallHidden] = React.useState(false);
@@ -308,47 +297,45 @@ function Board({ submitMove }) {
   }, [setShowLargeBoard, showLargeBoard, zoomInOnBoard]);
 
   return (
-    <BoardContainer ref={boardContainerRef}>
-      <Outer ref={outerRef}>
-        <SizedInner
-          style={{
-            "--width": `${boardSizeParams.pxWidth}px`,
-            "--height": `${boardSizeParams.pxHeight}px`,
-          }}
-          ref={sizedInnerRef}
-        >
-          {smallMounted && (
-            <BoardCanvas
-              pxWidth={boardSizeParams.pxWidth}
-              pxHeight={boardSizeParams.pxHeight}
+    <Outer ref={outerRef}>
+      <SizedInner
+        style={{
+          "--width": `${boardSizeParams.pxWidth}px`,
+          "--height": `${boardSizeParams.pxHeight}px`,
+        }}
+        ref={sizedInnerRef}
+      >
+        {smallMounted && (
+          <BoardCanvas
+            pxWidth={boardSizeParams.pxWidth}
+            pxHeight={boardSizeParams.pxHeight}
+            boardSizeParams={boardSizeParams}
+            opacity={smallOpacity}
+          />
+        )}
+        {largeMounted && (
+          <ZoomedOutOverview
+            opacity={largeOpacity}
+            boardSizeParams={boardSizeParams}
+          />
+        )}
+        <PanzoomBox />
+        {smallMounted && (
+          <>
+            <PieceDisplay
               boardSizeParams={boardSizeParams}
               opacity={smallOpacity}
+              hidden={smallHidden}
             />
-          )}
-          {largeMounted && (
-            <ZoomedOutOverview
-              opacity={largeOpacity}
+            <PieceMoveButtons
               boardSizeParams={boardSizeParams}
+              moveAndClear={moveAndClear}
+              opacity={smallOpacity}
             />
-          )}
-          <PanzoomBox />
-          {smallMounted && (
-            <>
-              <PieceDisplay
-                boardSizeParams={boardSizeParams}
-                opacity={smallOpacity}
-                hidden={smallHidden}
-              />
-              <PieceMoveButtons
-                boardSizeParams={boardSizeParams}
-                moveAndClear={moveAndClear}
-                opacity={smallOpacity}
-              />
-            </>
-          )}
-        </SizedInner>
-      </Outer>
-    </BoardContainer>
+          </>
+        )}
+      </SizedInner>
+    </Outer>
   );
 }
 
