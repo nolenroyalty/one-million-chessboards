@@ -4,19 +4,11 @@ import BoardCanvas from "../BoardCanvas/BoardCanvas";
 import PieceDisplay from "../PieceDisplay/PieceDisplay";
 import PieceMoveButtons from "../PieceMoveButtons/PieceMoveButtons";
 import ZoomedOutOverview from "../ZoomedOutOverview/ZoomedOutOverview";
-import {
-  clamp,
-  incrementPieceMove,
-  incrementPieceCapture,
-  pieceKey,
-  TYPE_TO_NAME,
-} from "../../utils";
+import { clamp } from "../../utils";
 import PanzoomBox from "../PanzoomBox/PanzoomBox";
 import useBoardSizeParams from "../../hooks/use-board-size-params";
-import HandlersContext from "../HandlersContext/HandlersContext";
 import CoordsContext from "../CoordsContext/CoordsContext";
 import ShowLargeBoardContext from "../ShowLargeBoardContext/ShowLargeBoardContext";
-import SelectedPieceAndSquaresContext from "../SelectedPieceAndSquaresContext/SelectedPieceAndSquaresContext";
 
 const Outer = styled.div`
   width: 100%;
