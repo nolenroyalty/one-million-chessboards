@@ -48,10 +48,6 @@ const SizedInner = styled.div`
 `;
 
 function Board({ submitMove }) {
-  const { clearSelectedPiece } = React.useContext(
-    SelectedPieceAndSquaresContext
-  );
-
   const outerRef = React.useRef(null);
   const sizedInnerRef = React.useRef(null);
   const [smallHidden, setSmallHidden] = React.useState(false);
@@ -59,7 +55,6 @@ function Board({ submitMove }) {
   const [largeMounted, setLargeMounted] = React.useState(false);
   const [smallOpacity, setSmallOpacity] = React.useState(1);
   const [largeOpacity, setLargeOpacity] = React.useState(0);
-  const { pieceHandler, statsHandler } = React.useContext(HandlersContext);
   const { setCoords } = React.useContext(CoordsContext);
   const { showLargeBoard, setShowLargeBoard } = React.useContext(
     ShowLargeBoardContext
@@ -92,7 +87,6 @@ function Board({ submitMove }) {
         setSmallOpacity(0);
         setLargeOpacity(0);
       }
-      clearSelectedPiece();
       setSmallHidden(false);
       const opacityTimeout = setTimeout(() => {
         setSmallOpacity(1);
@@ -107,67 +101,7 @@ function Board({ submitMove }) {
         clearTimeout(opacityTimeout);
       };
     }
-  }, [showLargeBoard, largeMounted, smallMounted, clearSelectedPiece]);
-
-  const moveAndClear = React.useCallback(
-    ({ piece, toX, toY }) => {
-      let dMoves = 1;
-      let dWhitePieces = 0;
-      let dBlackPieces = 0;
-      let dWhiteKings = 0;
-      let dBlackKings = 0;
-      let incrLocalMoves = true;
-      let incrLocalCaptures = false;
-      incrementPieceMove(piece.id);
-      const toKey = pieceKey(toX, toY);
-      const pieces = pieceHandler.current.getPieces();
-      if (pieces.has(toKey)) {
-        incrementPieceCapture(piece.id);
-        incrLocalCaptures = true;
-        const capturedPiece = pieces.get(toKey);
-        if (capturedPiece) {
-          const pieceType = TYPE_TO_NAME[capturedPiece.type];
-          const isKing = pieceType === "king";
-          if (capturedPiece.isWhite) {
-            dWhitePieces--;
-            if (isKing) {
-              dWhiteKings--;
-            }
-          } else {
-            dBlackPieces--;
-            if (isKing) {
-              dBlackKings--;
-            }
-          }
-        }
-      }
-      statsHandler.current.applyLocalDelta({
-        dMoves,
-        dWhitePieces,
-        dBlackPieces,
-        dWhiteKings,
-        dBlackKings,
-        incrLocalMoves,
-        incrLocalCaptures,
-      });
-      submitMove({ piece, toX, toY });
-      clearSelectedPiece();
-    },
-    [statsHandler, submitMove, pieceHandler, clearSelectedPiece]
-  );
-
-  React.useEffect(() => {
-    // clear piece when escape is pressed
-    const handleEscape = (e) => {
-      if (e.key === "Escape") {
-        clearSelectedPiece();
-      }
-    };
-    window.addEventListener("keydown", handleEscape);
-    return () => {
-      window.removeEventListener("keydown", handleEscape);
-    };
-  }, [clearSelectedPiece]);
+  }, [showLargeBoard, largeMounted, smallMounted]);
 
   const zoomInOnBoard = React.useCallback(
     (e) => {
@@ -329,7 +263,7 @@ function Board({ submitMove }) {
             />
             <PieceMoveButtons
               boardSizeParams={boardSizeParams}
-              moveAndClear={moveAndClear}
+              submitMove={submitMove}
               opacity={smallOpacity}
             />
           </>
