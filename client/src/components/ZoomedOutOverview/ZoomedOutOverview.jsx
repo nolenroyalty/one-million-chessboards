@@ -1,5 +1,6 @@
 import React from "react";
 import styled from "styled-components";
+import HandlersContext from "../HandlersContext/HandlersContext";
 import {
   getStartingAndEndingCoords,
   getScreenRelativeCoords,
@@ -7,7 +8,7 @@ import {
   colorForPieceType,
   computeAnimationDuration,
 } from "../../utils";
-
+import CoordsContext from "../CoordsContext/CoordsContext";
 const MAX_ANIMATION_DURATION = 1200;
 const MIN_ANIMATION_DURATION = 500;
 const MAX_DMOVE = 25;
@@ -33,13 +34,9 @@ const ZoomCanvas = styled.canvas`
   image-rendering: pixelated;
 `;
 
-function ZoomedOutOverview({
-  coords,
-  pieceHandler,
-  opacity,
-  boardSizeParams,
-  largeBoardKillSwitch,
-}) {
+function ZoomedOutOverview({ opacity, boardSizeParams, largeBoardKillSwitch }) {
+  const { pieceHandler } = React.useContext(HandlersContext);
+  const { coords } = React.useContext(CoordsContext);
   const pieceCanvasRef = React.useRef(null);
   const boardCanvasRef = React.useRef(null);
   const animationCanvasRef = React.useRef(null);

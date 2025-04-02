@@ -1,5 +1,6 @@
 import React from "react";
 import styled from "styled-components";
+import CoordsContext from "../CoordsContext/CoordsContext";
 import {
   getStartingAndEndingCoords,
   getScreenRelativeCoords,
@@ -24,7 +25,6 @@ const MOVEABLE_SQUARE_COLOR = "#3b82f6";
 const SELECTED_PIECE_COLOR = "#fbbf24";
 
 function BoardCanvas({
-  coords,
   pxWidth,
   pxHeight,
   boardSizeParams,
@@ -33,6 +33,7 @@ function BoardCanvas({
   opacity,
 }) {
   const ref = React.useRef(null);
+  const { coords } = React.useContext(CoordsContext);
   React.useEffect(() => {
     if (!ref.current) {
       return;

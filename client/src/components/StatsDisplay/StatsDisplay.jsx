@@ -2,7 +2,7 @@ import React from "react";
 import styled from "styled-components";
 import BoardControlsPanel from "../BoardControlsPanel/BoardControlsPanel";
 import { clamp } from "../../utils";
-
+import HandlersContext from "../HandlersContext/HandlersContext";
 const Wrapper = styled(BoardControlsPanel)`
   display: flex;
   flex-direction: column;
@@ -159,7 +159,8 @@ function TextLines({ stats }) {
   );
 }
 
-function StatsDisplay({ statsHandler }) {
+function StatsDisplay() {
+  const { statsHandler } = React.useContext(HandlersContext);
   const [stats, setStats] = React.useState(statsHandler.current.getStats());
   React.useEffect(() => {
     statsHandler.current.subscribe({

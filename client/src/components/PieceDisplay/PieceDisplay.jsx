@@ -1,5 +1,7 @@
 import React from "react";
 import styled, { keyframes } from "styled-components";
+import HandlersContext from "../HandlersContext/HandlersContext";
+import CoordsContext from "../CoordsContext/CoordsContext";
 import {
   imageForPieceType,
   getStartingAndEndingCoords,
@@ -8,6 +10,7 @@ import {
   computeAnimationDuration,
   getZoomedInScreenAbsoluteCoords,
 } from "../../utils";
+import { CircleX } from "lucide-react";
 
 const MAX_ANIMATION_DURATION = 750;
 const MIN_ANIMATION_DURATION = 350;
@@ -136,6 +139,7 @@ const Piece = React.forwardRef(
         ref={ref}
       >
         <PieceImg className="chess-piece" src={src} style={imgStyle} />
+        {/* <CircleX style={imgStyle} /> */}
       </PieceButtonWrapper>
     );
   }
@@ -156,8 +160,6 @@ const __Piece = React.memo(Piece, (prevProps, nextProps) => {
 
 // CR nroyalty: make sure to deselect a piece if it's moved by another player
 function PieceDisplay({
-  pieceHandler,
-  coords,
   boardSizeParams,
   handlePieceClick,
   selectedPiece,
@@ -165,6 +167,8 @@ function PieceDisplay({
   opacity,
   clearSelectedPieceAndSquares,
 }) {
+  const { pieceHandler } = React.useContext(HandlersContext);
+  const { coords } = React.useContext(CoordsContext);
   const { startingX, startingY, endingX, endingY } = React.useMemo(() => {
     return getStartingAndEndingCoords({
       coords,
@@ -237,6 +241,10 @@ function PieceDisplay({
   ]);
 
   React.useEffect(() => {
+    console.log("ZZZ");
+    visiblePiecesAndIdsRef.current = getVisiblePiecesAndIds(
+      pieceHandler.current.getPieces()
+    );
     pieceHandler.current.subscribe({
       id: "piece-display",
       callback: (data) => {

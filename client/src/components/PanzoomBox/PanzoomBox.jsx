@@ -1,7 +1,7 @@
 import React from "react";
 import styled from "styled-components";
 import Panzoom from "@panzoom/panzoom";
-
+import CoordsContext from "../CoordsContext/CoordsContext";
 const PanzoomWrapper = styled.div`
   position: absolute;
   width: 100%;
@@ -9,11 +9,8 @@ const PanzoomWrapper = styled.div`
   inset: 0;
 `;
 
-function PanzoomBox({
-  setCoords,
-  clearSelectedPieceAndSquares,
-  showLargeBoard,
-}) {
+function PanzoomBox({ clearSelectedPieceAndSquares, showLargeBoard }) {
+  const { setCoords } = React.useContext(CoordsContext);
   const ref = React.useRef(null);
   const lastPanzoom = React.useRef({ lastX: 0, lastY: 0, accX: 0, accY: 0 });
   React.useEffect(() => {

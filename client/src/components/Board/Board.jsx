@@ -14,7 +14,8 @@ import {
 import PanzoomBox from "../PanzoomBox/PanzoomBox";
 import BoardControls from "../BoardControls/BoardControls";
 import useBoardSizeParams from "../../hooks/use-board-size-params";
-
+import HandlersContext from "../HandlersContext/HandlersContext";
+import CoordsContext from "../CoordsContext/CoordsContext";
 const BoardContainer = styled.div`
   display: flex;
   flex-direction: column;
@@ -55,14 +56,7 @@ const SizedInner = styled.div`
   position: relative;
 `;
 
-function Board({
-  coords,
-  submitMove,
-  setCoords,
-  pieceHandler,
-  minimapHandler,
-  statsHandler,
-}) {
+function Board({ submitMove }) {
   const [selectedPiece, setSelectedPiece] = React.useState(null);
   const [moveableSquares, setMoveableSquares] = React.useState(new Set());
   const boardContainerRef = React.useRef(null);
@@ -75,7 +69,8 @@ function Board({
   const [smallOpacity, setSmallOpacity] = React.useState(1);
   const [largeOpacity, setLargeOpacity] = React.useState(0);
   const largeBoardKillSwitch = React.useRef(false);
-
+  const { pieceHandler, statsHandler } = React.useContext(HandlersContext);
+  const { coords, setCoords } = React.useContext(CoordsContext);
   const setShowLargeBoard = React.useCallback(
     (show) => {
       _setShowLargeBoard(show);
@@ -351,7 +346,6 @@ function Board({
         >
           {smallMounted && (
             <BoardCanvas
-              coords={coords}
               pxWidth={boardSizeParams.pxWidth}
               pxHeight={boardSizeParams.pxHeight}
               boardSizeParams={boardSizeParams}
@@ -362,25 +356,20 @@ function Board({
           )}
           {largeMounted && (
             <ZoomedOutOverview
-              coords={coords}
-              pieceHandler={pieceHandler}
               opacity={largeOpacity}
               boardSizeParams={boardSizeParams}
               largeBoardKillSwitch={largeBoardKillSwitch}
             />
           )}
           <PanzoomBox
-            setCoords={setCoords}
             clearSelectedPieceAndSquares={clearSelectedPieceAndSquares}
             showLargeBoard={showLargeBoard}
           />
           {smallMounted && (
             <>
               <PieceDisplay
-                coords={coords}
                 handlePieceClick={handlePieceClick}
                 boardSizeParams={boardSizeParams}
-                pieceHandler={pieceHandler}
                 opacity={smallOpacity}
                 hidden={smallHidden}
                 selectedPiece={selectedPiece}
@@ -389,7 +378,6 @@ function Board({
               />
               <PieceMoveButtons
                 moveableSquares={moveableSquares}
-                coords={coords}
                 boardSizeParams={boardSizeParams}
                 moveAndClear={moveAndClear}
                 selectedPiece={selectedPiece}
@@ -400,13 +388,9 @@ function Board({
         </SizedInner>
       </Outer>
       <BoardControls
-        coords={coords}
-        setCoords={setCoords}
         showLargeBoard={showLargeBoard}
         setShowLargeBoard={setShowLargeBoard}
         selectedPiece={selectedPiece}
-        minimapHandler={minimapHandler}
-        statsHandler={statsHandler}
       />
     </BoardContainer>
   );

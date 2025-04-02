@@ -21,7 +21,7 @@ import Minimap from "../Minimap/Minimap";
 import StatsDisplay from "../StatsDisplay/StatsDisplay";
 import ColorYouArePlaying from "../ColorYouArePlaying/ColorYouArePlaying";
 import { QUERY } from "../../constants";
-
+import CoordsContext from "../CoordsContext/CoordsContext";
 const Wrapper = styled.div`
   width: 100%;
   --inner-height: 170px;
@@ -280,7 +280,8 @@ const YourStatSquareLabel = styled.p`
   line-height: 1;
 `;
 
-function AllBoardButtons({ setShowLargeBoard, showLargeBoard, setCoords }) {
+function AllBoardButtons({ setShowLargeBoard, showLargeBoard }) {
+  const { setCoords } = React.useContext(CoordsContext);
   const delta = showLargeBoard ? 4 : 1;
   return (
     <AllBoardButtonsWrapper>
@@ -422,15 +423,7 @@ function SelectedPiece({ selectedPiece }) {
   );
 }
 
-function BoardControls({
-  coords,
-  setCoords,
-  showLargeBoard,
-  setShowLargeBoard,
-  selectedPiece,
-  minimapHandler,
-  statsHandler,
-}) {
+function BoardControls({ showLargeBoard, setShowLargeBoard, selectedPiece }) {
   const [hide, setHide] = React.useState(false);
   // add hide functionality especially for mobile...
 
@@ -449,18 +442,13 @@ function BoardControls({
 
   return (
     <Wrapper style={{ "--translate-y": hide ? "100%" : "0%" }}>
-      <Minimap
-        coords={coords}
-        setCoords={setCoords}
-        minimapHandler={minimapHandler}
-      />
+      <Minimap />
       <SelectedPiece selectedPiece={selectedPiece} />
-      <StatsDisplay statsHandler={statsHandler} />
+      <StatsDisplay />
       <ColorYouArePlaying />
       <AllBoardButtons
         setShowLargeBoard={setShowLargeBoard}
         showLargeBoard={showLargeBoard}
-        setCoords={setCoords}
       />
       <By />
     </Wrapper>

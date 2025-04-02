@@ -4,7 +4,8 @@ import BoardControlsPanel from "../BoardControlsPanel/BoardControlsPanel";
 import { useElementDimensions } from "../../hooks/use-element-dimensions";
 import { clamp } from "../../utils";
 import { QUERY } from "../../constants";
-
+import HandlersContext from "../HandlersContext/HandlersContext";
+import CoordsContext from "../CoordsContext/CoordsContext";
 const WHITE_ADVANTAGE_COLORS_HEX = ["#9ca3af", "#d1d5db", "#e5e7eb"];
 const BLACK_ADVANTAGE_COLORS_HEX = ["#4b5563", "#374151", "#1f2937"];
 const MINIMAP_RECT_STROKE_OUTER_COLOR = "#0a0a0a";
@@ -97,10 +98,11 @@ const DrawingCanvas = styled.canvas`
 
 const MINIMAP_DOT_SIZE = 10;
 
-function MinimapCanvas({ coords, setCoords, minimapHandler }) {
+function MinimapCanvas({ coords, setCoords }) {
   const coordsCanvasRef = React.useRef(null);
   const elementDimensions = useElementDimensions(coordsCanvasRef);
   const minimapDataCanvasRef = React.useRef(null);
+  const { minimapHandler } = React.useContext(HandlersContext);
 
   const [minimapState, setMinimapState] = React.useState(
     minimapHandler.current.getState()
@@ -201,7 +203,9 @@ function MinimapCanvas({ coords, setCoords, minimapHandler }) {
   );
 }
 
-function Minimap({ coords, setCoords, minimapHandler }) {
+function Minimap() {
+  const { coords, setCoords } = React.useContext(CoordsContext);
+  const { minimapHandler } = React.useContext(HandlersContext);
   return (
     <Wrapper>
       <CoordsDisplay coords={coords} />

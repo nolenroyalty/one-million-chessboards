@@ -8,6 +8,8 @@ import BigHeader from "../BigHeader/BigHeader.jsx";
 import SmallHeader from "../SmallHeader/SmallHeader.jsx";
 import MinimapHandler from "../../minimapHandler.js";
 import StatsHandler from "../../statsHandler.js";
+import { HandlersContextProvider } from "../HandlersContext/HandlersContext";
+import { CoordsContextProvider } from "../CoordsContext/CoordsContext";
 
 const Main = styled.main`
   display: flex;
@@ -96,8 +98,8 @@ function useStartBot({ pieceHandler, submitMove, started }) {
 }
 
 function App() {
+  console.log("APP");
   const [websocket, setWebsocket] = React.useState(null);
-  const [coords, setCoords] = React.useState({ x: 500, y: 500 });
   const statsHandler = React.useRef(new StatsHandler());
   const pieceHandler = React.useRef(
     new PieceHandler({ statsHandler: statsHandler.current })
@@ -226,33 +228,25 @@ function App() {
     };
   }, []);
 
-  React.useEffect(() => {
-    // CR nroyalty: debounce this...
-    if (websocket) {
-      websocket.send(
-        JSON.stringify({
-          type: "subscribe",
-          centerX: coords.x,
-          centerY: coords.y,
-        })
-      );
-    }
-  }, [websocket, coords]);
-
   return (
-    <Main>
-      <SmallHeader />
-      <BigHeader runBot={runBot} />
-      {/* <ChessPieceColorer /> */}
-      <Board
-        coords={coords}
-        submitMove={submitMove}
-        setCoords={setCoords}
-        pieceHandler={pieceHandler}
-        minimapHandler={minimapHandler}
-        statsHandler={statsHandler}
-      />
-    </Main>
+    <HandlersContextProvider
+      statsHandler={statsHandler}
+      pieceHandler={pieceHandler}
+      minimapHandler={minimapHandler}
+    >
+      <CoordsContextProvider
+        initialX={500}
+        initialY={500}
+        websocket={websocket}
+      >
+        <Main>
+          <SmallHeader />
+          <BigHeader runBot={runBot} />
+          {/* <ChessPieceColorer /> */}
+          <Board submitMove={submitMove} />
+        </Main>
+      </CoordsContextProvider>
+    </HandlersContextProvider>
   );
 }
 
