@@ -2,6 +2,7 @@ import React from "react";
 import styled, { keyframes } from "styled-components";
 import HandlersContext from "../HandlersContext/HandlersContext";
 import CoordsContext from "../CoordsContext/CoordsContext";
+import SelectedPieceAndSquaresContext from "../SelectedPieceAndSquaresContext/SelectedPieceAndSquaresContext";
 import {
   imageForPieceType,
   getStartingAndEndingCoords,
@@ -159,16 +160,11 @@ const __Piece = React.memo(Piece, (prevProps, nextProps) => {
 });
 
 // CR nroyalty: make sure to deselect a piece if it's moved by another player
-function PieceDisplay({
-  boardSizeParams,
-  handlePieceClick,
-  selectedPiece,
-  hidden,
-  opacity,
-  clearSelectedPieceAndSquares,
-}) {
+function PieceDisplay({ boardSizeParams, hidden, opacity }) {
   const { pieceHandler } = React.useContext(HandlersContext);
   const { coords } = React.useContext(CoordsContext);
+  const { selectedPiece, clearSelectedPiece, setSelectedPiece } =
+    React.useContext(SelectedPieceAndSquaresContext);
   const { startingX, startingY, endingX, endingY } = React.useMemo(() => {
     return getStartingAndEndingCoords({
       coords,
@@ -241,7 +237,6 @@ function PieceDisplay({
   ]);
 
   React.useEffect(() => {
-    console.log("ZZZ");
     visiblePiecesAndIdsRef.current = getVisiblePiecesAndIds(
       pieceHandler.current.getPieces()
     );
@@ -250,13 +245,13 @@ function PieceDisplay({
       callback: (data) => {
         data.recentMoves.forEach((move) => {
           if (move.pieceId === selectedPiece?.id) {
-            clearSelectedPieceAndSquares();
+            clearSelectedPiece();
           }
           recentMoveByPieceIdRef.current.set(move.pieceId, move);
         });
         data.recentCaptures.forEach((capture) => {
           if (capture.capturedPieceId === selectedPiece?.id) {
-            clearSelectedPieceAndSquares();
+            clearSelectedPiece();
           }
         });
         const nowVisiblePiecesAndIds = getVisiblePiecesAndIds(data.pieces);
@@ -276,12 +271,7 @@ function PieceDisplay({
         id: "piece-display",
       });
     };
-  }, [
-    getVisiblePiecesAndIds,
-    pieceHandler,
-    selectedPiece?.id,
-    clearSelectedPieceAndSquares,
-  ]);
+  }, [getVisiblePiecesAndIds, pieceHandler, selectedPiece, clearSelectedPiece]);
 
   const getAnimatedCoords = React.useCallback(({ pieceId, now }) => {
     const recentMove = recentMoveByPieceIdRef.current.get(pieceId);
@@ -318,10 +308,10 @@ function PieceDisplay({
   const maybeHandlePieceClick = React.useCallback(
     (piece) => {
       if (!hidden) {
-        handlePieceClick(piece);
+        setSelectedPiece(piece);
       }
     },
-    [hidden, handlePieceClick]
+    [hidden, setSelectedPiece]
   );
 
   React.useEffect(() => {

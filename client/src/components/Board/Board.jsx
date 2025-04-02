@@ -17,7 +17,7 @@ import useBoardSizeParams from "../../hooks/use-board-size-params";
 import HandlersContext from "../HandlersContext/HandlersContext";
 import CoordsContext from "../CoordsContext/CoordsContext";
 import ShowLargeBoardContext from "../ShowLargeBoardContext/ShowLargeBoardContext";
-
+import SelectedPieceAndSquaresContext from "../SelectedPieceAndSquaresContext/SelectedPieceAndSquaresContext";
 const BoardContainer = styled.div`
   display: flex;
   flex-direction: column;
@@ -59,8 +59,10 @@ const SizedInner = styled.div`
 `;
 
 function Board({ submitMove }) {
-  const [selectedPiece, setSelectedPiece] = React.useState(null);
-  const [moveableSquares, setMoveableSquares] = React.useState(new Set());
+  const { clearSelectedPiece } = React.useContext(
+    SelectedPieceAndSquaresContext
+  );
+
   const boardContainerRef = React.useRef(null);
   const outerRef = React.useRef(null);
   const sizedInnerRef = React.useRef(null);
@@ -70,15 +72,11 @@ function Board({ submitMove }) {
   const [smallOpacity, setSmallOpacity] = React.useState(1);
   const [largeOpacity, setLargeOpacity] = React.useState(0);
   const { pieceHandler, statsHandler } = React.useContext(HandlersContext);
-  const { coords, setCoords } = React.useContext(CoordsContext);
+  const { setCoords } = React.useContext(CoordsContext);
   const { showLargeBoard, setShowLargeBoard } = React.useContext(
     ShowLargeBoardContext
   );
   const boardSizeParams = useBoardSizeParams({ outerRef });
-  const clearSelectedPieceAndSquares = React.useCallback(() => {
-    setSelectedPiece(null);
-    setMoveableSquares(new Set());
-  }, []);
 
   React.useEffect(() => {
     if (showLargeBoard) {
@@ -106,7 +104,7 @@ function Board({ submitMove }) {
         setSmallOpacity(0);
         setLargeOpacity(0);
       }
-      clearSelectedPieceAndSquares();
+      clearSelectedPiece();
       setSmallHidden(false);
       const opacityTimeout = setTimeout(() => {
         setSmallOpacity(1);
@@ -121,12 +119,7 @@ function Board({ submitMove }) {
         clearTimeout(opacityTimeout);
       };
     }
-  }, [
-    showLargeBoard,
-    largeMounted,
-    smallMounted,
-    clearSelectedPieceAndSquares,
-  ]);
+  }, [showLargeBoard, largeMounted, smallMounted, clearSelectedPiece]);
 
   const moveAndClear = React.useCallback(
     ({ piece, toX, toY }) => {
@@ -170,33 +163,23 @@ function Board({ submitMove }) {
         incrLocalCaptures,
       });
       submitMove({ piece, toX, toY });
-      setSelectedPiece(null);
-      setMoveableSquares(new Set());
+      clearSelectedPiece();
     },
-    [statsHandler, submitMove, pieceHandler]
-  );
-
-  const handlePieceClick = React.useCallback(
-    (piece) => {
-      setSelectedPiece(piece);
-      const moveableSquares = pieceHandler.current.getMoveableSquares(piece);
-      setMoveableSquares(moveableSquares);
-    },
-    [pieceHandler]
+    [statsHandler, submitMove, pieceHandler, clearSelectedPiece]
   );
 
   React.useEffect(() => {
     // clear piece when escape is pressed
     const handleEscape = (e) => {
       if (e.key === "Escape") {
-        clearSelectedPieceAndSquares();
+        clearSelectedPiece();
       }
     };
     window.addEventListener("keydown", handleEscape);
     return () => {
       window.removeEventListener("keydown", handleEscape);
     };
-  }, [clearSelectedPieceAndSquares]);
+  }, [clearSelectedPiece]);
 
   const zoomInOnBoard = React.useCallback(
     (e) => {
@@ -340,8 +323,6 @@ function Board({ submitMove }) {
               pxWidth={boardSizeParams.pxWidth}
               pxHeight={boardSizeParams.pxHeight}
               boardSizeParams={boardSizeParams}
-              moveableSquares={moveableSquares}
-              selectedPiece={selectedPiece}
               opacity={smallOpacity}
             />
           )}
@@ -351,32 +332,24 @@ function Board({ submitMove }) {
               boardSizeParams={boardSizeParams}
             />
           )}
-          <PanzoomBox
-            clearSelectedPieceAndSquares={clearSelectedPieceAndSquares}
-          />
+          <PanzoomBox />
           {smallMounted && (
             <>
               <PieceDisplay
-                handlePieceClick={handlePieceClick}
                 boardSizeParams={boardSizeParams}
                 opacity={smallOpacity}
                 hidden={smallHidden}
-                selectedPiece={selectedPiece}
-                setSelectedPiece={setSelectedPiece}
-                clearSelectedPieceAndSquares={clearSelectedPieceAndSquares}
               />
               <PieceMoveButtons
-                moveableSquares={moveableSquares}
                 boardSizeParams={boardSizeParams}
                 moveAndClear={moveAndClear}
-                selectedPiece={selectedPiece}
                 opacity={smallOpacity}
               />
             </>
           )}
         </SizedInner>
       </Outer>
-      <BoardControls selectedPiece={selectedPiece} />
+      <BoardControls />
     </BoardContainer>
   );
 }

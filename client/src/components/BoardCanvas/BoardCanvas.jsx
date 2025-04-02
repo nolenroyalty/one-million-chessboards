@@ -8,7 +8,7 @@ import {
   pieceKey,
   getSquareColor,
 } from "../../utils";
-
+import SelectedPieceAndSquaresContext from "../SelectedPieceAndSquaresContext/SelectedPieceAndSquaresContext";
 const Canvas = styled.canvas`
   position: absolute;
   top: 0;
@@ -24,16 +24,12 @@ const BOARD_BORDER_COLOR = "#171717";
 const MOVEABLE_SQUARE_COLOR = "#3b82f6";
 const SELECTED_PIECE_COLOR = "#fbbf24";
 
-function BoardCanvas({
-  pxWidth,
-  pxHeight,
-  boardSizeParams,
-  moveableSquares,
-  selectedPiece,
-  opacity,
-}) {
+function BoardCanvas({ pxWidth, pxHeight, boardSizeParams, opacity }) {
   const ref = React.useRef(null);
   const { coords } = React.useContext(CoordsContext);
+  const { moveableSquares, selectedPiece } = React.useContext(
+    SelectedPieceAndSquaresContext
+  );
   React.useEffect(() => {
     if (!ref.current) {
       return;

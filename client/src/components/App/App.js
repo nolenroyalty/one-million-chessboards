@@ -11,7 +11,7 @@ import StatsHandler from "../../statsHandler.js";
 import { HandlersContextProvider } from "../HandlersContext/HandlersContext";
 import { CoordsContextProvider } from "../CoordsContext/CoordsContext";
 import { ShowLargeBoardContextProvider } from "../ShowLargeBoardContext/ShowLargeBoardContext";
-
+import { SelectedPieceAndSquaresContextProvider } from "../SelectedPieceAndSquaresContext/SelectedPieceAndSquaresContext";
 const Main = styled.main`
   display: flex;
   flex-direction: column;
@@ -241,12 +241,14 @@ function App() {
         websocket={websocket}
       >
         <ShowLargeBoardContextProvider>
-          <Main>
-            <SmallHeader />
-            <BigHeader runBot={runBot} />
-            {/* <ChessPieceColorer /> */}
-            <Board submitMove={submitMove} />
-          </Main>
+          <SelectedPieceAndSquaresContextProvider>
+            <Main>
+              <SmallHeader />
+              <BigHeader runBot={runBot} />
+              {/* <ChessPieceColorer /> */}
+              <Board submitMove={submitMove} />
+            </Main>
+          </SelectedPieceAndSquaresContextProvider>
         </ShowLargeBoardContextProvider>
       </CoordsContextProvider>
     </HandlersContextProvider>

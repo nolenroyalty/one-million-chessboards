@@ -3,6 +3,8 @@ import styled from "styled-components";
 import Panzoom from "@panzoom/panzoom";
 import CoordsContext from "../CoordsContext/CoordsContext";
 import ShowLargeBoardContext from "../ShowLargeBoardContext/ShowLargeBoardContext";
+import SelectedPieceAndSquaresContext from "../SelectedPieceAndSquaresContext/SelectedPieceAndSquaresContext";
+
 const PanzoomWrapper = styled.div`
   position: absolute;
   width: 100%;
@@ -10,9 +12,12 @@ const PanzoomWrapper = styled.div`
   inset: 0;
 `;
 
-function PanzoomBox({ clearSelectedPieceAndSquares }) {
+function PanzoomBox() {
   const { setCoords } = React.useContext(CoordsContext);
   const { showLargeBoard } = React.useContext(ShowLargeBoardContext);
+  const { clearSelectedPiece } = React.useContext(
+    SelectedPieceAndSquaresContext
+  );
 
   const ref = React.useRef(null);
   const lastPanzoom = React.useRef({ lastX: 0, lastY: 0, accX: 0, accY: 0 });
@@ -26,7 +31,7 @@ function PanzoomBox({ clearSelectedPieceAndSquares }) {
 
     const handlePanzoomStart = (e) => {
       console.log("panzoomstart");
-      clearSelectedPieceAndSquares();
+      clearSelectedPiece();
       lastPanzoom.current = {
         ...lastPanzoom.current,
         lastX: e.detail.x,
@@ -144,7 +149,7 @@ function PanzoomBox({ clearSelectedPieceAndSquares }) {
       elt.removeEventListener("panzoomend", handlePanzoomEnd);
       elt.removeEventListener("panzoompan", handlePanzoomPan);
     };
-  }, [setCoords, clearSelectedPieceAndSquares, showLargeBoard]);
+  }, [setCoords, showLargeBoard, clearSelectedPiece]);
   return <PanzoomWrapper ref={ref} />;
 }
 

@@ -23,7 +23,7 @@ import ColorYouArePlaying from "../ColorYouArePlaying/ColorYouArePlaying";
 import { QUERY } from "../../constants";
 import CoordsContext from "../CoordsContext/CoordsContext";
 import ShowLargeBoardContext from "../ShowLargeBoardContext/ShowLargeBoardContext";
-
+import SelectedPieceAndSquaresContext from "../SelectedPieceAndSquaresContext/SelectedPieceAndSquaresContext";
 const Wrapper = styled.div`
   width: 100%;
   --inner-height: 170px;
@@ -354,7 +354,8 @@ function StatSquare({ icon, getLabel }) {
   );
 }
 
-function SelectedPiece({ selectedPiece }) {
+function SelectedPiece() {
+  const { selectedPiece } = React.useContext(SelectedPieceAndSquaresContext);
   const imageSrc = React.useMemo(() => {
     if (!selectedPiece) {
       return null;
@@ -428,7 +429,7 @@ function SelectedPiece({ selectedPiece }) {
   );
 }
 
-function BoardControls({ selectedPiece }) {
+function BoardControls() {
   const [hide, setHide] = React.useState(false);
   // add hide functionality especially for mobile...
 
@@ -448,7 +449,7 @@ function BoardControls({ selectedPiece }) {
   return (
     <Wrapper style={{ "--translate-y": hide ? "100%" : "0%" }}>
       <Minimap />
-      <SelectedPiece selectedPiece={selectedPiece} />
+      <SelectedPiece />
       <StatsDisplay />
       <ColorYouArePlaying />
       <AllBoardButtons />

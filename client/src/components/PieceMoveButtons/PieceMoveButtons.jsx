@@ -1,5 +1,6 @@
 import React from "react";
 import CoordsContext from "../CoordsContext/CoordsContext";
+import SelectedPieceAndSquaresContext from "../SelectedPieceAndSquaresContext/SelectedPieceAndSquaresContext";
 import {
   keyToCoords,
   getStartingAndEndingCoords,
@@ -23,14 +24,11 @@ const MoveButton = styled.button`
   transition: opacity 0.3s ease-in-out;
 `;
 
-function PieceMoveButtons({
-  moveableSquares,
-  boardSizeParams,
-  selectedPiece,
-  moveAndClear,
-  hidden,
-}) {
+function PieceMoveButtons({ boardSizeParams, moveAndClear, hidden }) {
   const { coords } = React.useContext(CoordsContext);
+  const { selectedPiece, moveableSquares } = React.useContext(
+    SelectedPieceAndSquaresContext
+  );
   const { startingX, startingY } = getStartingAndEndingCoords({
     coords,
     width: boardSizeParams.squareWidth,
