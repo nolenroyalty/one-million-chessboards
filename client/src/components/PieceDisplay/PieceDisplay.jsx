@@ -388,30 +388,20 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
 
   React.useEffect(() => {
     let frameId;
+    const maybeSetRefTransform = (ref, x, y) => {
+      if (ref) {
+        const { x: absoluteX, y: absoluteY } = getZoomedInScreenAbsoluteCoords({
+          screenX: x,
+          screenY: y,
+          boardSizeParams,
+        });
+        ref.style.transform = `translate(${absoluteX}px, ${absoluteY}px)`;
+      }
+    };
     const loop = () => {
       frameId = requestAnimationFrame(loop);
       const now = performance.now();
       const toKeep = new Map();
-      const maybeSetRefTransform = (ref, x, y) => {
-        if (ref) {
-          const { x: absoluteX, y: absoluteY } =
-            getZoomedInScreenAbsoluteCoords({
-              screenX: x,
-              screenY: y,
-              boardSizeParams,
-            });
-          ref.style.transform = `translate(${absoluteX}px, ${absoluteY}px)`;
-          //   const newX = Math.round(absoluteX * 100) / 100;
-          //   const newY = Math.round(absoluteY * 100) / 100;
-          //   const lastX = ref.__lastX ?? -Infinity;
-          //   const lastY = ref.__lastY ?? -Infinity;
-          //   if (newX !== lastX || newY !== lastY) {
-          //     ref.__lastX = newX;
-          //     ref.__lastY = newY;
-          //     ref.style.transform = `translate(${newX}px, ${newY}px)`;
-          //   }
-        }
-      };
 
       for (const move of recentMoveByPieceIdRef.current.values()) {
         const ref = piecesRefsMap.current.get(move.pieceId);
