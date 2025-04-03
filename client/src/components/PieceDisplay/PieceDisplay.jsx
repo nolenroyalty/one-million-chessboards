@@ -12,11 +12,10 @@ import {
   getZoomedInScreenAbsoluteCoords,
 } from "../../utils";
 
-const MAX_ANIMATION_DURATION = 750;
+const MAX_ANIMATION_DURATION = 1000;
 const MIN_ANIMATION_DURATION = 350;
 const MAX_DMOVE = 15;
-
-// CR nroyalty: tombstones for recently captured pieces!
+const CAPTURE_ANIMATION_DURATION = 200;
 
 const PieceImg = styled.img`
   width: var(--size);
@@ -71,20 +70,20 @@ const CapturedPieceWrapper = styled.button`
   justify-content: center;
   width: var(--size);
   height: var(--size);
-  animation: ${AnimFadeout} 0.25s ease-in-out both 0.03s;
+  animation: ${AnimFadeout} ${CAPTURE_ANIMATION_DURATION}ms ease-in-out both;
   transform: translate(var(--x), var(--y));
 `;
 
-function CapturedPiece({ id, x, y, src, piece, size }) {
+function _CapturedPiece({ id, x, y, src, pieceX, pieceY, size }) {
   return (
     <CapturedPieceWrapper
       id={id}
       data-id={id}
-      data-piece-x={piece.x}
-      data-piece-y={piece.y}
+      data-piece-x={pieceX}
+      data-piece-y={pieceY}
       style={{
-        "--x": `${x * size}px`,
-        "--y": `${y * size}px`,
+        "--x": `${x}px`,
+        "--y": `${y}px`,
         "--size": `${size}px`,
       }}
     >
@@ -93,9 +92,9 @@ function CapturedPiece({ id, x, y, src, piece, size }) {
   );
 }
 
+const CapturedPiece = React.memo(_CapturedPiece);
+
 function _Piece({
-  x,
-  y,
   src,
   dataId,
   pieceX,
@@ -194,11 +193,12 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
   }, [coords, boardSizeParams]);
 
   const piecesRefsMap = React.useRef(new Map());
+  const capturedPiecesByIdRef = React.useRef(new Map());
+  const [forceUpdate, setForceUpdate] = React.useState(0);
 
   const recentMoveByPieceIdRef = React.useRef(
     initialMoveAnimationState(pieceHandler.current.getMoveMapByPieceId())
   );
-  const [forceUpdate, setForceUpdate] = React.useState(0);
 
   const isNotVisible = React.useCallback(
     ({ x, y }) => {
@@ -272,48 +272,81 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
       pieceHandler.current.getPieces()
     );
     setForceUpdate((prev) => prev + 1);
+
     pieceHandler.current.subscribe({
       id: "piece-display",
       callback: (data) => {
+        let doUpdate = false;
+        const capturesToAdd = [];
+        const movesToAdd = [];
+
         if (data.wasSnapshot) {
           const nowVisiblePiecesAndIds = getVisiblePiecesAndIds(data.pieces);
           const newIds = nowVisiblePiecesAndIds;
           const oldIds = visiblePiecesAndIdsRef.current;
           const sizeEqual = newIds.size === oldIds.size;
-          const contentEqual = () => {
-            for (const id of newIds.keys()) {
-              if (!oldIds.has(id)) {
-                return false;
+          if (!sizeEqual) {
+            doUpdate = true;
+          }
+          const now = performance.now();
+          visiblePiecesAndIdsRef.current = nowVisiblePiecesAndIds;
+
+          for (const oldId of oldIds.keys()) {
+            if (!newIds.has(oldId)) {
+              doUpdate = true;
+              const currentPiece = pieceHandler.current.getPieceById(oldId);
+              const oldPiece = oldIds.get(oldId);
+              if (!currentPiece && oldPiece) {
+                const alreadyCaptured =
+                  capturedPiecesByIdRef.current.has(oldId);
+                // reasonable chance that it's been captured and we haven't heard about it.
+                if (!alreadyCaptured) {
+                  console.log("SPECULATIVELY ADD CAPTURE");
+                  capturesToAdd.push({
+                    receivedAt: now,
+                    piece: oldPiece,
+                  });
+                }
               }
             }
-            return true;
-          };
-
-          if (!sizeEqual || !contentEqual()) {
-            setForceUpdate((prev) => prev + 1);
           }
-          visiblePiecesAndIdsRef.current = nowVisiblePiecesAndIds;
-        } else {
-          let doUpdate = false;
-          const now = performance.now();
-          data.recentMoves.forEach((move) => {
-            clearSelectedPieceForId(move.pieceId);
-            let animationState;
-            const prevAnimationState = getAnimatedCoords({
-              pieceId: move.pieceId,
-              now,
-            });
-            if (prevAnimationState) {
-              const fakeMove = {
-                ...move,
-                fromX: prevAnimationState.x,
-                fromY: prevAnimationState.y,
-              };
-              animationState = makeMoveAnimationState(fakeMove);
+
+          for (const newId of newIds.keys()) {
+            if (!oldIds.has(newId)) {
+              doUpdate = true;
+              console.log("PIECE APPEARED?");
+              const newPiece = newIds.get(newId);
+              if (newPiece) {
+                // add a fake move to prevent us from putting the piece
+                // in the final spot and then animating it backawards
+                movesToAdd.push({
+                  fromX: newPiece.x,
+                  fromY: newPiece.y,
+                  toX: newPiece.x,
+                  toY: newPiece.y,
+                  pieceId: newId,
+                  receivedAt: now,
+                });
+              }
             } else {
-              animationState = makeMoveAnimationState(move);
+              const oldPiece = oldIds.get(newId);
+              const newPiece = newIds.get(newId);
+              if (oldPiece.x !== newPiece.x || oldPiece.y !== newPiece.y) {
+                console.log("SHOULD SPECULATIVELY ADD MOVE");
+                const move = {
+                  fromX: oldPiece.x,
+                  fromY: oldPiece.y,
+                  toX: newPiece.x,
+                  toY: newPiece.y,
+                  pieceId: newId,
+                  receivedAt: now,
+                };
+                movesToAdd.push(move);
+              }
             }
-            recentMoveByPieceIdRef.current.set(move.pieceId, animationState);
+          }
+        } else {
+          data.recentMoves.forEach((move) => {
             const visibleNow = !moveIsInvisible(move);
             const visibleBefore = visiblePiecesAndIdsRef.current.has(
               move.pieceId
@@ -326,29 +359,67 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
                 visiblePiecesAndIdsRef.current.set(move.pieceId, piece);
                 doUpdate = true;
               }
+              movesToAdd.push(move);
             } else if (visibleBefore && visibleNow) {
               const piece = pieceHandler.current.getPieceById(move.pieceId);
               if (piece) {
                 visiblePiecesAndIdsRef.current.set(move.pieceId, piece);
               }
+              movesToAdd.push(move);
             }
           });
 
           data.recentCaptures.forEach((capture) => {
-            clearSelectedPieceForId(capture.capturedPieceId);
-            const wasVisible = visiblePiecesAndIdsRef.current.has(
+            const piece = visiblePiecesAndIdsRef.current.get(
               capture.capturedPieceId
             );
 
-            if (wasVisible) {
+            if (piece) {
               visiblePiecesAndIdsRef.current.delete(capture.capturedPieceId);
               doUpdate = true;
+              capturesToAdd.push({
+                receivedAt: capture.receivedAt,
+                piece,
+              });
             }
           });
+        }
 
-          if (doUpdate) {
-            setForceUpdate((prev) => prev + 1);
+        const now = performance.now();
+        movesToAdd.forEach((move) => {
+          clearSelectedPieceForId(move.pieceId);
+          let animationState;
+          const prevAnimationState = getAnimatedCoords({
+            pieceId: move.pieceId,
+            now,
+          });
+          if (prevAnimationState) {
+            const fakeMove = {
+              ...move,
+              fromX: prevAnimationState.x,
+              fromY: prevAnimationState.y,
+            };
+            animationState = makeMoveAnimationState(fakeMove);
+          } else {
+            animationState = makeMoveAnimationState(move);
           }
+          recentMoveByPieceIdRef.current.set(move.pieceId, animationState);
+        });
+
+        if (capturesToAdd.length > 0) {
+          capturesToAdd.forEach((capture) => {
+            capturedPiecesByIdRef.current.set(capture.piece.id, capture);
+          });
+          for (const id of capturedPiecesByIdRef.current.keys()) {
+            const capture = capturedPiecesByIdRef.current.get(id);
+            if (now - capture.receivedAt > CAPTURE_ANIMATION_DURATION) {
+              capturedPiecesByIdRef.current.delete(id);
+            }
+          }
+        }
+
+        if (doUpdate) {
+          setForceUpdate((prev) => prev + 1);
         }
       },
     });
@@ -435,80 +506,121 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
     };
   }, [boardSizeParams, startingX, startingY, isNotVisible, getAnimatedCoords]);
 
-  const memoizedPieces = React.useMemo(() => {
-    const pieces = [];
-    const shutUpError = forceUpdate;
-    for (const piece of visiblePiecesAndIdsRef.current.values()) {
-      if (isInvisibleNowAndViaMove({ piece })) {
-        continue;
-      }
-      const now = performance.now();
-      let maybeAnimatedX = piece.x;
-      let maybeAnimatedY = piece.y;
+  const { capturedPieces, memoizedPieces } = React.useMemo(() => {
+    let shutupForceUpdate = forceUpdate;
+    const capturedPieces = [];
+    const memoizedPieces = [];
+    const now = performance.now();
+
+    const determineAbsoluteCoords = ({ pieceId, x, y }) => {
+      let maybeAnimatedX = x;
+      let maybeAnimatedY = y;
       const maybeAnimated = getAnimatedCoords({
-        pieceId: piece.id,
+        pieceId: pieceId,
         now,
       });
       if (maybeAnimated) {
         maybeAnimatedX = maybeAnimated.x;
         maybeAnimatedY = maybeAnimated.y;
       }
-      const { x, y } = getScreenRelativeCoords({
+      const { x: screenX, y: screenY } = getScreenRelativeCoords({
         x: maybeAnimatedX,
         y: maybeAnimatedY,
         startingX,
         startingY,
       });
-
       const { x: absoluteX, y: absoluteY } = getZoomedInScreenAbsoluteCoords({
-        screenX: x,
-        screenY: y,
+        screenX,
+        screenY,
         boardSizeParams,
       });
+      return { absoluteX, absoluteY };
+    };
 
-      const translate = `translate(${absoluteX}px, ${absoluteY}px)`;
+    for (const piece of visiblePiecesAndIdsRef.current.values()) {
+      if (isInvisibleNowAndViaMove({ piece })) {
+        continue;
+      }
+      const { absoluteX, absoluteY } = determineAbsoluteCoords({
+        pieceId: piece.id,
+        x: piece.x,
+        y: piece.y,
+      });
 
-      pieces.push({
+      memoizedPieces.push({
         piece,
         imageSrc: imageForPieceType({
           pieceType: piece.type,
           isWhite: piece.isWhite,
         }),
-        x,
-        y,
-        translate,
+        translate: `translate(${absoluteX}px, ${absoluteY}px)`,
         selected: piece.id === selectedPiece?.id,
       });
     }
-    return pieces;
+
+    for (const capture of capturedPiecesByIdRef.current.values()) {
+      const { absoluteX, absoluteY } = determineAbsoluteCoords({
+        pieceId: capture.piece.id,
+        x: capture.piece.x,
+        y: capture.piece.y,
+      });
+      capturedPieces.push({
+        piece: capture.piece,
+        x: absoluteX,
+        y: absoluteY,
+        src: imageForPieceType({
+          pieceType: capture.piece.type,
+          isWhite: capture.piece.isWhite,
+        }),
+      });
+    }
+
+    return { capturedPieces, memoizedPieces };
   }, [
-    getAnimatedCoords,
     isInvisibleNowAndViaMove,
+    getAnimatedCoords,
     startingX,
     startingY,
-    forceUpdate,
-    selectedPiece,
     boardSizeParams,
+    selectedPiece?.id,
+    forceUpdate,
   ]);
 
-  return memoizedPieces.map(({ piece, imageSrc, x, y, translate }) => {
-    return (
-      <Piece
-        key={piece.id}
-        savePieceRef={savePieceRef}
-        src={imageSrc}
-        dataId={piece.id}
-        x={x}
-        y={y}
-        translate={translate}
-        size={boardSizeParams.squarePx}
-        hidden={hidden}
-        opacity={opacity}
-        maybeHandlePieceClick={maybeHandlePieceClick}
-        selected={piece.id === selectedPiece?.id}
-      />
-    );
-  });
+  return (
+    <>
+      {capturedPieces.map(({ piece, x, y, src }) => {
+        return (
+          <CapturedPiece
+            key={piece.id}
+            x={x}
+            y={y}
+            src={src}
+            pieceX={piece.x}
+            pieceY={piece.y}
+            size={boardSizeParams.squarePx}
+          />
+        );
+      })}
+      {memoizedPieces.map(({ piece, imageSrc, x, y, translate }) => {
+        return (
+          <Piece
+            key={piece.id}
+            savePieceRef={savePieceRef}
+            src={imageSrc}
+            dataId={piece.id}
+            x={x}
+            y={y}
+            translate={translate}
+            size={boardSizeParams.squarePx}
+            hidden={hidden}
+            opacity={opacity}
+            maybeHandlePieceClick={maybeHandlePieceClick}
+            selected={piece.id === selectedPiece?.id}
+          />
+        );
+      })}
+    </>
+  );
 }
 
 export default PieceDisplay;
