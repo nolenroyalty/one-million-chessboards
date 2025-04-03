@@ -8,6 +8,12 @@ class MinimapHandler {
     this.subscribers.push({ id, callback });
   }
 
+  unsubscribe({ id }) {
+    this.subscribers = this.subscribers.filter(
+      (subscriber) => subscriber.id !== id
+    );
+  }
+
   broadcast({ state }) {
     this.state = state;
     this.subscribers.forEach(({ callback }) => {

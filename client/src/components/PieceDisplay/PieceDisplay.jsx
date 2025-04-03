@@ -95,68 +95,64 @@ function CapturedPiece({ id, x, y, src, piece, size }) {
     </CapturedPieceWrapper>
   );
 }
-const Piece = React.forwardRef(
-  (
-    {
-      x,
-      y,
-      src,
-      onClick,
-      dataId,
-      pieceX,
-      pieceY,
-      size,
-      hidden,
-      opacity,
-      selected,
-      translate,
-    },
-    ref
-  ) => {
-    const style = React.useMemo(() => {
-      return {
-        "--size": `${size}px`,
-        transform: translate,
-        "--opacity": opacity,
-        "--pointer-events": hidden ? "none" : "auto",
-        "--cursor": hidden ? "none" : "pointer",
-      };
-    }, [size, translate, opacity, hidden]);
 
-    const imgStyle = React.useMemo(() => {
-      return { "--transform": selected ? "scale(1.12)" : "scale(1)" };
-    }, [selected]);
+function _Piece({
+  x,
+  y,
+  src,
+  onClick,
+  dataId,
+  pieceX,
+  pieceY,
+  size,
+  hidden,
+  opacity,
+  selected,
+  translate,
+  pieceRef,
+}) {
+  const style = React.useMemo(() => {
+    return {
+      "--size": `${size}px`,
+      transform: translate,
+      "--opacity": opacity,
+      "--pointer-events": hidden ? "none" : "auto",
+      "--cursor": hidden ? "none" : "pointer",
+    };
+  }, [size, translate, opacity, hidden]);
 
-    return (
-      <PieceButtonWrapper
-        data-id={dataId}
-        data-piece-x={pieceX}
-        data-piece-y={pieceY}
-        // it's important that we use an inline style here because it lets
-        // us override that style from our animation handler and then automatically
-        // remove that overridden style when we re-render the piece
-        style={style}
-        onClick={onClick}
-        ref={ref}
-      >
-        <PieceImg className="chess-piece" src={src} style={imgStyle} />
-        {/* <CircleX style={imgStyle} /> */}
-      </PieceButtonWrapper>
-    );
-  }
-);
+  const imgStyle = React.useMemo(() => {
+    return { "--transform": selected ? "scale(1.12)" : "scale(1)" };
+  }, [selected]);
 
-const __Piece = React.memo(Piece, (prevProps, nextProps) => {
   return (
-    prevProps.dataId === nextProps.dataId &&
-    prevProps.piece.x === nextProps.piece.x &&
-    prevProps.piece.y === nextProps.piece.y &&
-    prevProps.src === nextProps.src &&
-    prevProps.selected === nextProps.selected &&
-    prevProps.hidden === nextProps.hidden &&
-    prevProps.opacity === nextProps.opacity &&
-    prevProps.size === nextProps.size
+    <PieceButtonWrapper
+      data-id={dataId}
+      data-piece-x={pieceX}
+      data-piece-y={pieceY}
+      // it's important that we use an inline style here because it lets
+      // us override that style from our animation handler and then automatically
+      // remove that overridden style when we re-render the piece
+      style={style}
+      onClick={onClick}
+      ref={pieceRef}
+    >
+      <PieceImg className="chess-piece" src={src} style={imgStyle} />
+      {/* <CircleX style={imgStyle} /> */}
+    </PieceButtonWrapper>
   );
+}
+
+const Piece = React.memo(_Piece, (prevProps, nextProps) => {
+  return true;
+  // prevProps.dataId === nextProps.dataId &&
+  // prevProps.piece.x === nextProps.piece.x &&
+  // prevProps.piece.y === nextProps.piece.y &&
+  // prevProps.src === nextProps.src &&
+  // prevProps.selected === nextProps.selected &&
+  // prevProps.hidden === nextProps.hidden &&
+  // prevProps.opacity === nextProps.opacity &&
+  // prevProps.size === nextProps.size
 });
 
 // CR nroyalty: make sure to deselect a piece if it's moved by another player
@@ -388,6 +384,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
   );
 
   const memoizedPieces = React.useMemo(() => {
+    console.log("memoizedPieces");
     const pieces = [];
     const shutUpError = forceUpdate;
     for (const piece of visiblePiecesAndIdsRef.current.pieces) {
@@ -452,9 +449,10 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
       return (
         <Piece
           key={piece.id}
-          ref={refFunc}
+          pieceRef={refFunc}
           piece={piece}
           src={imageSrc}
+          dataId={piece.id}
           x={x}
           y={y}
           translate={translate}

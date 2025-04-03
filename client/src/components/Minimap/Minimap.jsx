@@ -109,14 +109,15 @@ function MinimapCanvas({ coords, setCoords }) {
   );
 
   React.useEffect(() => {
-    minimapHandler.current.subscribe({
+    let minimap = minimapHandler.current;
+    minimap.subscribe({
       id: "minimap",
       callback: ({ state }) => {
         setMinimapState(state);
       },
     });
     return () => {
-      minimapHandler.current.unsubscribe({
+      minimap.unsubscribe({
         id: "minimap",
       });
     };

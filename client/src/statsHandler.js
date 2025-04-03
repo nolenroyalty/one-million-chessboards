@@ -54,6 +54,12 @@ class StatsHandler {
     this.subscribers.push({ id, callback });
   }
 
+  unsubscribe({ id }) {
+    this.subscribers = this.subscribers.filter(
+      (subscriber) => subscriber.id !== id
+    );
+  }
+
   getStats() {
     return {
       totalMoves:
