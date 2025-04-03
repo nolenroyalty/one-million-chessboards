@@ -12,7 +12,7 @@ import {
   getZoomedInScreenAbsoluteCoords,
 } from "../../utils";
 
-const MAX_ANIMATION_DURATION = 1000;
+const MAX_ANIMATION_DURATION = 750;
 const MIN_ANIMATION_DURATION = 350;
 const MAX_DMOVE = 15;
 const CAPTURE_ANIMATION_DURATION = 200;
