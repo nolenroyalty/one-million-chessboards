@@ -150,6 +150,7 @@ function PanzoomBox() {
       elt.removeEventListener("panzoompan", handlePanzoomPan);
     };
   }, [setCoords, showLargeBoard, clearSelectedPiece]);
+
   return <PanzoomWrapper ref={ref} />;
 }
 

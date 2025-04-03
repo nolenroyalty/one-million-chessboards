@@ -11,7 +11,6 @@ import {
   computeAnimationDuration,
   getZoomedInScreenAbsoluteCoords,
 } from "../../utils";
-import { CircleX } from "lucide-react";
 
 const MAX_ANIMATION_DURATION = 750;
 const MIN_ANIMATION_DURATION = 350;
@@ -100,7 +99,6 @@ function _Piece({
   x,
   y,
   src,
-  onClick,
   dataId,
   pieceX,
   pieceY,
@@ -109,7 +107,8 @@ function _Piece({
   opacity,
   selected,
   translate,
-  pieceRef,
+  savePieceRef,
+  maybeHandlePieceClick,
 }) {
   const style = React.useMemo(() => {
     return {
@@ -125,6 +124,17 @@ function _Piece({
     return { "--transform": selected ? "scale(1.12)" : "scale(1)" };
   }, [selected]);
 
+  const onClick = React.useCallback(() => {
+    maybeHandlePieceClick(dataId);
+  }, [maybeHandlePieceClick, dataId]);
+
+  const refFunc = React.useCallback(
+    (el) => {
+      savePieceRef(dataId, el);
+    },
+    [savePieceRef, dataId]
+  );
+
   return (
     <PieceButtonWrapper
       data-id={dataId}
@@ -135,7 +145,7 @@ function _Piece({
       // remove that overridden style when we re-render the piece
       style={style}
       onClick={onClick}
-      ref={pieceRef}
+      ref={refFunc}
     >
       <PieceImg className="chess-piece" src={src} style={imgStyle} />
       {/* <CircleX style={imgStyle} /> */}
@@ -143,17 +153,7 @@ function _Piece({
   );
 }
 
-const Piece = React.memo(_Piece, (prevProps, nextProps) => {
-  return true;
-  // prevProps.dataId === nextProps.dataId &&
-  // prevProps.piece.x === nextProps.piece.x &&
-  // prevProps.piece.y === nextProps.piece.y &&
-  // prevProps.src === nextProps.src &&
-  // prevProps.selected === nextProps.selected &&
-  // prevProps.hidden === nextProps.hidden &&
-  // prevProps.opacity === nextProps.opacity &&
-  // prevProps.size === nextProps.size
-});
+const Piece = React.memo(_Piece);
 
 // CR nroyalty: make sure to deselect a piece if it's moved by another player
 function PieceDisplay({ boardSizeParams, hidden, opacity }) {
@@ -302,9 +302,14 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
   }, []);
 
   const maybeHandlePieceClick = React.useCallback(
-    (piece) => {
+    (pieceId) => {
       if (!hidden) {
-        setSelectedPiece(piece);
+        const piece = visiblePiecesAndIdsRef.current.pieces.find(
+          (p) => p.id === pieceId
+        );
+        if (piece) {
+          setSelectedPiece(piece);
+        }
       }
     },
     [hidden, setSelectedPiece]
@@ -360,31 +365,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
     };
   }, [boardSizeParams, startingX, startingY, isNotVisible, getAnimatedCoords]);
 
-  const createOnClickHandler = React.useCallback(
-    (pieceId) => {
-      return (e) => {
-        const piece = visiblePiecesAndIdsRef.current.pieces.find(
-          (p) => p.id === pieceId
-        );
-        if (piece) {
-          maybeHandlePieceClick(piece);
-        }
-      };
-    },
-    [maybeHandlePieceClick]
-  );
-
-  const createRefFunc = React.useCallback(
-    (pieceId) => {
-      return (el) => {
-        savePieceRef(pieceId, el);
-      };
-    },
-    [savePieceRef]
-  );
-
   const memoizedPieces = React.useMemo(() => {
-    console.log("memoizedPieces");
     const pieces = [];
     const shutUpError = forceUpdate;
     for (const piece of visiblePiecesAndIdsRef.current.pieces) {
@@ -419,7 +400,6 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
 
       pieces.push({
         piece,
-        refFunc: createRefFunc(piece.id),
         imageSrc: imageForPieceType({
           pieceType: piece.type,
           isWhite: piece.isWhite,
@@ -427,14 +407,11 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
         x,
         y,
         translate,
-        onClick: createOnClickHandler(piece.id),
         selected: piece.id === selectedPiece?.id,
       });
     }
     return pieces;
   }, [
-    createOnClickHandler,
-    createRefFunc,
     getAnimatedCoords,
     isInvisibleNowAndViaMove,
     startingX,
@@ -444,27 +421,24 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
     boardSizeParams,
   ]);
 
-  return memoizedPieces.map(
-    ({ piece, refFunc, imageSrc, x, y, translate, onClick }) => {
-      return (
-        <Piece
-          key={piece.id}
-          pieceRef={refFunc}
-          piece={piece}
-          src={imageSrc}
-          dataId={piece.id}
-          x={x}
-          y={y}
-          translate={translate}
-          size={boardSizeParams.squarePx}
-          hidden={hidden}
-          opacity={opacity}
-          onClick={onClick}
-          selected={piece.id === selectedPiece?.id}
-        />
-      );
-    }
-  );
+  return memoizedPieces.map(({ piece, imageSrc, x, y, translate }) => {
+    return (
+      <Piece
+        key={piece.id}
+        savePieceRef={savePieceRef}
+        src={imageSrc}
+        dataId={piece.id}
+        x={x}
+        y={y}
+        translate={translate}
+        size={boardSizeParams.squarePx}
+        hidden={hidden}
+        opacity={opacity}
+        maybeHandlePieceClick={maybeHandlePieceClick}
+        selected={piece.id === selectedPiece?.id}
+      />
+    );
+  });
 }
 
 export default PieceDisplay;
