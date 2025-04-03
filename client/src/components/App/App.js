@@ -54,7 +54,7 @@ const Main = styled.main`
   background-size: 16px 16px;
 `;
 
-function useStartBot({ pieceHandler, submitMove, started }) {
+function useStartBot({ pieceHandler, submitMove, started, onlyId }) {
   React.useEffect(() => {
     if (!started) {
       return;
@@ -63,40 +63,65 @@ function useStartBot({ pieceHandler, submitMove, started }) {
     const loop = () => {
       let attempts = 0;
       let targetPiece, targetSquare;
-      for (let i = 0; i < 10; i++) {
-        while (attempts < 50) {
-          const pieces = Array.from(pieceHandler.current.getPieces().values());
-          const randomPiece = pieces[Math.floor(Math.random() * pieces.length)];
+      if (onlyId) {
+        const piece = pieceHandler.current.getPieceById(onlyId);
+        if (piece) {
+          targetPiece = piece;
           const moveableSquares =
-            pieceHandler.current.getMoveableSquares(randomPiece);
+            pieceHandler.current.getMoveableSquares(targetPiece);
           if (moveableSquares.size > 0) {
-            targetPiece = randomPiece;
             targetSquare =
               Array.from(moveableSquares)[
                 Math.floor(Math.random() * moveableSquares.size)
               ];
-            break;
+            const [x, y] = keyToCoords(targetSquare);
+            submitMove({
+              piece: targetPiece,
+              toX: x,
+              toY: y,
+            });
           }
-          attempts++;
         }
-        if (targetPiece && targetSquare) {
-          const [x, y] = keyToCoords(targetSquare);
-          submitMove({
-            piece: targetPiece,
-            toX: x,
-            toY: y,
-          });
+      } else {
+        for (let i = 0; i < 10; i++) {
+          while (attempts < 50) {
+            const pieces = Array.from(
+              pieceHandler.current.getPieces().values()
+            );
+            const randomPiece =
+              pieces[Math.floor(Math.random() * pieces.length)];
+            const moveableSquares =
+              pieceHandler.current.getMoveableSquares(randomPiece);
+            if (moveableSquares.size > 0) {
+              targetPiece = randomPiece;
+              targetSquare =
+                Array.from(moveableSquares)[
+                  Math.floor(Math.random() * moveableSquares.size)
+                ];
+              break;
+            }
+            attempts++;
+          }
+          if (targetPiece && targetSquare) {
+            const [x, y] = keyToCoords(targetSquare);
+            submitMove({
+              piece: targetPiece,
+              toX: x,
+              toY: y,
+            });
+          }
         }
       }
     };
+    const freq = onlyId ? 400 : 100;
     console.log("starting bot");
-    botInterval = setInterval(loop, 100);
+    botInterval = setInterval(loop, freq);
 
     return () => {
       console.log("stopping bot");
       clearInterval(botInterval);
     };
-  }, [pieceHandler, submitMove, started]);
+  }, [pieceHandler, submitMove, started, onlyId]);
 }
 
 function App() {

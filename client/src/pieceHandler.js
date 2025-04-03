@@ -4,6 +4,7 @@ class PieceHandler {
   constructor({ statsHandler }) {
     this.statsHandler = statsHandler;
     this.piecesByLocation = new Map();
+    this.piecesById = new Map();
     this.subscribers = [];
     this.moves = [];
     this.captures = [];
@@ -36,6 +37,10 @@ class PieceHandler {
     return this.piecesByLocation;
   }
 
+  getPieceById(id) {
+    return this.piecesById.get(id);
+  }
+
   getCaptures() {
     return this.captures;
   }
@@ -62,7 +67,7 @@ class PieceHandler {
     );
   }
 
-  _applyMove({ pieces, afterSeqnum, move }) {
+  _applyMove({ pieces, piecesById, afterSeqnum, move }) {
     if (move.seqNum <= afterSeqnum) {
       return { skip: true };
     }
@@ -81,26 +86,30 @@ class PieceHandler {
       moveState: move.moveState,
     };
     pieces.set(toKey, piece);
-
+    piecesById.set(move.pieceId, piece);
     return { skip: false };
   }
 
   _piecesOfSnapshot({ snapshot }) {
     const pieces = new Map();
+    const piecesById = new Map();
     snapshot.pieces.forEach((piece) => {
       pieces.set(pieceKey(piece.x, piece.y), piece);
+      piecesById.set(piece.id, piece);
     });
     return {
       pieces,
+      piecesById,
       startingSeqnum: snapshot.startingSeqnum,
       endingSeqnum: snapshot.endingSeqnum,
     };
   }
 
   handleSnapshot({ snapshot }) {
-    const { pieces, startingSeqnum, endingSeqnum } = this._piecesOfSnapshot({
-      snapshot,
-    });
+    const { pieces, piecesById, startingSeqnum, endingSeqnum } =
+      this._piecesOfSnapshot({
+        snapshot,
+      });
     const moves = this.filterBySeqnum({
       list: this.moves,
       afterSeqnum: startingSeqnum,
@@ -110,9 +119,10 @@ class PieceHandler {
       afterSeqnum: startingSeqnum,
     });
     moves.forEach((move) => {
-      this._applyMove({ pieces, move, afterSeqnum: 0 });
+      this._applyMove({ pieces, piecesById, move, afterSeqnum: 0 });
     });
     this.piecesByLocation = pieces;
+    this.piecesById = piecesById;
     this.moves = moves;
     this.snapshotSeqnum = { from: startingSeqnum, to: endingSeqnum };
     this.broadcast({ recentMoves: [], recentCaptures: [], wasSnapshot: true });
@@ -132,6 +142,7 @@ class PieceHandler {
     moves.forEach((move) => {
       const { skip } = this._applyMove({
         pieces: this.piecesByLocation,
+        piecesById: this.piecesById,
         move,
         afterSeqnum: this.snapshotSeqnum.from,
       });
@@ -151,6 +162,7 @@ class PieceHandler {
         this.addReceivedAt(capture, now);
         recentCaptures.push(capture);
         this.captures.push(capture);
+        this.piecesById.delete(capture.capturedPieceId);
         const pieceType = TYPE_TO_NAME[capture.capturedType];
         const wasKing = pieceType === "king";
         if (capture.wasWhite) {

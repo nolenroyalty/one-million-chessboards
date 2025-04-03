@@ -176,7 +176,6 @@ function initialMoveAnimationState(moveMapByPieceId) {
   return ret;
 }
 
-// CR nroyalty: make sure to deselect a piece if it's moved by another player
 function PieceDisplay({ boardSizeParams, hidden, opacity }) {
   const { pieceHandler } = React.useContext(HandlersContext);
   const { coords } = React.useContext(CoordsContext);
@@ -208,35 +207,40 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
     [startingX, startingY, endingX, endingY]
   );
 
-  const isInvisibleNowAndViaMove = React.useCallback(
-    ({ piece }) => {
-      const recentMove = recentMoveByPieceIdRef.current.get(piece.id);
-      if (recentMove) {
-        const { fromX, fromY, toX, toY } = recentMove;
-        const wasInvisible = isNotVisible({ x: fromX, y: fromY });
-        const willBeInvisible = isNotVisible({ x: toX, y: toY });
-        return wasInvisible && willBeInvisible;
-      }
-      return isNotVisible({ x: piece.x, y: piece.y });
+  const moveIsInvisible = React.useCallback(
+    (move) => {
+      const { fromX, fromY, toX, toY } = move;
+      return (
+        isNotVisible({ x: fromX, y: fromY }) && isNotVisible({ x: toX, y: toY })
+      );
     },
     [isNotVisible]
   );
 
+  const isInvisibleNowAndViaMove = React.useCallback(
+    ({ piece }) => {
+      const recentMove = recentMoveByPieceIdRef.current.get(piece.id);
+      if (recentMove) {
+        return moveIsInvisible(recentMove);
+      }
+      return isNotVisible({ x: piece.x, y: piece.y });
+    },
+    [isNotVisible, moveIsInvisible]
+  );
+
   const getVisiblePiecesAndIds = React.useCallback(
     (piecesMap) => {
-      const pieces = [];
-      const ids = new Set();
+      const map = new Map();
       for (const piece of piecesMap.values()) {
-        if (ids.has(piece.id)) {
+        if (map.has(piece.id)) {
           continue;
         }
         if (isInvisibleNowAndViaMove({ piece })) {
           continue;
         }
-        ids.add(piece.id);
-        pieces.push(piece);
+        map.set(piece.id, piece);
       }
-      return { pieces, ids };
+      return map;
     },
     [isInvisibleNowAndViaMove]
   );
@@ -244,53 +248,6 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
   const visiblePiecesAndIdsRef = React.useRef(
     getVisiblePiecesAndIds(pieceHandler.current.getPieces())
   );
-
-  React.useEffect(() => {
-    console.log("RESUB");
-    visiblePiecesAndIdsRef.current = getVisiblePiecesAndIds(
-      pieceHandler.current.getPieces()
-    );
-    setForceUpdate((prev) => prev + 1);
-    pieceHandler.current.subscribe({
-      id: "piece-display",
-      callback: (data) => {
-        // CR nroyalty: I'm too tired to do this right now, but we should
-        // check whether we're currently in the middle of an animation for a piece,
-        // and if so we should respect that animation when determining its next
-        // animation state (if we get a new one for the same piece)
-        data.recentMoves.forEach((move) => {
-          clearSelectedPieceForId(move.pieceId);
-          const animationState = makeMoveAnimationState(move);
-          recentMoveByPieceIdRef.current.set(move.pieceId, animationState);
-        });
-
-        data.recentCaptures.forEach((capture) => {
-          clearSelectedPieceForId(capture.capturedPieceId);
-        });
-
-        const nowVisiblePiecesAndIds = getVisiblePiecesAndIds(data.pieces);
-        const newIds = nowVisiblePiecesAndIds.ids;
-        const oldIds = visiblePiecesAndIdsRef.current.ids;
-        if (
-          newIds.size !== oldIds.size ||
-          ![...newIds].every((id) => oldIds.has(id))
-        ) {
-          setForceUpdate((prev) => prev + 1);
-        }
-        visiblePiecesAndIdsRef.current = nowVisiblePiecesAndIds;
-      },
-    });
-    return () => {
-      pieceHandler.current.unsubscribe({
-        id: "piece-display",
-      });
-    };
-  }, [
-    getVisiblePiecesAndIds,
-    pieceHandler,
-    clearSelectedPiece,
-    clearSelectedPieceForId,
-  ]);
 
   const getAnimatedCoords = React.useCallback(({ pieceId, now }) => {
     const recentMove = recentMoveByPieceIdRef.current.get(pieceId);
@@ -309,6 +266,106 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
     return null;
   }, []);
 
+  React.useEffect(() => {
+    console.log("RESUB");
+    visiblePiecesAndIdsRef.current = getVisiblePiecesAndIds(
+      pieceHandler.current.getPieces()
+    );
+    setForceUpdate((prev) => prev + 1);
+    pieceHandler.current.subscribe({
+      id: "piece-display",
+      callback: (data) => {
+        if (data.wasSnapshot) {
+          const nowVisiblePiecesAndIds = getVisiblePiecesAndIds(data.pieces);
+          const newIds = nowVisiblePiecesAndIds;
+          const oldIds = visiblePiecesAndIdsRef.current;
+          const sizeEqual = newIds.size === oldIds.size;
+          const contentEqual = () => {
+            for (const id of newIds.keys()) {
+              if (!oldIds.has(id)) {
+                return false;
+              }
+            }
+            return true;
+          };
+
+          if (!sizeEqual || !contentEqual()) {
+            setForceUpdate((prev) => prev + 1);
+          }
+          visiblePiecesAndIdsRef.current = nowVisiblePiecesAndIds;
+        } else {
+          let doUpdate = false;
+          const now = performance.now();
+          data.recentMoves.forEach((move) => {
+            clearSelectedPieceForId(move.pieceId);
+            let animationState;
+            const prevAnimationState = getAnimatedCoords({
+              pieceId: move.pieceId,
+              now,
+            });
+            if (prevAnimationState) {
+              const fakeMove = {
+                ...move,
+                fromX: prevAnimationState.x,
+                fromY: prevAnimationState.y,
+              };
+              animationState = makeMoveAnimationState(fakeMove);
+            } else {
+              animationState = makeMoveAnimationState(move);
+            }
+            recentMoveByPieceIdRef.current.set(move.pieceId, animationState);
+            const visibleNow = !moveIsInvisible(move);
+            const visibleBefore = visiblePiecesAndIdsRef.current.has(
+              move.pieceId
+            );
+            if (visibleBefore && !visibleNow) {
+              visiblePiecesAndIdsRef.current.delete(move.pieceId);
+            } else if (!visibleBefore && visibleNow) {
+              const piece = pieceHandler.current.getPieceById(move.pieceId);
+              if (piece) {
+                visiblePiecesAndIdsRef.current.set(move.pieceId, piece);
+                doUpdate = true;
+              }
+            } else if (visibleBefore && visibleNow) {
+              const piece = pieceHandler.current.getPieceById(move.pieceId);
+              if (piece) {
+                visiblePiecesAndIdsRef.current.set(move.pieceId, piece);
+              }
+            }
+          });
+
+          data.recentCaptures.forEach((capture) => {
+            clearSelectedPieceForId(capture.capturedPieceId);
+            const wasVisible = visiblePiecesAndIdsRef.current.has(
+              capture.capturedPieceId
+            );
+
+            if (wasVisible) {
+              visiblePiecesAndIdsRef.current.delete(capture.capturedPieceId);
+              doUpdate = true;
+            }
+          });
+
+          if (doUpdate) {
+            setForceUpdate((prev) => prev + 1);
+          }
+        }
+      },
+    });
+    return () => {
+      pieceHandler.current.unsubscribe({
+        id: "piece-display",
+      });
+    };
+  }, [
+    getVisiblePiecesAndIds,
+    pieceHandler,
+    clearSelectedPiece,
+    clearSelectedPieceForId,
+    moveIsInvisible,
+    getAnimatedCoords,
+  ]);
+
   const savePieceRef = React.useCallback((pieceId, ref) => {
     if (ref) {
       piecesRefsMap.current.set(pieceId, ref);
@@ -320,9 +377,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
   const maybeHandlePieceClick = React.useCallback(
     (pieceId) => {
       if (!hidden) {
-        const piece = visiblePiecesAndIdsRef.current.pieces.find(
-          (p) => p.id === pieceId
-        );
+        const piece = visiblePiecesAndIdsRef.current.get(pieceId);
         if (piece) {
           setSelectedPiece(piece);
         }
@@ -393,7 +448,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
   const memoizedPieces = React.useMemo(() => {
     const pieces = [];
     const shutUpError = forceUpdate;
-    for (const piece of visiblePiecesAndIdsRef.current.pieces) {
+    for (const piece of visiblePiecesAndIdsRef.current.values()) {
       if (isInvisibleNowAndViaMove({ piece })) {
         continue;
       }
