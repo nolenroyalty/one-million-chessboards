@@ -5,22 +5,20 @@ const CoordsContext = React.createContext();
 export function CoordsContextProvider({
   initialX,
   initialY,
-  websocket,
+  safelySendJSON,
+  connected,
   children,
 }) {
   const [coords, setCoords] = React.useState({ x: initialX, y: initialY });
   React.useEffect(() => {
     // CR nroyalty: debounce this...
-    if (websocket) {
-      websocket.send(
-        JSON.stringify({
-          type: "subscribe",
-          centerX: coords.x,
-          centerY: coords.y,
-        })
-      );
-    }
-  }, [websocket, coords]);
+    safelySendJSON({
+      type: "subscribe",
+      centerX: coords.x,
+      centerY: coords.y,
+    });
+  }, [coords, safelySendJSON, connected]);
+
   const value = React.useMemo(
     () => ({ coords, setCoords }),
     [coords, setCoords]

@@ -101,7 +101,8 @@ function useStartBot({ pieceHandler, submitMove, started }) {
 
 function App() {
   console.log("APP");
-  const [websocket, setWebsocket] = React.useState(null);
+  const websocketRef = React.useRef(null);
+  const [connected, setConnected] = React.useState(false);
   const statsHandler = React.useRef(new StatsHandler());
   const pieceHandler = React.useRef(
     new PieceHandler({ statsHandler: statsHandler.current })
@@ -109,16 +110,23 @@ function App() {
   const minimapHandler = React.useRef(new MinimapHandler());
   const [runBot, setRunBot] = React.useState(false);
 
+  const safelySendJSON = React.useCallback((json) => {
+    const ws = websocketRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify(json));
+      } catch (e) {
+        console.error("Error sending JSON", e);
+      }
+    }
+  }, []);
+
   const submitMove = React.useCallback(
     ({ piece, toX, toY }) => {
       const move = createMoveRequest(piece, toX, toY);
-      if (websocket) {
-        websocket.send(JSON.stringify(move));
-      } else {
-        console.log(`Cannot send move because we are not connected: ${move}`);
-      }
+      safelySendJSON(move);
     },
-    [websocket]
+    [safelySendJSON]
   );
 
   useStartBot({ pieceHandler, submitMove, started: runBot });
@@ -142,16 +150,27 @@ function App() {
     let reconnectTimeout = null;
     let connected = false;
     let pongInterval = null;
+    let killed = false;
 
     function connect() {
+      console.log("TRYING TO CONNECT - current WS", websocketRef.current);
       const protocol =
         window.location.protocol === "https:" ? "wss://" : "ws://";
       const hostname = window.location.host;
       const wsPath = "/ws";
       const wsUrl = `${protocol}${hostname}${wsPath}`;
+      if (websocketRef.current) {
+        console.log("closing existing websocket");
+        websocketRef.current.close();
+        websocketRef.current = null;
+      }
       const ws = new WebSocket(wsUrl);
+      websocketRef.current = ws;
 
-      ws.addEventListener("message", (event) => {
+      ws.onmessage = (event) => {
+        if (killed) {
+          return;
+        }
         // CR nroyalty: handle movement error / cancelation
         // CR nroyalty: move error handling is like "keep recent moves clientside
         // and send a move ID to the server; use that to figure out what to cancel"
@@ -169,28 +188,38 @@ function App() {
         } else if (data.type === "globalStats") {
           statsHandler.current.setGlobalStats({ stats: data });
         }
-      });
+      };
 
-      ws.addEventListener("open", () => {
+      ws.onopen = () => {
+        if (killed) {
+          return;
+        }
         console.log("Connected to server");
-        setWebsocket(ws);
         connected = true;
+        setConnected(true);
         failedReconnections.current = 0;
 
         pongInterval = setInterval(() => {
+          if (killed) {
+            return;
+          }
           ws.send(JSON.stringify({ type: "app-ping" }));
         }, 10000);
-      });
+      };
 
-      ws.addEventListener("error", (event) => {
+      ws.onerror = (event) => {
         console.log("websocket error", event);
-      });
+      };
 
-      ws.addEventListener("close", () => {
+      ws.onclose = () => {
+        if (killed) {
+          return;
+        }
         console.log("Disconnected from server");
         clearInterval(pongInterval);
-        setWebsocket(null);
+        websocketRef.current = null;
         connected = false;
+        setConnected(false);
         failedReconnections.current++;
         if (failedReconnections.current === 1) {
           connect();
@@ -207,26 +236,37 @@ function App() {
           console.log("Attempting to reconnect");
           connect();
         }, sleepTime);
-      });
+      };
     }
     connect();
 
-    document.addEventListener("visibilitychange", () => {
-      console.log("visibilitychange", document.visibilityState);
+    const reconnectOnVisibilityChange = () => {
       if (document.visibilityState === "visible" && !connected) {
         console.log("Reconnecting because we are visible");
         clearTimeout(reconnectTimeout);
         connect();
       }
-    });
+    };
+
+    document.addEventListener("visibilitychange", reconnectOnVisibilityChange);
 
     return () => {
+      const ws = websocketRef.current;
+      document.removeEventListener(
+        "visibilitychange",
+        reconnectOnVisibilityChange
+      );
+      killed = true;
       if (reconnectTimeout) {
         clearTimeout(reconnectTimeout);
       }
       if (pongInterval) {
         clearInterval(pongInterval);
       }
+      if (ws) {
+        ws.close();
+      }
+      websocketRef.current = null;
     };
   }, []);
 
@@ -239,7 +279,8 @@ function App() {
       <CoordsContextProvider
         initialX={500}
         initialY={500}
-        websocket={websocket}
+        safelySendJSON={safelySendJSON}
+        connected={connected}
       >
         <ShowLargeBoardContextProvider>
           <SelectedPieceAndSquaresContextProvider>

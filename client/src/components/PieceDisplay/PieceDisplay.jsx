@@ -31,7 +31,7 @@ const PieceImg = styled.img`
   &:hover {
     transform: scale(1.12);
   }
-  filter: url(#colorRemap) url(#binaryRemap);
+  /* filter: url(#colorRemap) url(#binaryRemap); */
 `;
 
 const PieceButtonWrapper = styled.button`
@@ -153,12 +153,39 @@ function _Piece({
 
 const Piece = React.memo(_Piece);
 
+function makeMoveAnimationState(move) {
+  const animationDuration = computeAnimationDuration({
+    moveDistance: Math.hypot(move.toX - move.fromX, move.toY - move.fromY),
+    maxAnimationDuration: MAX_ANIMATION_DURATION,
+    minAnimationDuration: MIN_ANIMATION_DURATION,
+    maxMoveDistance: MAX_DMOVE,
+  });
+  const endTime = move.receivedAt + animationDuration;
+  return {
+    ...move,
+    endTime,
+    animationDuration,
+  };
+}
+
+function initialMoveAnimationState(moveMapByPieceId) {
+  const ret = new Map();
+  for (const move of moveMapByPieceId.values()) {
+    ret.set(move.pieceId, makeMoveAnimationState(move));
+  }
+  return ret;
+}
+
 // CR nroyalty: make sure to deselect a piece if it's moved by another player
 function PieceDisplay({ boardSizeParams, hidden, opacity }) {
   const { pieceHandler } = React.useContext(HandlersContext);
   const { coords } = React.useContext(CoordsContext);
-  const { selectedPiece, clearSelectedPiece, setSelectedPiece } =
-    React.useContext(SelectedPieceAndSquaresContext);
+  const {
+    selectedPiece,
+    clearSelectedPiece,
+    setSelectedPiece,
+    clearSelectedPieceForId,
+  } = React.useContext(SelectedPieceAndSquaresContext);
   const { startingX, startingY, endingX, endingY } = React.useMemo(() => {
     return getStartingAndEndingCoords({
       coords,
@@ -168,8 +195,9 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
   }, [coords, boardSizeParams]);
 
   const piecesRefsMap = React.useRef(new Map());
+
   const recentMoveByPieceIdRef = React.useRef(
-    pieceHandler.current.getMoveMapByPieceId()
+    initialMoveAnimationState(pieceHandler.current.getMoveMapByPieceId())
   );
   const [forceUpdate, setForceUpdate] = React.useState(0);
 
@@ -218,6 +246,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
   );
 
   React.useEffect(() => {
+    console.log("RESUB");
     visiblePiecesAndIdsRef.current = getVisiblePiecesAndIds(
       pieceHandler.current.getPieces()
     );
@@ -225,31 +254,18 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
     pieceHandler.current.subscribe({
       id: "piece-display",
       callback: (data) => {
+        // CR nroyalty: I'm too tired to do this right now, but we should
+        // check whether we're currently in the middle of an animation for a piece,
+        // and if so we should respect that animation when determining its next
+        // animation state (if we get a new one for the same piece)
         data.recentMoves.forEach((move) => {
-          if (move.pieceId === selectedPiece?.id) {
-            clearSelectedPiece();
-          }
-          const animationDuration = computeAnimationDuration({
-            moveDistance: Math.hypot(
-              move.toX - move.fromX,
-              move.toY - move.fromY
-            ),
-            maxAnimationDuration: MAX_ANIMATION_DURATION,
-            minAnimationDuration: MIN_ANIMATION_DURATION,
-            maxMoveDistance: MAX_DMOVE,
-          });
-          const endTime = move.receivedAt + animationDuration;
-          recentMoveByPieceIdRef.current.set(move.pieceId, {
-            ...move,
-            endTime,
-            animationDuration,
-          });
+          clearSelectedPieceForId(move.pieceId);
+          const animationState = makeMoveAnimationState(move);
+          recentMoveByPieceIdRef.current.set(move.pieceId, animationState);
         });
 
         data.recentCaptures.forEach((capture) => {
-          if (capture.capturedPieceId === selectedPiece?.id) {
-            clearSelectedPiece();
-          }
+          clearSelectedPieceForId(capture.capturedPieceId);
         });
 
         const nowVisiblePiecesAndIds = getVisiblePiecesAndIds(data.pieces);
@@ -269,7 +285,12 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
         id: "piece-display",
       });
     };
-  }, [getVisiblePiecesAndIds, pieceHandler, selectedPiece, clearSelectedPiece]);
+  }, [
+    getVisiblePiecesAndIds,
+    pieceHandler,
+    clearSelectedPiece,
+    clearSelectedPieceForId,
+  ]);
 
   const getAnimatedCoords = React.useCallback(({ pieceId, now }) => {
     const recentMove = recentMoveByPieceIdRef.current.get(pieceId);
@@ -325,6 +346,15 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
               boardSizeParams,
             });
           ref.style.transform = `translate(${absoluteX}px, ${absoluteY}px)`;
+          //   const newX = Math.round(absoluteX * 100) / 100;
+          //   const newY = Math.round(absoluteY * 100) / 100;
+          //   const lastX = ref.__lastX ?? -Infinity;
+          //   const lastY = ref.__lastY ?? -Infinity;
+          //   if (newX !== lastX || newY !== lastY) {
+          //     ref.__lastX = newX;
+          //     ref.__lastY = newY;
+          //     ref.style.transform = `translate(${newX}px, ${newY}px)`;
+          //   }
         }
       };
 

@@ -6,23 +6,40 @@ const SelectedPieceAndSquaresContext = React.createContext();
 
 export function SelectedPieceAndSquaresContextProvider({ children }) {
   const { pieceHandler } = React.useContext(HandlersContext);
-  const [selectedPiece, _setSelectedPiece] = React.useState(null);
-  const [moveableSquares, setMoveableSquares] = React.useState(new Set());
+  const [selectedPieceAndSquares, setSelectedPieceAndSquares] = React.useState({
+    selectedPiece: null,
+    moveableSquares: new Set(),
+  });
   const { showLargeBoard } = React.useContext(ShowLargeBoardContext);
 
   const clearSelectedPiece = React.useCallback(() => {
-    _setSelectedPiece(null);
-    setMoveableSquares(new Set());
+    setSelectedPieceAndSquares({
+      selectedPiece: null,
+      moveableSquares: new Set(),
+    });
   }, []);
 
   const setSelectedPiece = React.useCallback(
     (piece) => {
-      _setSelectedPiece(piece);
-      const moveableSquares = pieceHandler.current.getMoveableSquares(piece);
-      setMoveableSquares(moveableSquares);
+      setSelectedPieceAndSquares({
+        selectedPiece: piece,
+        moveableSquares: pieceHandler.current.getMoveableSquares(piece),
+      });
     },
     [pieceHandler]
   );
+
+  const clearSelectedPieceForId = React.useCallback((id) => {
+    setSelectedPieceAndSquares((prev) => {
+      if (prev.selectedPiece?.id === id) {
+        return {
+          selectedPiece: null,
+          moveableSquares: new Set(),
+        };
+      }
+      return prev;
+    });
+  }, []);
 
   React.useEffect(() => {
     // clear piece when escape is pressed
@@ -43,12 +60,18 @@ export function SelectedPieceAndSquaresContextProvider({ children }) {
 
   const value = React.useMemo(
     () => ({
-      selectedPiece,
+      selectedPiece: selectedPieceAndSquares.selectedPiece,
+      moveableSquares: selectedPieceAndSquares.moveableSquares,
       setSelectedPiece,
-      moveableSquares,
       clearSelectedPiece,
+      clearSelectedPieceForId,
     }),
-    [selectedPiece, setSelectedPiece, moveableSquares, clearSelectedPiece]
+    [
+      selectedPieceAndSquares,
+      setSelectedPiece,
+      clearSelectedPiece,
+      clearSelectedPieceForId,
+    ]
   );
 
   return (
