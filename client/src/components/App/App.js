@@ -65,9 +65,8 @@ function useStartBot({ pieceHandler, submitMove, started }) {
       let targetPiece, targetSquare;
       for (let i = 0; i < 10; i++) {
         while (attempts < 50) {
-          const randomPiece = Array.from(pieceHandler.current.pieces.values())[
-            Math.floor(Math.random() * pieceHandler.current.pieces.size)
-          ];
+          const pieces = Array.from(pieceHandler.current.getPieces().values());
+          const randomPiece = pieces[Math.floor(Math.random() * pieces.length)];
           const moveableSquares =
             pieceHandler.current.getMoveableSquares(randomPiece);
           if (moveableSquares.size > 0) {

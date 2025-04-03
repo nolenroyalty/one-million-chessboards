@@ -25,7 +25,6 @@ const PieceImg = styled.img`
   transition:
     opacity 0.3s ease,
     transform 0.3s ease;
-  will-change: opacity, transform;
 
   transform-origin: center;
   transform: var(--transform);
@@ -49,7 +48,6 @@ const PieceButtonWrapper = styled.button`
   justify-content: center;
   opacity: var(--opacity);
   transition: opacity 0.3s ease;
-  will-change: opacity, transform;
 `;
 
 const AnimFadeout = keyframes`
@@ -220,22 +218,10 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
   );
 
   React.useEffect(() => {
-    const visible = getVisiblePiecesAndIds(pieceHandler.current.getPieces());
-    visiblePiecesAndIdsRef.current = visible;
-    setForceUpdate((prev) => prev + 1);
-  }, [
-    endingX,
-    endingY,
-    getVisiblePiecesAndIds,
-    pieceHandler,
-    startingX,
-    startingY,
-  ]);
-
-  React.useEffect(() => {
     visiblePiecesAndIdsRef.current = getVisiblePiecesAndIds(
       pieceHandler.current.getPieces()
     );
+    setForceUpdate((prev) => prev + 1);
     pieceHandler.current.subscribe({
       id: "piece-display",
       callback: (data) => {
@@ -243,13 +229,29 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
           if (move.pieceId === selectedPiece?.id) {
             clearSelectedPiece();
           }
-          recentMoveByPieceIdRef.current.set(move.pieceId, move);
+          const animationDuration = computeAnimationDuration({
+            moveDistance: Math.hypot(
+              move.toX - move.fromX,
+              move.toY - move.fromY
+            ),
+            maxAnimationDuration: MAX_ANIMATION_DURATION,
+            minAnimationDuration: MIN_ANIMATION_DURATION,
+            maxMoveDistance: MAX_DMOVE,
+          });
+          const endTime = move.receivedAt + animationDuration;
+          recentMoveByPieceIdRef.current.set(move.pieceId, {
+            ...move,
+            endTime,
+            animationDuration,
+          });
         });
+
         data.recentCaptures.forEach((capture) => {
           if (capture.capturedPieceId === selectedPiece?.id) {
             clearSelectedPiece();
           }
         });
+
         const nowVisiblePiecesAndIds = getVisiblePiecesAndIds(data.pieces);
         const newIds = nowVisiblePiecesAndIds.ids;
         const oldIds = visiblePiecesAndIdsRef.current.ids;
@@ -272,19 +274,12 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
   const getAnimatedCoords = React.useCallback(({ pieceId, now }) => {
     const recentMove = recentMoveByPieceIdRef.current.get(pieceId);
     if (recentMove) {
-      const { fromX, fromY, toX, toY, receivedAt } = recentMove;
-      const elapsed = now - receivedAt;
-      const moveDistance = Math.hypot(toX - fromX, toY - fromY);
-      // CR-maybe nroyalty: we could memoize this if need be
-      const animationDuration = computeAnimationDuration({
-        moveDistance,
-        maxAnimationDuration: MAX_ANIMATION_DURATION,
-        minAnimationDuration: MIN_ANIMATION_DURATION,
-        maxMoveDistance: MAX_DMOVE,
-      });
-      if (elapsed > animationDuration) {
+      const { fromX, fromY, toX, toY, receivedAt, endTime, animationDuration } =
+        recentMove;
+      if (now > endTime) {
         return { x: toX, y: toY, finished: true };
       }
+      const elapsed = now - receivedAt;
       const progress = easeInOutSquare(elapsed / animationDuration);
       const x = fromX + (toX - fromX) * progress;
       const y = fromY + (toY - fromY) * progress;

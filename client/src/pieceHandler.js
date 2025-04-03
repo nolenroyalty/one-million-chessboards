@@ -3,7 +3,7 @@ import { pieceKey, getMoveableSquares, TYPE_TO_NAME } from "./utils";
 class PieceHandler {
   constructor({ statsHandler }) {
     this.statsHandler = statsHandler;
-    this.pieces = new Map();
+    this.piecesByLocation = new Map();
     this.subscribers = [];
     this.moves = [];
     this.captures = [];
@@ -33,7 +33,7 @@ class PieceHandler {
   }
 
   getPieces() {
-    return this.pieces;
+    return this.piecesByLocation;
   }
 
   getCaptures() {
@@ -41,16 +41,17 @@ class PieceHandler {
   }
 
   getMoveableSquares(piece) {
-    return getMoveableSquares(piece, this.pieces);
+    return getMoveableSquares(piece, this.piecesByLocation);
   }
 
-  broadcast({ recentMoves, recentCaptures }) {
+  broadcast({ recentMoves, recentCaptures, wasSnapshot }) {
     this.subscribers.forEach(({ callback }) =>
       callback({
-        pieces: this.pieces,
+        pieces: this.piecesByLocation,
         moves: this.moves,
         recentMoves,
         recentCaptures,
+        wasSnapshot,
       })
     );
   }
@@ -109,16 +110,16 @@ class PieceHandler {
       afterSeqnum: startingSeqnum,
     });
     moves.forEach((move) => {
-      this._applyMove({ pieces, move });
+      this._applyMove({ pieces, move, afterSeqnum: 0 });
     });
-    this.pieces = pieces;
+    this.piecesByLocation = pieces;
     this.moves = moves;
     this.snapshotSeqnum = { from: startingSeqnum, to: endingSeqnum };
-    this.broadcast({ recentMoves: [], recentCaptures: [] });
+    this.broadcast({ recentMoves: [], recentCaptures: [], wasSnapshot: true });
   }
 
-  addReceivedAt(move) {
-    move.receivedAt = performance.now();
+  addReceivedAt(item, now) {
+    item.receivedAt = now;
   }
 
   handleMoves({ moves, captures }) {
@@ -127,14 +128,15 @@ class PieceHandler {
     let dBlackPieces = 0;
     let dWhiteKings = 0;
     let dBlackKings = 0;
+    const now = performance.now();
     moves.forEach((move) => {
       const { skip } = this._applyMove({
-        pieces: this.pieces,
+        pieces: this.piecesByLocation,
         move,
         afterSeqnum: this.snapshotSeqnum.from,
       });
       if (!skip) {
-        this.addReceivedAt(move);
+        this.addReceivedAt(move, now);
         this.moves.push(move);
         dTotalMoves++;
       } else {
@@ -146,7 +148,7 @@ class PieceHandler {
       if (capture.seqNum <= this.snapshotSeqnum.from) {
         console.log("skipping capture", capture);
       } else {
-        this.addReceivedAt(capture);
+        this.addReceivedAt(capture, now);
         recentCaptures.push(capture);
         this.captures.push(capture);
         const pieceType = TYPE_TO_NAME[capture.capturedType];
@@ -171,7 +173,7 @@ class PieceHandler {
       dWhiteKings,
       dBlackKings,
     });
-    this.broadcast({ recentMoves: moves, recentCaptures });
+    this.broadcast({ recentMoves: moves, recentCaptures, wasSnapshot: false });
   }
 }
 
