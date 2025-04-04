@@ -131,16 +131,12 @@ func (c *Client) handleMessage(message []byte) {
 		toX, _ := msg["toX"].(float64)
 		toY, _ := msg["toY"].(float64)
 
-		log.Printf("Received move: %v", msg)
-
 		// Basic bounds checking
 		if !CoordInBounds(fromX) || !CoordInBounds(fromY) ||
 			!CoordInBounds(toX) || !CoordInBounds(toY) {
 			c.SendError("Invalid coordinates")
 			return
 		}
-
-		log.Printf("Submitting move request")
 
 		// Submit the move request
 		c.server.moveRequests <- MoveRequest{

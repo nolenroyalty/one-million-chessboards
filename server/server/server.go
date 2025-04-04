@@ -3,7 +3,6 @@ package server
 import (
 	"encoding/json"
 	"log"
-	"math/rand"
 	"net/http"
 	"sync"
 	"time"
@@ -20,6 +19,7 @@ const (
 type Server struct {
 	// Game state
 	board      *Board
+	persistentBoard *PersistentBoard
 	zoneMap    *ZoneMap
 	minimapAggregator *MinimapAggregator
 	clients    map[*Client]struct{}
@@ -185,9 +185,12 @@ func GetRelevantZones(pos Position) map[ZoneCoord]struct{} {
 }
 
 // NewServer creates a new game server
-func NewServer() *Server {
+func NewServer(filename string) *Server {
+	persistentBoard := NewPersistentBoard(filename)
+	board := persistentBoard.GetBoardCopy()
 	return &Server{
-		board:         NewBoard(),
+		board:         board,
+		persistentBoard: persistentBoard,
 		zoneMap:       NewZoneMap(),
 		minimapAggregator: NewMinimapAggregator(),
 		clients:       make(map[*Client]struct{}),
@@ -211,6 +214,7 @@ func (s *Server) Run() {
 
 	s.minimapAggregator.Initialize(s.board)
 	// Start the specialized processing goroutines
+	s.board.SaveToFile("state/TEST.bin")
 	go s.processMoves()
 	go s.handleSubscriptions()
 	go s.minimapAggregator.Run()
@@ -218,6 +222,7 @@ func (s *Server) Run() {
 	go s.sendPeriodicStats()
 	go s.zoneMap.processZoneMap()
 	go s.handleClientRegistrations()
+	go s.persistentBoard.Run()
 	select {}
 }
 
@@ -329,7 +334,7 @@ func (s *Server) processMoves() {
 		affectedZones := s.zoneMap.GetAffectedZones(moveReq.Move)
 		interestedClients := s.zoneMap.GetClientsForZones(affectedZones)
 		var captureMove *PieceCapture = nil;
-		if capturedPiece != nil {
+		if !capturedPiece.Empty {
 			captureMove = &PieceCapture{
 				CapturedPieceID: capturedPiece.ID,
 				X:               moveReq.Move.ToX,
@@ -341,8 +346,8 @@ func (s *Server) processMoves() {
 			}
 		}
 
-		log.Printf("Updating minimap aggregator")
 		s.minimapAggregator.UpdateForMove(&pieceMove, captureMove)
+		s.persistentBoard.ApplyMove(moveReq.Move)
 		
 		// Run client notifications in a separate goroutine
 		go func(clients map[*Client]struct{}, move PieceMove, capture *PieceCapture) {
@@ -445,27 +450,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request, staticDir str
 // 	}
 // }
 
-func (s *Server) InitializeBoard() {
-	// startX := uint16(40)
-	// startY := uint16(40)
-	// for dx := range 30 {
-	// 	for dy := range 30 {
-	// 		s.board.ResetBoardSection(startX + uint16(dx), startY + uint16(dy), false, false)
-	// 	}
-	// }
-	startX := uint16(0)
-	startY := uint16(0)
-	for dx := range 1000 {
-		for dy := range 1000 {
-			random := rand.Intn(1500)
-			includeWhite := random > dy;
-			includeBlack := random > dx;
-			// includeWhite := random < 50
-			// includeBlack := random >= 50
-			s.board.ResetBoardSection(startX + uint16(dx), startY + uint16(dy), includeWhite, includeBlack)
-		}
-	}
-}
 
 func (s *Server) Testing_GetPiece(x, y uint16) *Piece {
 	return s.board.GetPiece(x, y)

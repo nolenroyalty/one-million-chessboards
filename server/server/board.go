@@ -1,16 +1,20 @@
 package server
 
 import (
+	"bufio"
+	"encoding/binary"
 	"log"
+	"math/rand"
+	"os"
 	"sync/atomic"
+	"time"
 )
 
 // Board represents the entire game state
 type Board struct {
-	pieces   [BOARD_SIZE][BOARD_SIZE]atomic.Pointer[Piece]
+	pieces   [BOARD_SIZE][BOARD_SIZE]atomic.Uint64
 	nextID   uint32
 	seqNum   atomic.Uint64
-	// stats    GameStats
 	totalMoves atomic.Uint64
 	whitePiecesCaptured atomic.Uint32
 	blackPiecesCaptured atomic.Uint32
@@ -47,37 +51,29 @@ func (b *Board) GetPiece(x, y uint16) *Piece {
 		return nil
 	}
 
-	piece := b.pieces[y][x].Load()
-	if piece == nil {
+	raw := b.pieces[y][x].Load()
+	piece := PieceOfEncodedPiece(EncodedPiece(raw))
+	if piece.Empty {
 		return nil
 	}
-	return piece
+	return &piece
 }
 
 type ApplyMoveResult struct {
-	CapturedPiece *Piece
-	MovedPiece *Piece
+	CapturedPiece Piece
+	MovedPiece Piece
 	NoMove bool
 }
 
 // ApplyMove applies a move to the board, returning the captured piece if any
-func (b *Board) _ApplyMove(piece *Piece, move Move) ApplyMoveResult {
+func (b *Board) _ApplyMove(piece Piece, move Move) ApplyMoveResult {
 	
 	// Get the piece to move
-	if piece == nil {
+	if piece.Empty {
 		return ApplyMoveResult{NoMove: true}
 	}
 
-	needsNewPiece := false;
 	if piece.MoveState == Unmoved || piece.MoveState == DoubleMoved {
-		needsNewPiece = true
-	}
-
-	// We can't safely mutate the piece here (we're relying on atomic pointers
-	// and mutating their values isn't safe). Avoid an allocation unless we 
-	// need one.
-	if needsNewPiece {
-		piece = NewPiece(piece.ID, piece.Type, piece.IsWhite)
 		if piece.Type == Pawn {
 			dy := int32(move.ToY) - int32(move.FromY)
 			if dy == 2 || dy == -2 {
@@ -94,9 +90,11 @@ func (b *Board) _ApplyMove(piece *Piece, move Move) ApplyMoveResult {
 	// a duplicate piece on the board. This does mean that we potentially
 	// have a race where a piece disappears from the board, but I think that's
 	// fine since we'll send the move information to the client.
-	b.pieces[move.FromY][move.FromX].Store(nil)
-	var capturedPiece *Piece = b.pieces[move.ToY][move.ToX].Swap(piece)
-	if capturedPiece != nil {
+	b.pieces[move.FromY][move.FromX].Store(uint64(EmptyEncodedPiece))
+	capturedEncodedPiece := b.pieces[move.ToY][move.ToX].Swap(uint64(piece.Encode()))
+	capturedPiece := PieceOfEncodedPiece(EncodedPiece(capturedEncodedPiece))
+
+	if !capturedPiece.Empty {
 		
 		// Update capture statistics
 		if capturedPiece.IsWhite {
@@ -121,49 +119,41 @@ func (b *Board) _ApplyMove(piece *Piece, move Move) ApplyMoveResult {
 // MoveResult represents the outcome of a move validation
 type MoveResult struct {
 	Valid         bool
-	MovedPiece    *Piece
-	CapturedPiece *Piece
+	MovedPiece    Piece
+	CapturedPiece Piece
 	SeqNum        uint64
 }
 
 
 func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
-	log.Printf("Validating and applying move: %v", move)
 	if !BoundsCheck(move) {
 		log.Printf("Move is out of bounds")
-		return MoveResult{Valid: false, MovedPiece: nil, CapturedPiece: nil}
+		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
 	}
 
-	movedPiece := b.pieces[move.FromY][move.FromX].Load()
-	if movedPiece == nil {
+	raw := b.pieces[move.FromY][move.FromX].Load()
+	movedPiece := PieceOfEncodedPiece(EncodedPiece(raw))
+	if movedPiece.Empty {
 		log.Printf("No piece at from position")
-		return MoveResult{Valid: false, MovedPiece: nil, CapturedPiece: nil}
+		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
 	}
 	
 	if movedPiece.ID != move.PieceID {
 		log.Printf("Piece ID does not match")
-		return MoveResult{Valid: false, MovedPiece: nil, CapturedPiece: nil}
+		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
 	}
 	
 	// Check if the move is valid
 	if !SatisfiesBasicMoveRules(b, move) {
 		log.Printf("Move is invalid")
-		return MoveResult{Valid: false, MovedPiece: nil, CapturedPiece: nil}
+		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
 	}
-	// Apply the move and get any captured piece
 	result := b._ApplyMove(movedPiece, move)
 	if result.NoMove {
-		log.Printf("No move")
-		return MoveResult{Valid: false, MovedPiece: nil, CapturedPiece: nil}
+		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
 	}
-	log.Printf("Made move")
 	b.seqNum.Add(1)
 	seqNum := b.seqNum.Load()
-	log.Printf("Moved piece: %v", result.MovedPiece)
-	log.Printf("Captured piece: %v", result.CapturedPiece)
-	log.Printf("returning!")
-	
-	// Return a result indicating a valid move and any captured piece
 	return MoveResult{Valid: true, MovedPiece: result.MovedPiece, CapturedPiece: result.CapturedPiece, SeqNum: seqNum}
 }
 
@@ -229,7 +219,7 @@ func (b *Board) setupPiecesForColor(baseX, baseY uint16, isWhite bool, newPieces
 	// Place pawns
 	for x := uint16(0); x < 8; x++ {
 		piece := b.createPiece(Pawn, isWhite)
-		b.pieces[pawnRow][baseX+x].Store(piece)
+		b.pieces[pawnRow][baseX+x].Store(uint64(piece.Encode()))
 		*newPieces = append(*newPieces, &PieceState{
 			Piece: piece,
 			X:     baseX + x,
@@ -241,7 +231,7 @@ func (b *Board) setupPiecesForColor(baseX, baseY uint16, isWhite bool, newPieces
 	pieceTypes := []PieceType{Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook}
 	for x := uint16(0); x < 8; x++ {
 		piece := b.createPiece(pieceTypes[x], isWhite)
-		b.pieces[pieceRow][baseX+x].Store(piece)
+		b.pieces[pieceRow][baseX+x].Store(uint64(piece.Encode()))
 		*newPieces = append(*newPieces, &PieceState{
 			Piece: piece,
 			X:     baseX + x,
@@ -251,7 +241,7 @@ func (b *Board) setupPiecesForColor(baseX, baseY uint16, isWhite bool, newPieces
 }
 
 // createPiece creates a new piece and increments the ID counter
-func (b *Board) createPiece(pieceType PieceType, isWhite bool) *Piece {
+func (b *Board) createPiece(pieceType PieceType, isWhite bool) Piece {
 	piece := NewPiece(b.nextID, pieceType, isWhite)
 	b.nextID++
 	return piece
@@ -291,18 +281,19 @@ func (b *Board) GetStateForPosition(pos Position) StateSnapshot {
 	}
 	
 	// Collect pieces in the viewport
-	pieces := make([]*PieceState, 0, 100) // Approximate capacity
+	pieces := make([]PieceState, 0, 100) // Approximate capacity
 	
 	for y := minY; y <= maxY; y++ {
 		for x := minX; x <= maxX; x++ {
-			piece := b.pieces[y][x].Load()
-			if piece != nil {
-				pieces = append(pieces, &PieceState{
+			raw := b.pieces[y][x].Load()
+			piece := PieceOfEncodedPiece(EncodedPiece(raw))
+			if !piece.Empty {
+				pieces = append(pieces, PieceState{
 					Piece: piece,
 					X:     x,
 					Y:     y,
 				})
-			}
+			} 
 		}
 	}
 	
@@ -317,11 +308,146 @@ func (b *Board) GetStateForPosition(pos Position) StateSnapshot {
 	}
 }
 
+type PieceWithCoords struct {
+	RawPiece EncodedPiece
+	Coords uint32
+}
 
+type BoardHeader struct {
+	NextID uint32
+	SeqNum uint64
+	TotalMoves uint64
+	WhitePiecesCaptured uint32
+	BlackPiecesCaptured uint32
+	WhiteKingsCaptured uint32
+	BlackKingsCaptured uint32
+}
+
+func (b *Board) SaveToFile(filename string) error {
+	log.Printf("Saving board to file: %s", filename)
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	start := time.Now()
+	bufferedWriter := bufio.NewWriterSize(file, 32 * 1024 * 1024)
+	header := BoardHeader{
+		NextID: b.nextID,
+		SeqNum: b.seqNum.Load(),
+		TotalMoves: b.totalMoves.Load(),
+		WhitePiecesCaptured: b.whitePiecesCaptured.Load(),
+		BlackPiecesCaptured: b.blackPiecesCaptured.Load(),
+		WhiteKingsCaptured: b.whiteKingsCaptured.Load(),
+		BlackKingsCaptured: b.blackKingsCaptured.Load(),
+	}
+	binary.Write(bufferedWriter, binary.LittleEndian, header)
+	bufferedWriter.Flush()
+
+	// nroyalty: optionally we could only write "real" pieces here...
+	// nroyalty...but it's hard to do that without knowing in advance which
+	// ones to write...
+	for y := uint16(0); y < BOARD_SIZE; y++ {
+		for x := uint16(0); x < BOARD_SIZE; x++ {
+			raw := b.pieces[y][x].Load()
+			encodedPiece := EncodedPiece(raw)
+			if EncodedIsEmpty(encodedPiece) {
+				continue
+			}
+			pieceWithCoords := PieceWithCoords{
+				RawPiece: encodedPiece,
+				Coords: uint32(x) << 16 | uint32(y),
+			}
+			binary.Write(bufferedWriter, binary.LittleEndian, pieceWithCoords)
+		}
+	}
+
+	elapsed := time.Since(start)
+	bufferedWriter.Flush()
+	log.Printf("Time taken to save board: %s", elapsed)
+	return nil;
+}
+
+func (b *Board) LoadFromFile(filename string) error {
+	log.Printf("Loading board from file: %s", filename)
+	file, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	start := time.Now()
+	// Use a large buffer size to reduce syscalls
+	bufferedReader := bufio.NewReaderSize(file, 32 * 1024 * 1024)
+	
+	// Read header
+	header := BoardHeader{}
+	err = binary.Read(bufferedReader, binary.LittleEndian, &header)
+	if err != nil {
+		return err
+	}
+	
+	// Set board state from header
+	b.nextID = header.NextID
+	b.seqNum.Store(header.SeqNum)
+	b.totalMoves.Store(header.TotalMoves)
+	b.whitePiecesCaptured.Store(header.WhitePiecesCaptured)
+	b.blackPiecesCaptured.Store(header.BlackPiecesCaptured)
+	b.whiteKingsCaptured.Store(header.WhiteKingsCaptured)
+	b.blackKingsCaptured.Store(header.BlackKingsCaptured)
+	
+	// Clear the board first (set all pieces to empty)
+	for y := uint16(0); y < BOARD_SIZE; y++ {
+		for x := uint16(0); x < BOARD_SIZE; x++ {
+			b.pieces[y][x].Store(uint64(EmptyEncodedPiece))
+		}
+	}
+	
+	// Read pieces until EOF
+	pieceWithCoords := PieceWithCoords{}
+	for {
+		err = binary.Read(bufferedReader, binary.LittleEndian, &pieceWithCoords)
+		if err != nil {
+			// EOF is expected when we've read all pieces
+			if err.Error() == "EOF" {
+				break
+			}
+			return err
+		}
+		
+		// Extract coordinates from packed uint32
+		x := uint16(pieceWithCoords.Coords >> 16)
+		y := uint16(pieceWithCoords.Coords & 0xFFFF)
+		
+		// Store the piece at the correct position
+		b.pieces[y][x].Store(uint64(pieceWithCoords.RawPiece))
+	}
+
+	elapsed := time.Since(start)
+	log.Printf("Time taken to load board: %s", elapsed)
+	return nil
+}
+
+func (b *Board) InitializeRandom() {
+	log.Printf("Initializing random board")
+	startX := uint16(0)
+	startY := uint16(0)
+	for dx := range 1000 {
+		for dy := range 1000 {
+			random := rand.Intn(1500)
+			includeWhite := random > dy;
+			includeBlack := random > dx;
+			// includeWhite := random < 50
+			// includeBlack := random >= 50
+			b.ResetBoardSection(startX + uint16(dx), startY + uint16(dy), includeWhite, includeBlack)
+		}
+	}
+}
 
 // PieceState combines a piece with its position
 type PieceState struct {
-	Piece *Piece
+	Piece Piece
 	X     uint16
 	Y     uint16
 }
@@ -334,7 +460,7 @@ type Position struct {
 
 // StateSnapshot contains all piece data for a client's view
 type StateSnapshot struct {
-	Pieces    []*PieceState
+	Pieces    []PieceState
 	AreaMinX  uint16
 	AreaMinY  uint16
 	AreaMaxX  uint16

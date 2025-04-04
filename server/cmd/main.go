@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"one-million-chessboards/server"
+	"unsafe"
 )
 
 var (
@@ -18,10 +19,10 @@ func main() {
 
 	
 	// Create the server
-	s := server.NewServer()
-	s.InitializeBoard()
+	s := server.NewServer("state/TEST.bin")
 	piece := s.Testing_GetPiece(500, 496)
 	log.Printf("Piece at (500, 496): %v", piece)
+	log.Printf("Size of piece: %d", unsafe.Sizeof(piece))
 	
 	// Start the server in a goroutine
 	go s.Run()
