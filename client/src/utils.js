@@ -1,4 +1,4 @@
-const MAX_MOVE_DISTANCE = 40;
+const MAX_MOVE_DISTANCE = 36;
 
 export function pieceKey(x, y) {
   return `${x}-${y}`;

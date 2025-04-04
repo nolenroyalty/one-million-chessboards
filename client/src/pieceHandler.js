@@ -106,6 +106,10 @@ class PieceHandler {
   }
 
   handleSnapshot({ snapshot }) {
+    if (snapshot.endingSeqnum <= this.snapshotSeqnum.from) {
+      console.log("skipping STALE snapshot");
+      return;
+    }
     const { pieces, piecesById, startingSeqnum, endingSeqnum } =
       this._piecesOfSnapshot({
         snapshot,

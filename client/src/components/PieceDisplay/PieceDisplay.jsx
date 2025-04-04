@@ -393,7 +393,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
             pieceId: move.pieceId,
             now,
           });
-          if (prevAnimationState) {
+          if (prevAnimationState && !prevAnimationState.finished) {
             const fakeMove = {
               ...move,
               fromX: prevAnimationState.x,
@@ -466,7 +466,15 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
           screenY: y,
           boardSizeParams,
         });
-        ref.style.transform = `translate(${absoluteX}px, ${absoluteY}px)`;
+        const newX = Math.round(absoluteX * 100) / 100;
+        const newY = Math.round(absoluteY * 100) / 100;
+        const lastX = ref.__lastX || -Infinity;
+        const lastY = ref.__lastY || -Infinity;
+        if (lastX !== newX || lastY !== newY) {
+          ref.style.transform = `translate(${newX}px, ${newY}px)`;
+          ref.__lastX = newX;
+          ref.__lastY = newY;
+        }
       }
     };
     const loop = () => {
