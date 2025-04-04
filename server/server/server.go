@@ -13,7 +13,7 @@ import (
 
 const (
 	aggregationInterval = time.Second * 30
-	statsUpdateInterval = time.Second * 10
+	statsUpdateInterval = time.Second * 5
 )
 
 // Server is the main game server coordinator
@@ -23,33 +23,49 @@ type Server struct {
 	zoneMap    *ZoneMap
 	minimapAggregator *MinimapAggregator
 	clients    map[*Client]struct{}
-	clientsMu  sync.RWMutex
 	
 	// Communication channels
 	register       chan *Client
 	unregister     chan *Client
+	getClients     chan CurrentClients
 	moveRequests   chan MoveRequest
 	subscriptions  chan SubscriptionRequest
 	
 	// HTTP server components
 	upgrader   websocket.Upgrader
 }
-
-/* CR nroyalty: remove clientsMu lock, rework to use channels */
-
-
+type zoneOperation struct {
+	client *Client
+	oldZones map[ZoneCoord]struct{}
+	newZones map[ZoneCoord]struct{}
+	done chan struct{}
+}
+type zoneQuery struct {
+	zones map[ZoneCoord]struct{}
+	response chan map[*Client]struct{}
+}
+	
 // ZoneMap tracks which clients are interested in which zones
 type ZoneMap struct {
 	// Map from zone IDs to sets of clients
 	clientsByZone [ZONE_COUNT][ZONE_COUNT]map[*Client]struct{}
-	mu            sync.RWMutex
+	// mu            sync.RWMutex
+	operations chan zoneOperation
+	queries chan zoneQuery
+	resultPool sync.Pool
 }
 
-// NewZoneMap creates a new zone map
 func NewZoneMap() *ZoneMap {
-	zm := &ZoneMap{}
-	
-	// Initialize each map in the 2D array
+	zm := &ZoneMap{
+		operations: make(chan zoneOperation, 1024),
+		queries: make(chan zoneQuery, 1024),
+		resultPool: sync.Pool{
+			New: func() interface{} {
+				return make(map[*Client]struct{}, 64)
+			},
+		},
+	}
+
 	for i := range ZONE_COUNT {
 		for j := range ZONE_COUNT {
 			zm.clientsByZone[i][j] = make(map[*Client]struct{})
@@ -59,46 +75,70 @@ func NewZoneMap() *ZoneMap {
 	return zm
 }
 
-// AddClient adds a client to the specified zones
-func (zm *ZoneMap) AddClient(client *Client, zones map[ZoneCoord]struct{}) {
-	zm.mu.Lock()
-	defer zm.mu.Unlock()
-
-	for zone, _ := range client.currentZones {
-		log.Printf("Removing client from zone: %v", zone)
-		delete(zm.clientsByZone[zone.X][zone.Y], client)
-	}
-
-	for zone, _ := range zones {
-		log.Printf("Adding client to zone: %v", zone)
-		zm.clientsByZone[zone.X][zone.Y][client] = struct{}{}
+func (zm *ZoneMap) processZoneMap() {
+	for {
+		select {
+		case op := <-zm.operations:
+			for zone := range op.oldZones {
+				delete(zm.clientsByZone[zone.X][zone.Y], op.client)
+			}
+			for zone := range op.newZones {
+				zm.clientsByZone[zone.X][zone.Y][op.client] = struct{}{}
+			}
+			if (op.done != nil) {
+				close(op.done)
+			}
+		case query := <-zm.queries:
+			resultMap := zm.resultPool.Get().(map[*Client]struct{})
+			for k := range resultMap {
+				delete(resultMap, k)
+			}
+			for zone := range query.zones {
+				for client := range zm.clientsByZone[zone.X][zone.Y] {
+					resultMap[client] = struct{}{}
+				}
+			}
+			query.response <- resultMap
+		}
 	}
 }
 
-// RemoveClient removes a client from all zones
-func (zm *ZoneMap) RemoveClient(client *Client) {
-	zm.mu.Lock()
-	defer zm.mu.Unlock()
-	
-	for zone, _ := range client.currentZones {
-		delete(zm.clientsByZone[zone.X][zone.Y], client)
+func (zm *ZoneMap) AddClientToZones(client *Client, newZones map[ZoneCoord]struct{}) {
+	op := zoneOperation{
+		client: client,
+		oldZones: client.currentZones,
+		newZones: newZones,
+		done: make(chan struct{}),
 	}
+	zm.operations <- op
+}
+
+// RemoveClient removes a client from all zones
+func (zm *ZoneMap) RemoveClientFromZones(client *Client) {
+	op := zoneOperation{
+		client: client,
+		oldZones: client.currentZones,
+		newZones: make(map[ZoneCoord]struct{}),
+		done: make(chan struct{}),
+	}
+	zm.operations <- op
 }
 
 // GetClientsForZones returns all clients interested in any of the specified zones
 func (zm *ZoneMap) GetClientsForZones(zones map[ZoneCoord]struct{}) map[*Client]struct{} {
-	zm.mu.RLock()
-	defer zm.mu.RUnlock()
-	
-	result := make(map[*Client]struct{})
-	
-	for zone, _ := range zones {
-		for client := range zm.clientsByZone[zone.X][zone.Y] {
-			result[client] = struct{}{}
-		}
+	response := make(chan map[*Client]struct{}, 1)
+	query := zoneQuery{
+		zones: zones,
+		response: response,
 	}
+	zm.queries <- query
+	result := <-response
 	
 	return result
+}
+
+func (zm *ZoneMap) ReturnClientMap(m map[*Client]struct{}) {
+	zm.resultPool.Put(m)
 }
 
 // GetAffectedZones returns all zones affected by a move
@@ -158,10 +198,11 @@ func NewServer() *Server {
 		zoneMap:       NewZoneMap(),
 		minimapAggregator: NewMinimapAggregator(),
 		clients:       make(map[*Client]struct{}),
-		register:      make(chan *Client),
-		unregister:    make(chan *Client),
-		moveRequests:  make(chan MoveRequest),
-		subscriptions: make(chan SubscriptionRequest),
+		register:      make(chan *Client, 512),
+		unregister:    make(chan *Client, 512),
+		getClients:    make(chan CurrentClients, 128),
+		moveRequests:  make(chan MoveRequest, 1024),
+		subscriptions: make(chan SubscriptionRequest, 1024),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -182,16 +223,9 @@ func (s *Server) Run() {
 	go s.minimapAggregator.Run()
 	go s.sendPeriodicAggregations()
 	go s.sendPeriodicStats()
-	// Main goroutine handles client registration/disconnection
-	for {
-		select {
-		case client := <-s.register:
-			s.registerClient(client)
-			
-		case client := <-s.unregister:
-			s.unregisterClient(client)
-		}
-	}
+	go s.zoneMap.processZoneMap()
+	go s.handleClientRegistrations()
+	select {}
 }
 
 func (s *Server) sendPeriodicAggregations() {
@@ -204,13 +238,14 @@ func (s *Server) sendPeriodicAggregations() {
 		aggregation := s.minimapAggregator.RequestAggregation()
 		log.Printf("Sending periodic aggregation")
 		response := <-aggregation
-		s.clientsMu.RLock()
+		clientsReq := CurrentClients{response: make(chan map[*Client]struct{})}
+		s.getClients <- clientsReq
+		clients := <-clientsReq.response
 		if (response != nil) {
-			for client := range s.clients {
+			for client := range clients {
 				client.SendMinimapUpdate(response)
 			}
 		}
-		s.clientsMu.RUnlock()
 	}
 }
 
@@ -241,19 +276,18 @@ func (s *Server) sendPeriodicStats() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		log.Printf("Requesting stats")
 		statsUpdate := s.createStatsUpdate()
-		log.Printf("Sending stats")
 		statsJson, err := json.Marshal(statsUpdate)
 		if err != nil {
 			log.Printf("Error marshalling stats: %v", err)
 			continue
 		}
-		s.clientsMu.RLock()
-		for client := range s.clients {
+		clientsReq := CurrentClients{response: make(chan map[*Client]struct{})}
+		s.getClients <- clientsReq
+		clients := <-clientsReq.response
+		for client := range clients {
 			client.SendGlobalStats(statsJson)
 		}
-		s.clientsMu.RUnlock()
 	}
 }
 
@@ -277,7 +311,6 @@ func (s *Server) RequestStaleAggregation() json.RawMessage {
 // issues we could avoid allocations
 func (s *Server) processMoves() {
 	for moveReq := range s.moveRequests {
-		log.Printf("Processing move request")
 		// Validate the move
 		moveResult := s.board.ValidateAndApplyMove(moveReq.Move)
 		if !moveResult.Valid {
@@ -285,7 +318,6 @@ func (s *Server) processMoves() {
 			moveReq.Client.SendError("Invalid move")
 			continue
 		}
-		log.Printf("Move request validated")
 		movedPiece := moveResult.MovedPiece
 		capturedPiece := moveResult.CapturedPiece
 
@@ -303,7 +335,6 @@ func (s *Server) processMoves() {
 
 		affectedZones := s.zoneMap.GetAffectedZones(moveReq.Move)
 		interestedClients := s.zoneMap.GetClientsForZones(affectedZones)
-
 		var captureMove *PieceCapture = nil;
 		if capturedPiece != nil {
 			captureMove = &PieceCapture{
@@ -317,6 +348,7 @@ func (s *Server) processMoves() {
 			}
 		}
 
+		log.Printf("Updating minimap aggregator")
 		s.minimapAggregator.UpdateForMove(&pieceMove, captureMove)
 		
 		// Run client notifications in a separate goroutine
@@ -324,18 +356,20 @@ func (s *Server) processMoves() {
 			for client := range clients {
 				client.AddMoveToBuffer(move)
 			}
-
 			if capture != nil {
 				for client := range clients {
 					client.AddCaptureToBuffer(*capture)
 				}
 			}
+			s.zoneMap.ReturnClientMap(interestedClients)
 		}(interestedClients, pieceMove, captureMove)
 	}
 }
 
 
 // handleSubscriptions processes client subscription requests
+// CR nroyalty: this should all just live in client.go at this
+// point?
 func (s *Server) handleSubscriptions() {
 	for sub := range s.subscriptions {
 		// Update the client's position
@@ -344,10 +378,8 @@ func (s *Server) handleSubscriptions() {
 		// Calculate which zones the client should be subscribed to
 		zones := GetRelevantZones(sub.Client.position)
 
-		log.Printf("Client subscribed to zones: %v", zones)
-		
 		// Update the zone map
-		s.zoneMap.AddClient(sub.Client, zones)
+		s.zoneMap.AddClientToZones(sub.Client, zones)
 		
 		// Update the client's record of its zones
 		sub.Client.currentZones = zones
@@ -361,28 +393,32 @@ func (s *Server) handleSubscriptions() {
 	}
 }
 
-// registerClient adds a new client to the server
-func (s *Server) registerClient(client *Client) {
-	s.clientsMu.Lock()
-	s.clients[client] = struct{}{}
-	s.clientsMu.Unlock()
-
-	go client.Run()
-
-	log.Printf("Client connected, total: %d", len(s.clients))
+type CurrentClients struct {
+	response chan map[*Client]struct{}
 }
 
-// unregisterClient removes a client from the server
-func (s *Server) unregisterClient(client *Client) {
-	s.clientsMu.Lock()
-	delete(s.clients, client)
-	s.clientsMu.Unlock()
-	// Remove from zone mapping
-	s.zoneMap.RemoveClient(client)
-
-	client.Close()
-	
-	log.Printf("Client disconnected, total: %d", len(s.clients))
+func (s *Server) handleClientRegistrations() {
+	for {
+		select {
+			case client := <-s.register:
+				s.clients[client] = struct{}{}
+				log.Printf("Client registered, total: %d", len(s.clients))
+				go client.Run()
+			case client := <-s.unregister:
+				delete(s.clients, client)
+				log.Printf("Client unregistered, total: %d", len(s.clients))
+				go func() {
+					s.zoneMap.RemoveClientFromZones(client)
+					client.Close()
+				}()
+			case req := <-s.getClients:
+				clientsCopy := make(map[*Client]struct{}, len(s.clients))
+				for client := range s.clients {
+					clientsCopy[client] = struct{}{}
+				}
+				req.response <- clientsCopy
+		}
+	}
 }
 
 // ServeWs handles websocket requests from clients
