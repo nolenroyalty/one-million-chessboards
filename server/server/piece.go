@@ -23,14 +23,14 @@ const (
 
 // Piece represents a chess piece
 type Piece struct {
-	ID        uint64
+	ID        uint32
 	Type      PieceType
 	IsWhite   bool
 	MoveState MoveState
 }
 
 // NewPiece creates a new piece with default values
-func NewPiece(id uint64, pieceType PieceType, isWhite bool) *Piece {
+func NewPiece(id uint32, pieceType PieceType, isWhite bool) *Piece {
 	return &Piece{
 		ID:        id,
 		Type:      pieceType,

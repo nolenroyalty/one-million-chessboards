@@ -47,9 +47,7 @@ type zoneQuery struct {
 	
 // ZoneMap tracks which clients are interested in which zones
 type ZoneMap struct {
-	// Map from zone IDs to sets of clients
 	clientsByZone [ZONE_COUNT][ZONE_COUNT]map[*Client]struct{}
-	// mu            sync.RWMutex
 	operations chan zoneOperation
 	queries chan zoneQuery
 	resultPool sync.Pool
@@ -113,7 +111,6 @@ func (zm *ZoneMap) AddClientToZones(client *Client, newZones map[ZoneCoord]struc
 	zm.operations <- op
 }
 
-// RemoveClient removes a client from all zones
 func (zm *ZoneMap) RemoveClientFromZones(client *Client) {
 	op := zoneOperation{
 		client: client,
@@ -141,9 +138,7 @@ func (zm *ZoneMap) ReturnClientMap(m map[*Client]struct{}) {
 	zm.resultPool.Put(m)
 }
 
-// GetAffectedZones returns all zones affected by a move
 func (zm *ZoneMap) GetAffectedZones(move Move) map[ZoneCoord]struct{} {
-	// Get zones for both the source and destination positions
 	fromZone := GetZoneCoord(move.FromX, move.FromY)
 	toZone := GetZoneCoord(move.ToX, move.ToY)
 	
@@ -152,11 +147,9 @@ func (zm *ZoneMap) GetAffectedZones(move Move) map[ZoneCoord]struct{} {
 		return map[ZoneCoord]struct{}{fromZone: {}}
 	}
 	
-	// Otherwise return both
 	return map[ZoneCoord]struct{}{fromZone: {}, toZone: {}}
 }
 
-// ZoneCoord represents a zone coordinate pair
 type ZoneCoord struct {
 	X uint16
 	Y uint16
@@ -375,13 +368,8 @@ func (s *Server) handleSubscriptions() {
 		// Update the client's position
 		sub.Client.position = Position{X: sub.Zone.X, Y: sub.Zone.Y}
 		
-		// Calculate which zones the client should be subscribed to
 		zones := GetRelevantZones(sub.Client.position)
-
-		// Update the zone map
 		s.zoneMap.AddClientToZones(sub.Client, zones)
-		
-		// Update the client's record of its zones
 		sub.Client.currentZones = zones
 
 		// CR nroyalty: only send a new snapshot if the client has moved a lot?

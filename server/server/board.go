@@ -8,7 +8,7 @@ import (
 // Board represents the entire game state
 type Board struct {
 	pieces   [BOARD_SIZE][BOARD_SIZE]atomic.Pointer[Piece]
-	nextID   uint64
+	nextID   uint32
 	seqNum   atomic.Uint64
 	// stats    GameStats
 	totalMoves atomic.Uint64

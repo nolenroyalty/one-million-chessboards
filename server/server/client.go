@@ -145,7 +145,7 @@ func (c *Client) handleMessage(message []byte) {
 		// Submit the move request
 		c.server.moveRequests <- MoveRequest{
 			Move: Move{
-				PieceID: uint64(pieceID),
+				PieceID: uint32(pieceID),
 				FromX:   uint16(fromX),
 				FromY:   uint16(fromY),
 				ToX:     uint16(toX),
@@ -323,7 +323,7 @@ func (c *Client) AddCaptureToBuffer(capture PieceCapture) {
 func (c *Client) SendStateSnapshot(snapshot StateSnapshot) {
 	// Create JSON message for state snapshot
 	type PieceData struct {
-		ID        uint64    `json:"id"`
+		ID        uint32    `json:"id"`
 		X         uint16    `json:"x"`
 		Y         uint16    `json:"y"`
 		Type      PieceType `json:"type"`

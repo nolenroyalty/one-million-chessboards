@@ -2,7 +2,7 @@ package server
 
 // Move represents a chess piece move
 type Move struct {
-	PieceID uint64
+	PieceID uint32
 	FromX   uint16
 	FromY   uint16
 	ToX     uint16
@@ -38,7 +38,7 @@ func SatisfiesBasicMoveRules(board *Board, move Move) bool {
 
 // PieceMove represents a move update to send to clients
 type PieceMove struct {
-	PieceID   uint64 `json:"pieceId"`
+	PieceID   uint32 `json:"pieceId"`
 	FromX     uint16 `json:"fromX"`
 	FromY     uint16 `json:"fromY"`
 	ToX       uint16 `json:"toX"`
@@ -51,12 +51,12 @@ type PieceMove struct {
 
 // PieceCapture represents a capture update to send to clients
 type PieceCapture struct {
-	CapturedPieceID  uint64 `json:"capturedPieceId"`
+	CapturedPieceID  uint32 `json:"capturedPieceId"`
 	X                uint16 `json:"x"`
 	Y                uint16 `json:"y"`
 	CapturedType     PieceType `json:"capturedType"`
 	WasWhite         bool      `json:"wasWhite"`
-	CapturingPieceID uint64    `json:"capturingPieceId"`
+	CapturingPieceID uint32    `json:"capturingPieceId"`
 	SeqNum           uint64    `json:"seqNum"`
 }
 
