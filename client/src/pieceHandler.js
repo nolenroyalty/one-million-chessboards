@@ -1,5 +1,14 @@
 import { pieceKey, getMoveableSquares, TYPE_TO_NAME } from "./utils";
 
+// CR nroyalty: we're going to want to optimistically apply updates
+// and then roll back if the server rejects the move.
+// Doing that is going to require re-working this stuff. For example, if we optimistically
+// apply an update, and then we get a move that conflicts with that, we'll update our
+// state in a wrong way.
+
+// I think we can handle this by storing a separate "optimistic" state and clearing it out
+// if we get a move that conflicts with the optimistic state (?)
+
 class PieceHandler {
   constructor({ statsHandler }) {
     this.statsHandler = statsHandler;

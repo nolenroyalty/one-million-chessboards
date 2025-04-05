@@ -112,6 +112,7 @@ func (b *Board) _ApplyMove(piece Piece, move Move) ApplyMoveResult {
 	
 	// Increment move counter
 	b.totalMoves.Add(1)
+	b.seqNum.Add(1)
 	
 	return ApplyMoveResult{CapturedPiece: capturedPiece, MovedPiece: piece, NoMove: false}
 }
@@ -152,7 +153,6 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 	if result.NoMove {
 		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
 	}
-	b.seqNum.Add(1)
 	seqNum := b.seqNum.Load()
 	return MoveResult{Valid: true, MovedPiece: result.MovedPiece, CapturedPiece: result.CapturedPiece, SeqNum: seqNum}
 }
