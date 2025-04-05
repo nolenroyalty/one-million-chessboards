@@ -128,25 +128,25 @@ type MoveResult struct {
 
 func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 	if !BoundsCheck(move) {
-		log.Printf("Move is out of bounds")
+		log.Printf("Invalid move: Move is out of bounds")
 		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
 	}
 
 	raw := b.pieces[move.FromY][move.FromX].Load()
 	movedPiece := PieceOfEncodedPiece(EncodedPiece(raw))
 	if movedPiece.Empty {
-		log.Printf("No piece at from position")
+		log.Printf("Invalid move: No piece at from position (expected id %d)", move.PieceID)
 		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
 	}
 	
 	if movedPiece.ID != move.PieceID {
-		log.Printf("Piece ID does not match")
+		log.Printf("Invalid move: Piece ID does not match")
 		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
 	}
 	
 	// Check if the move is valid
 	if !SatisfiesBasicMoveRules(b, move) {
-		log.Printf("Move is invalid")
+		log.Printf("Invalid move: Move does not satisfy basic move rules")
 		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
 	}
 	result := b._ApplyMove(movedPiece, move)

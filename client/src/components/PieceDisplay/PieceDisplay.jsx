@@ -267,7 +267,6 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
   }, []);
 
   React.useEffect(() => {
-    console.log("RESUB");
     visiblePiecesAndIdsRef.current = getVisiblePiecesAndIds(
       pieceHandler.current.getPieces()
     );

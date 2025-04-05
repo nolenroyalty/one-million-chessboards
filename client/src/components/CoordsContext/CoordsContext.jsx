@@ -12,11 +12,14 @@ export function CoordsContextProvider({
   const [coords, setCoords] = React.useState({ x: initialX, y: initialY });
   React.useEffect(() => {
     // CR nroyalty: debounce this...
-    safelySendJSON({
-      type: "subscribe",
-      centerX: coords.x,
-      centerY: coords.y,
-    });
+    console.log("CONNECTED?", connected);
+    if (connected) {
+      safelySendJSON({
+        type: "subscribe",
+        centerX: coords.x,
+        centerY: coords.y,
+      });
+    }
   }, [coords, safelySendJSON, connected]);
 
   const value = React.useMemo(

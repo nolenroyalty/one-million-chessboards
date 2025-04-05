@@ -60,6 +60,9 @@ function useStartBot({ pieceHandler, submitMove, started, onlyId }) {
       return;
     }
     let botInterval;
+    let count = 0;
+    let attemptsById = {};
+
     const loop = () => {
       let attempts = 0;
       let targetPiece, targetSquare;
@@ -103,6 +106,15 @@ function useStartBot({ pieceHandler, submitMove, started, onlyId }) {
             attempts++;
           }
           if (targetPiece && targetSquare) {
+            if (!attemptsById[targetPiece.id]) {
+              attemptsById[targetPiece.id] = 0;
+            }
+            attemptsById[targetPiece.id] = attemptsById[targetPiece.id] + 1;
+            if (attemptsById[targetPiece.id] > 1) {
+              console.log(
+                `ATTEMPT ${attemptsById[targetPiece.id]} FOR PIECE ${targetPiece.id}`
+              );
+            }
             const [x, y] = keyToCoords(targetSquare);
             submitMove({
               piece: targetPiece,
@@ -110,6 +122,11 @@ function useStartBot({ pieceHandler, submitMove, started, onlyId }) {
               toY: y,
             });
           }
+        }
+        count++;
+        if (count > 5) {
+          count = 0;
+          attemptsById = {};
         }
       }
     };
@@ -125,9 +142,8 @@ function useStartBot({ pieceHandler, submitMove, started, onlyId }) {
 }
 
 function App() {
-  console.log("APP");
   const websocketRef = React.useRef(null);
-  const [connected, setConnected] = React.useState(false);
+  const [exteriorConnected, setConnected] = React.useState(false);
   const statsHandler = React.useRef(new StatsHandler());
   const pieceHandler = React.useRef(
     new PieceHandler({ statsHandler: statsHandler.current })
@@ -174,11 +190,17 @@ function App() {
   React.useEffect(() => {
     let reconnectTimeout = null;
     let connected = false;
+    let connecting = false;
     let pongInterval = null;
     let killed = false;
 
     function connect() {
-      console.log("TRYING TO CONNECT - current WS", websocketRef.current);
+      const myId = Math.floor(Math.random() * 10000);
+      if (connecting) {
+        console.log("already connecting - not trying again!");
+        return;
+      }
+      connecting = true;
       const protocol =
         window.location.protocol === "https:" ? "wss://" : "ws://";
       const hostname = window.location.host;
@@ -219,7 +241,7 @@ function App() {
         if (killed) {
           return;
         }
-        console.log("Connected to server");
+        connecting = false;
         connected = true;
         setConnected(true);
         failedReconnections.current = 0;
@@ -234,6 +256,10 @@ function App() {
 
       ws.onerror = (event) => {
         console.log("websocket error", event);
+        // connecting = false;
+        // connected = false;
+        // setConnected(false);
+        // websocketRef.current = null;
       };
 
       ws.onclose = () => {
@@ -244,6 +270,7 @@ function App() {
         clearInterval(pongInterval);
         websocketRef.current = null;
         connected = false;
+        connecting = false;
         setConnected(false);
         failedReconnections.current++;
         if (failedReconnections.current === 1) {
@@ -305,7 +332,7 @@ function App() {
         initialX={500}
         initialY={500}
         safelySendJSON={safelySendJSON}
-        connected={connected}
+        connected={exteriorConnected}
       >
         <ShowLargeBoardContextProvider>
           <SelectedPieceAndSquaresContextProvider>
