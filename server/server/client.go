@@ -101,7 +101,6 @@ func (c *Client) ReadPump() {
 	}
 }
 
-
 func CoordInBounds(coord float64) bool {
 	return coord >= 0 && uint16(coord) < BOARD_SIZE
 }
@@ -164,7 +163,7 @@ func (c *Client) handleMessage(message []byte) {
 		// Submit the subscription request
 		c.server.subscriptions <- SubscriptionRequest{
 			Client: c,
-			Zone:      ZoneCoord{X: uint16(centerX), Y: uint16(centerY)},
+			Zone:   ZoneCoord{X: uint16(centerX), Y: uint16(centerY)},
 		}
 
 	case "requestSnapshot":
@@ -177,7 +176,7 @@ func (c *Client) handleMessage(message []byte) {
 	case "app-ping":
 		type AppPong struct {
 			Type string `json:"type"`
-			Time int64 `json:"time"`
+			Time int64  `json:"time"`
 		}
 		appPong := AppPong{
 			Type: "app-pong",
@@ -284,7 +283,6 @@ func (c *Client) ProcessMoveUpdates() {
 	}
 }
 
-
 // AddMoveToBuffer adds a move to the client's move buffer
 func (c *Client) AddMoveToBuffer(move PieceMove) {
 	c.bufferMu.Lock()
@@ -328,14 +326,14 @@ func (c *Client) SendStateSnapshot(snapshot StateSnapshot) {
 	}
 
 	type SnapshotMessage struct {
-		Type      string      `json:"type"`
-		Pieces    []PieceData `json:"pieces"`
-		AreaMinX  uint16      `json:"areaMinX"`
-		AreaMinY  uint16      `json:"areaMinY"`
-		AreaMaxX  uint16      `json:"areaMaxX"`
-		AreaMaxY  uint16      `json:"areaMaxY"`
-		StartingSeqNum uint64 `json:"startingSeqNum"`
-		EndingSeqNum uint64 `json:"endingSeqNum"`
+		Type           string      `json:"type"`
+		Pieces         []PieceData `json:"pieces"`
+		AreaMinX       uint16      `json:"areaMinX"`
+		AreaMinY       uint16      `json:"areaMinY"`
+		AreaMaxX       uint16      `json:"areaMaxX"`
+		AreaMaxY       uint16      `json:"areaMaxY"`
+		StartingSeqNum uint64      `json:"startingSeqNum"`
+		EndingSeqNum   uint64      `json:"endingSeqNum"`
 	}
 
 	// Convert pieces to the message format
@@ -352,14 +350,14 @@ func (c *Client) SendStateSnapshot(snapshot StateSnapshot) {
 	}
 
 	message := SnapshotMessage{
-		Type:      "stateSnapshot",
-		Pieces:    pieces,
-		AreaMinX:  snapshot.AreaMinX,
-		AreaMinY:  snapshot.AreaMinY,
-		AreaMaxX:  snapshot.AreaMaxX,
-		AreaMaxY:  snapshot.AreaMaxY,
+		Type:           "stateSnapshot",
+		Pieces:         pieces,
+		AreaMinX:       snapshot.AreaMinX,
+		AreaMinY:       snapshot.AreaMinY,
+		AreaMaxX:       snapshot.AreaMaxX,
+		AreaMaxY:       snapshot.AreaMaxY,
 		StartingSeqNum: snapshot.StartingSeqNum,
-		EndingSeqNum: snapshot.EndingSeqNum,
+		EndingSeqNum:   snapshot.EndingSeqNum,
 	}
 
 	// Marshal to JSON
@@ -385,15 +383,15 @@ func (c *Client) SendStateSnapshot(snapshot StateSnapshot) {
 func (c *Client) SendMoveUpdates(moves []PieceMove, captures []PieceCapture) {
 	// Create a proper JSON message structure
 	type MoveUpdateMessage struct {
-		Type      string         `json:"type"`
-		Moves     []PieceMove    `json:"moves"`
-		Captures  []PieceCapture `json:"captures"`
+		Type     string         `json:"type"`
+		Moves    []PieceMove    `json:"moves"`
+		Captures []PieceCapture `json:"captures"`
 	}
 
 	message := MoveUpdateMessage{
-		Type:      "moveUpdates",
-		Moves:     moves,
-		Captures:  captures,
+		Type:     "moveUpdates",
+		Moves:    moves,
+		Captures: captures,
 	}
 
 	// Marshal to JSON

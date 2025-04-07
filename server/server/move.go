@@ -38,11 +38,11 @@ func SatisfiesBasicMoveRules(board *Board, move Move) bool {
 
 // PieceMove represents a move update to send to clients
 type PieceMove struct {
-	PieceID   uint32 `json:"pieceId"`
-	FromX     uint16 `json:"fromX"`
-	FromY     uint16 `json:"fromY"`
-	ToX       uint16 `json:"toX"`
-	ToY       uint16 `json:"toY"`
+	PieceID   uint32    `json:"pieceId"`
+	FromX     uint16    `json:"fromX"`
+	FromY     uint16    `json:"fromY"`
+	ToX       uint16    `json:"toX"`
+	ToY       uint16    `json:"toY"`
 	PieceType PieceType `json:"pieceType"`
 	IsWhite   bool      `json:"isWhite"`
 	MoveState MoveState `json:"moveState"`
@@ -51,9 +51,9 @@ type PieceMove struct {
 
 // PieceCapture represents a capture update to send to clients
 type PieceCapture struct {
-	CapturedPieceID  uint32 `json:"capturedPieceId"`
-	X                uint16 `json:"x"`
-	Y                uint16 `json:"y"`
+	CapturedPieceID  uint32    `json:"capturedPieceId"`
+	X                uint16    `json:"x"`
+	Y                uint16    `json:"y"`
 	CapturedType     PieceType `json:"capturedType"`
 	WasWhite         bool      `json:"wasWhite"`
 	CapturingPieceID uint32    `json:"capturingPieceId"`

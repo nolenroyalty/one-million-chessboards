@@ -195,7 +195,6 @@ function App() {
     let killed = false;
 
     function connect() {
-      const myId = Math.floor(Math.random() * 10000);
       if (connecting) {
         console.log("already connecting - not trying again!");
         return;

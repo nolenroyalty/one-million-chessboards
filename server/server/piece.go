@@ -35,27 +35,27 @@ type EncodedPiece uint64
 const EmptyEncodedPiece = EncodedPiece(0)
 
 const (
-	PieceIdShift = 0 // always 32 bits
+	PieceIdShift   = 0  // always 32 bits
 	PieceTypeShift = 32 // give it 4 bits (6 piece types)
-	IsWhiteShift = 36 // only 1 bit ever
+	IsWhiteShift   = 36 // only 1 bit ever
 	MoveStateShift = 37 // let's leave 4 bits here (room for more, only 3 right now)
 	// plenty of room for extra metadata...
 
-	idMask = uint64(^uint32(0))
-	typeMask = 0xF << PieceTypeShift
-	isWhiteMask = 1 << IsWhiteShift
+	idMask        = uint64(^uint32(0))
+	typeMask      = 0xF << PieceTypeShift
+	isWhiteMask   = 1 << IsWhiteShift
 	moveStateMask = 0xF << MoveStateShift
 )
 
 func NewEncodedPiece(id uint32, pieceType PieceType, isWhite bool, moveState MoveState) EncodedPiece {
 	whiteInt := 0
-	if (isWhite) {
+	if isWhite {
 		whiteInt = 1
 	}
-	return EncodedPiece(uint64(id) << PieceIdShift |
-		uint64(pieceType) << PieceTypeShift |
-		uint64(whiteInt) << IsWhiteShift |
-		uint64(moveState) << MoveStateShift)
+	return EncodedPiece(uint64(id)<<PieceIdShift |
+		uint64(pieceType)<<PieceTypeShift |
+		uint64(whiteInt)<<IsWhiteShift |
+		uint64(moveState)<<MoveStateShift)
 }
 
 func EncodedIsEmpty(encodedPiece EncodedPiece) bool {
@@ -67,7 +67,7 @@ func PieceOfEncodedPiece(encodedPiece EncodedPiece) Piece {
 	id := raw & idMask
 	empty := id == 0
 
-	if (empty) {
+	if empty {
 		return Piece{
 			Empty: true,
 		}
@@ -82,17 +82,17 @@ func PieceOfEncodedPiece(encodedPiece EncodedPiece) Piece {
 }
 
 func (p *Piece) Encode() EncodedPiece {
-	if (p.Empty) {
+	if p.Empty {
 		return EmptyEncodedPiece
 	}
 	whiteInt := 0
-	if (p.IsWhite) {
+	if p.IsWhite {
 		whiteInt = 1
 	}
-	raw := uint64(p.ID) << PieceIdShift |
-		uint64(p.Type) << PieceTypeShift |
-		uint64(whiteInt) << IsWhiteShift |
-		uint64(p.MoveState) << MoveStateShift
+	raw := uint64(p.ID)<<PieceIdShift |
+		uint64(p.Type)<<PieceTypeShift |
+		uint64(whiteInt)<<IsWhiteShift |
+		uint64(p.MoveState)<<MoveStateShift
 	return EncodedPiece(raw)
 }
 

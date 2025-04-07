@@ -14,18 +14,18 @@ type MinimapCell struct {
 }
 
 type MoveAndMaybeCapture struct {
-	Move *PieceMove
+	Move    *PieceMove
 	Capture *PieceCapture
 }
 
 type SingleAggregation struct {
-	WhiteAhead bool `json:"whiteAhead"`
-	Amount uint16 `json:"amount"`
+	WhiteAhead bool   `json:"whiteAhead"`
+	Amount     uint16 `json:"amount"`
 }
 
 type AggregationResponse struct {
-	Type string `json:"type"`
-	Aggregations [NUMBER_OF_CELLS*NUMBER_OF_CELLS]SingleAggregation `json:"aggregations"`
+	Type         string                                               `json:"type"`
+	Aggregations [NUMBER_OF_CELLS * NUMBER_OF_CELLS]SingleAggregation `json:"aggregations"`
 }
 
 type AggregationRequest struct {
@@ -37,19 +37,19 @@ type CachedAggregationRequest struct {
 }
 
 type MinimapAggregator struct {
-	cells [NUMBER_OF_CELLS][NUMBER_OF_CELLS]MinimapCell
-	moveUpdates chan MoveAndMaybeCapture
-	aggregationRequests chan AggregationRequest
+	cells                     [NUMBER_OF_CELLS][NUMBER_OF_CELLS]MinimapCell
+	moveUpdates               chan MoveAndMaybeCapture
+	aggregationRequests       chan AggregationRequest
 	cachedAggregationRequests chan CachedAggregationRequest
-	lastAggregation json.RawMessage
+	lastAggregation           json.RawMessage
 }
 
 func NewMinimapAggregator() *MinimapAggregator {
 	return &MinimapAggregator{
-		moveUpdates: make(chan MoveAndMaybeCapture),
-		aggregationRequests: make(chan AggregationRequest),
+		moveUpdates:               make(chan MoveAndMaybeCapture),
+		aggregationRequests:       make(chan AggregationRequest),
 		cachedAggregationRequests: make(chan CachedAggregationRequest),
-		lastAggregation: json.RawMessage{},
+		lastAggregation:           json.RawMessage{},
 	}
 }
 
@@ -59,10 +59,10 @@ type AggregatorCoords struct {
 }
 
 func getAggregatorCoords(x, y uint16) AggregatorCoords {
-	boardX := x / 8;
-	boardY := y / 8;
-	cellX := boardX / CELL_SIZE;
-	cellY := boardY / CELL_SIZE;
+	boardX := x / 8
+	boardY := y / 8
+	cellX := boardX / CELL_SIZE
+	cellY := boardY / CELL_SIZE
 	return AggregatorCoords{
 		X: cellX,
 		Y: cellY,
@@ -96,9 +96,7 @@ func (m *MinimapAggregator) Initialize(board *Board) {
 	m.lastAggregation = <-aggregationRequest.Response
 }
 
-
-
-func (m *MinimapAggregator) updateForAggregatorCoords(coords AggregatorCoords, isWhite bool, decr bool	) {
+func (m *MinimapAggregator) updateForAggregatorCoords(coords AggregatorCoords, isWhite bool, decr bool) {
 	if isWhite {
 		if decr && m.cells[coords.X][coords.Y].WhiteCount > 0 {
 			m.cells[coords.X][coords.Y].WhiteCount--
@@ -120,7 +118,7 @@ func (m *MinimapAggregator) processMoveUpdate(pieceMove *PieceMove, capture *Pie
 	}
 	fromCoords := getAggregatorCoords(pieceMove.FromX, pieceMove.FromY)
 	toCoords := getAggregatorCoords(pieceMove.ToX, pieceMove.ToY)
-	if (fromCoords != toCoords) {
+	if fromCoords != toCoords {
 		m.updateForAggregatorCoords(fromCoords, pieceMove.IsWhite, true)
 		m.updateForAggregatorCoords(toCoords, pieceMove.IsWhite, false)
 	}
@@ -141,19 +139,19 @@ func (m *MinimapAggregator) handleAggregationRequest(request AggregationRequest)
 		whiteCount := m.cells[x][y].WhiteCount
 		blackCount := m.cells[x][y].BlackCount
 		diff := max(whiteCount, blackCount) - min(whiteCount, blackCount)
-		percentage := float64(diff) / float64(whiteCount + blackCount)
-		amount := 0;
-		if (percentage > 0.3 && diff > 50) {
+		percentage := float64(diff) / float64(whiteCount+blackCount)
+		amount := 0
+		if percentage > 0.3 && diff > 50 {
 			amount = 3
-		} else if (percentage > 0.15 && diff > 25) {
+		} else if percentage > 0.15 && diff > 25 {
 			amount = 2
-		} else if (percentage > 0.03 && diff > 2) {
+		} else if percentage > 0.03 && diff > 2 {
 			amount = 1
 		}
 
 		response.Aggregations[i] = SingleAggregation{
 			WhiteAhead: whiteCount > blackCount,
-			Amount: uint16(amount),
+			Amount:     uint16(amount),
 		}
 	}
 	jsonResponse, err := json.Marshal(response)
@@ -182,7 +180,7 @@ func (m *MinimapAggregator) Run() {
 func (m *MinimapAggregator) RequestAggregation() <-chan json.RawMessage {
 	response := make(chan json.RawMessage, 1)
 	m.aggregationRequests <- AggregationRequest{Response: response}
-	return response;
+	return response
 }
 
 func (m *MinimapAggregator) UpdateForMove(move *PieceMove, capture *PieceCapture) {
@@ -192,7 +190,7 @@ func (m *MinimapAggregator) UpdateForMove(move *PieceMove, capture *PieceCapture
 func (m *MinimapAggregator) GetCachedAggregation() json.RawMessage {
 	response := make(chan json.RawMessage, 1)
 	m.cachedAggregationRequests <- CachedAggregationRequest{Response: response}
-	return <-response;
+	return <-response
 }
 
 func (m *MinimapAggregator) handleCachedAggregationRequest(request CachedAggregationRequest) {

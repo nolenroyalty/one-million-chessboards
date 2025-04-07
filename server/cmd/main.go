@@ -11,6 +11,7 @@ import (
 var (
 	addr       = flag.String("addr", ":8080", "HTTP service address")
 	staticDir  = flag.String("static", "./static", "Directory for static files")
+	stateDir   = flag.String("state", "state", "Directory for state files")
 )
 
 func main() {
@@ -19,7 +20,7 @@ func main() {
 
 	
 	// Create the server
-	s := server.NewServer("state/TEST.bin")
+	s := server.NewServer(*stateDir)
 	piece := s.Testing_GetPiece(500, 496)
 	log.Printf("Piece at (500, 496): %v", piece)
 	log.Printf("Size of piece: %d", unsafe.Sizeof(piece))

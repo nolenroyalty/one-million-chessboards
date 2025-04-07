@@ -18,45 +18,45 @@ const (
 // Server is the main game server coordinator
 type Server struct {
 	// Game state
-	board      *Board
-	persistentBoard *PersistentBoard
-	zoneMap    *ZoneMap
+	board             *Board
+	persistentBoard   *PersistentBoard
+	zoneMap           *ZoneMap
 	minimapAggregator *MinimapAggregator
-	clients    map[*Client]struct{}
-	
+	clients           map[*Client]struct{}
+
 	// Communication channels
-	register       chan *Client
-	unregister     chan *Client
-	getClients     chan CurrentClients
-	moveRequests   chan MoveRequest
-	subscriptions  chan SubscriptionRequest
-	
+	register      chan *Client
+	unregister    chan *Client
+	getClients    chan CurrentClients
+	moveRequests  chan MoveRequest
+	subscriptions chan SubscriptionRequest
+
 	// HTTP server components
-	upgrader   websocket.Upgrader
+	upgrader websocket.Upgrader
 }
 type zoneOperation struct {
-	client *Client
+	client   *Client
 	oldZones map[ZoneCoord]struct{}
 	newZones map[ZoneCoord]struct{}
-	done chan struct{}
+	done     chan struct{}
 }
 type zoneQuery struct {
-	zones map[ZoneCoord]struct{}
+	zones    map[ZoneCoord]struct{}
 	response chan map[*Client]struct{}
 }
-	
+
 // ZoneMap tracks which clients are interested in which zones
 type ZoneMap struct {
 	clientsByZone [ZONE_COUNT][ZONE_COUNT]map[*Client]struct{}
-	operations chan zoneOperation
-	queries chan zoneQuery
-	resultPool sync.Pool
+	operations    chan zoneOperation
+	queries       chan zoneQuery
+	resultPool    sync.Pool
 }
 
 func NewZoneMap() *ZoneMap {
 	zm := &ZoneMap{
 		operations: make(chan zoneOperation, 1024),
-		queries: make(chan zoneQuery, 1024),
+		queries:    make(chan zoneQuery, 1024),
 		resultPool: sync.Pool{
 			New: func() interface{} {
 				return make(map[*Client]struct{}, 64)
@@ -69,7 +69,7 @@ func NewZoneMap() *ZoneMap {
 			zm.clientsByZone[i][j] = make(map[*Client]struct{})
 		}
 	}
-	
+
 	return zm
 }
 
@@ -83,7 +83,7 @@ func (zm *ZoneMap) processZoneMap() {
 			for zone := range op.newZones {
 				zm.clientsByZone[zone.X][zone.Y][op.client] = struct{}{}
 			}
-			if (op.done != nil) {
+			if op.done != nil {
 				close(op.done)
 			}
 		case query := <-zm.queries:
@@ -103,20 +103,20 @@ func (zm *ZoneMap) processZoneMap() {
 
 func (zm *ZoneMap) AddClientToZones(client *Client, newZones map[ZoneCoord]struct{}) {
 	op := zoneOperation{
-		client: client,
+		client:   client,
 		oldZones: client.currentZones,
 		newZones: newZones,
-		done: make(chan struct{}),
+		done:     make(chan struct{}),
 	}
 	zm.operations <- op
 }
 
 func (zm *ZoneMap) RemoveClientFromZones(client *Client) {
 	op := zoneOperation{
-		client: client,
+		client:   client,
 		oldZones: client.currentZones,
 		newZones: make(map[ZoneCoord]struct{}),
-		done: make(chan struct{}),
+		done:     make(chan struct{}),
 	}
 	zm.operations <- op
 }
@@ -125,12 +125,12 @@ func (zm *ZoneMap) RemoveClientFromZones(client *Client) {
 func (zm *ZoneMap) GetClientsForZones(zones map[ZoneCoord]struct{}) map[*Client]struct{} {
 	response := make(chan map[*Client]struct{}, 1)
 	query := zoneQuery{
-		zones: zones,
+		zones:    zones,
 		response: response,
 	}
 	zm.queries <- query
 	result := <-response
-	
+
 	return result
 }
 
@@ -141,12 +141,12 @@ func (zm *ZoneMap) ReturnClientMap(m map[*Client]struct{}) {
 func (zm *ZoneMap) GetAffectedZones(move Move) map[ZoneCoord]struct{} {
 	fromZone := GetZoneCoord(move.FromX, move.FromY)
 	toZone := GetZoneCoord(move.ToX, move.ToY)
-	
+
 	// If they're the same, return a single zone
 	if fromZone == toZone {
 		return map[ZoneCoord]struct{}{fromZone: {}}
 	}
-	
+
 	return map[ZoneCoord]struct{}{fromZone: {}, toZone: {}}
 }
 
@@ -168,37 +168,37 @@ func GetZoneCoord(x, y uint16) ZoneCoord {
 func GetRelevantZones(pos Position) map[ZoneCoord]struct{} {
 	// Calculate the center zone for the position
 	centerZone := GetZoneCoord(pos.X, pos.Y)
-	
+
 	relevantZones := make(map[ZoneCoord]struct{})
 
 	relevantZones[centerZone] = struct{}{}
 
 	for dx := -1; dx <= 1; dx++ {
 		for dy := -1; dy <= 1; dy++ {
-			zone := GetZoneCoord(pos.X + uint16(dx) * ZONE_SIZE, pos.Y + uint16(dy) * ZONE_SIZE)
+			zone := GetZoneCoord(pos.X+uint16(dx)*ZONE_SIZE, pos.Y+uint16(dy)*ZONE_SIZE)
 			relevantZones[zone] = struct{}{}
-			
+
 		}
 	}
-	
+
 	return relevantZones
 }
 
 // NewServer creates a new game server
-func NewServer(filename string) *Server {
-	persistentBoard := NewPersistentBoard(filename)
+func NewServer(stateDir string) *Server {
+	persistentBoard := NewPersistentBoard(stateDir)
 	board := persistentBoard.GetBoardCopy()
 	return &Server{
-		board:         board,
-		persistentBoard: persistentBoard,
-		zoneMap:       NewZoneMap(),
+		board:             board,
+		persistentBoard:   persistentBoard,
+		zoneMap:           NewZoneMap(),
 		minimapAggregator: NewMinimapAggregator(),
-		clients:       make(map[*Client]struct{}),
-		register:      make(chan *Client, 512),
-		unregister:    make(chan *Client, 512),
-		getClients:    make(chan CurrentClients, 128),
-		moveRequests:  make(chan MoveRequest, 1024),
-		subscriptions: make(chan SubscriptionRequest, 1024),
+		clients:           make(map[*Client]struct{}),
+		register:          make(chan *Client, 512),
+		unregister:        make(chan *Client, 512),
+		getClients:        make(chan CurrentClients, 128),
+		moveRequests:      make(chan MoveRequest, 1024),
+		subscriptions:     make(chan SubscriptionRequest, 1024),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -214,7 +214,6 @@ func (s *Server) Run() {
 
 	s.minimapAggregator.Initialize(s.board)
 	// Start the specialized processing goroutines
-	s.board.SaveToFile("state/TEST.bin")
 	go s.processMoves()
 	go s.handleSubscriptions()
 	go s.minimapAggregator.Run()
@@ -239,7 +238,7 @@ func (s *Server) sendPeriodicAggregations() {
 		clientsReq := CurrentClients{response: make(chan map[*Client]struct{})}
 		s.getClients <- clientsReq
 		clients := <-clientsReq.response
-		if (response != nil) {
+		if response != nil {
 			for client := range clients {
 				client.SendMinimapUpdate(response)
 			}
@@ -248,23 +247,23 @@ func (s *Server) sendPeriodicAggregations() {
 }
 
 type StatsUpdate struct {
-	Type string `json:"type"`
-	TotalMoves uint64 `json:"totalMoves"`
+	Type                 string `json:"type"`
+	TotalMoves           uint64 `json:"totalMoves"`
 	WhitePiecesRemaining uint32 `json:"whitePiecesRemaining"`
 	BlackPiecesRemaining uint32 `json:"blackPiecesRemaining"`
-	WhiteKingsRemaining uint32 `json:"whiteKingsRemaining"`
-	BlackKingsRemaining uint32 `json:"blackKingsRemaining"`
+	WhiteKingsRemaining  uint32 `json:"whiteKingsRemaining"`
+	BlackKingsRemaining  uint32 `json:"blackKingsRemaining"`
 }
 
 func (s *Server) createStatsUpdate() StatsUpdate {
 	stats := s.board.GetStats()
 	return StatsUpdate{
-		Type: "globalStats",
-		TotalMoves: stats.TotalMoves,
+		Type:                 "globalStats",
+		TotalMoves:           stats.TotalMoves,
 		WhitePiecesRemaining: stats.WhitePiecesRemaining,
 		BlackPiecesRemaining: stats.BlackPiecesRemaining,
-		WhiteKingsRemaining: stats.WhiteKingsRemaining,
-		BlackKingsRemaining: stats.BlackKingsRemaining,
+		WhiteKingsRemaining:  stats.WhiteKingsRemaining,
+		BlackKingsRemaining:  stats.BlackKingsRemaining,
 	}
 }
 
@@ -333,22 +332,22 @@ func (s *Server) processMoves() {
 
 		affectedZones := s.zoneMap.GetAffectedZones(moveReq.Move)
 		interestedClients := s.zoneMap.GetClientsForZones(affectedZones)
-		var captureMove *PieceCapture = nil;
+		var captureMove *PieceCapture = nil
 		if !capturedPiece.Empty {
 			captureMove = &PieceCapture{
-				CapturedPieceID: capturedPiece.ID,
-				X:               moveReq.Move.ToX,
-				Y:               moveReq.Move.ToY,
-				CapturedType:    capturedPiece.Type,
-				WasWhite:        capturedPiece.IsWhite,
+				CapturedPieceID:  capturedPiece.ID,
+				X:                moveReq.Move.ToX,
+				Y:                moveReq.Move.ToY,
+				CapturedType:     capturedPiece.Type,
+				WasWhite:         capturedPiece.IsWhite,
 				CapturingPieceID: movedPiece.ID,
 				SeqNum:           moveResult.SeqNum,
 			}
 		}
 
 		s.minimapAggregator.UpdateForMove(&pieceMove, captureMove)
-		s.persistentBoard.ApplyMove(moveReq.Move)
-		
+		s.persistentBoard.ApplyMove(moveReq.Move, moveResult.SeqNum)
+
 		// Run client notifications in a separate goroutine
 		go func(clients map[*Client]struct{}, move PieceMove, capture *PieceCapture) {
 			for client := range clients {
@@ -364,7 +363,6 @@ func (s *Server) processMoves() {
 	}
 }
 
-
 // handleSubscriptions processes client subscription requests
 // CR nroyalty: this should all just live in client.go at this
 // point?
@@ -372,7 +370,7 @@ func (s *Server) handleSubscriptions() {
 	for sub := range s.subscriptions {
 		// Update the client's position
 		sub.Client.position = Position{X: sub.Zone.X, Y: sub.Zone.Y}
-		
+
 		zones := GetRelevantZones(sub.Client.position)
 		s.zoneMap.AddClientToZones(sub.Client, zones)
 		sub.Client.currentZones = zones
@@ -393,23 +391,23 @@ type CurrentClients struct {
 func (s *Server) handleClientRegistrations() {
 	for {
 		select {
-			case client := <-s.register:
-				s.clients[client] = struct{}{}
-				log.Printf("Client registered, total: %d", len(s.clients))
-				go client.Run()
-			case client := <-s.unregister:
-				delete(s.clients, client)
-				log.Printf("Client unregistered, total: %d", len(s.clients))
-				go func() {
-					s.zoneMap.RemoveClientFromZones(client)
-					client.Close()
-				}()
-			case req := <-s.getClients:
-				clientsCopy := make(map[*Client]struct{}, len(s.clients))
-				for client := range s.clients {
-					clientsCopy[client] = struct{}{}
-				}
-				req.response <- clientsCopy
+		case client := <-s.register:
+			s.clients[client] = struct{}{}
+			log.Printf("Client registered, total: %d", len(s.clients))
+			go client.Run()
+		case client := <-s.unregister:
+			delete(s.clients, client)
+			log.Printf("Client unregistered, total: %d", len(s.clients))
+			go func() {
+				s.zoneMap.RemoveClientFromZones(client)
+				client.Close()
+			}()
+		case req := <-s.getClients:
+			clientsCopy := make(map[*Client]struct{}, len(s.clients))
+			for client := range s.clients {
+				clientsCopy[client] = struct{}{}
+			}
+			req.response <- clientsCopy
 		}
 	}
 }
@@ -421,10 +419,10 @@ func (s *Server) ServeWs(w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 		return
 	}
-	
+
 	// Create a new client
 	client := NewClient(conn, s)
-	
+
 	// Register the client
 	s.register <- client
 }
@@ -435,7 +433,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request, staticDir str
 		s.ServeWs(w, r)
 		return
 	}
-	
+
 	// Serve static files
 	http.FileServer(http.Dir(staticDir)).ServeHTTP(w, r)
 }
@@ -449,7 +447,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request, staticDir str
 // 		s.board.ResetBoardSection(boardX, boardY, false, false)
 // 	}
 // }
-
 
 func (s *Server) Testing_GetPiece(x, y uint16) *Piece {
 	return s.board.GetPiece(x, y)

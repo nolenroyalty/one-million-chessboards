@@ -1,30 +1,26 @@
 package server
 
 import (
-	"bufio"
-	"encoding/binary"
 	"log"
 	"math/rand"
-	"os"
 	"sync/atomic"
-	"time"
 )
 
 // Board represents the entire game state
 type Board struct {
-	pieces   [BOARD_SIZE][BOARD_SIZE]atomic.Uint64
-	nextID   uint32
-	seqNum   atomic.Uint64
-	totalMoves atomic.Uint64
+	pieces              [BOARD_SIZE][BOARD_SIZE]atomic.Uint64
+	nextID              uint32
+	seqNum              atomic.Uint64
+	totalMoves          atomic.Uint64
 	whitePiecesCaptured atomic.Uint32
 	blackPiecesCaptured atomic.Uint32
-	whiteKingsCaptured atomic.Uint32
-	blackKingsCaptured atomic.Uint32
+	whiteKingsCaptured  atomic.Uint32
+	blackKingsCaptured  atomic.Uint32
 }
 
 // GameStats tracks global game statistics
 type GameStats struct {
-	TotalMoves          uint64
+	TotalMoves           uint64
 	WhitePiecesRemaining uint32
 	BlackPiecesRemaining uint32
 	WhiteKingsRemaining  uint32
@@ -34,19 +30,19 @@ type GameStats struct {
 // NewBoard creates a new empty board
 func NewBoard() *Board {
 	return &Board{
-		nextID: 1,
-		seqNum: atomic.Uint64{},
-		totalMoves: atomic.Uint64{},
+		nextID:              1,
+		seqNum:              atomic.Uint64{},
+		totalMoves:          atomic.Uint64{},
 		whitePiecesCaptured: atomic.Uint32{},
 		blackPiecesCaptured: atomic.Uint32{},
-		whiteKingsCaptured: atomic.Uint32{},
-		blackKingsCaptured: atomic.Uint32{},
+		whiteKingsCaptured:  atomic.Uint32{},
+		blackKingsCaptured:  atomic.Uint32{},
 	}
 }
 
 // GetPiece returns the piece at the given coordinates
 func (b *Board) GetPiece(x, y uint16) *Piece {
-	
+
 	if x >= BOARD_SIZE || y >= BOARD_SIZE {
 		return nil
 	}
@@ -61,13 +57,13 @@ func (b *Board) GetPiece(x, y uint16) *Piece {
 
 type ApplyMoveResult struct {
 	CapturedPiece Piece
-	MovedPiece Piece
-	NoMove bool
+	MovedPiece    Piece
+	NoMove        bool
 }
 
 // ApplyMove applies a move to the board, returning the captured piece if any
 func (b *Board) _ApplyMove(piece Piece, move Move) ApplyMoveResult {
-	
+
 	// Get the piece to move
 	if piece.Empty {
 		return ApplyMoveResult{NoMove: true}
@@ -85,7 +81,7 @@ func (b *Board) _ApplyMove(piece Piece, move Move) ApplyMoveResult {
 			piece.MoveState = Moved
 		}
 	}
-	
+
 	// Do the store before the swap so that if we have a race, we don't have
 	// a duplicate piece on the board. This does mean that we potentially
 	// have a race where a piece disappears from the board, but I think that's
@@ -95,7 +91,7 @@ func (b *Board) _ApplyMove(piece Piece, move Move) ApplyMoveResult {
 	capturedPiece := PieceOfEncodedPiece(EncodedPiece(capturedEncodedPiece))
 
 	if !capturedPiece.Empty {
-		
+
 		// Update capture statistics
 		if capturedPiece.IsWhite {
 			b.whitePiecesCaptured.Add(1)
@@ -109,11 +105,11 @@ func (b *Board) _ApplyMove(piece Piece, move Move) ApplyMoveResult {
 			}
 		}
 	}
-	
+
 	// Increment move counter
 	b.totalMoves.Add(1)
 	b.seqNum.Add(1)
-	
+
 	return ApplyMoveResult{CapturedPiece: capturedPiece, MovedPiece: piece, NoMove: false}
 }
 
@@ -124,7 +120,6 @@ type MoveResult struct {
 	CapturedPiece Piece
 	SeqNum        uint64
 }
-
 
 func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 	if !BoundsCheck(move) {
@@ -138,12 +133,12 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 		log.Printf("Invalid move: No piece at from position (expected id %d)", move.PieceID)
 		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
 	}
-	
+
 	if movedPiece.ID != move.PieceID {
 		log.Printf("Invalid move: Piece ID does not match")
 		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
 	}
-	
+
 	// Check if the move is valid
 	if !SatisfiesBasicMoveRules(b, move) {
 		log.Printf("Invalid move: Move does not satisfy basic move rules")
@@ -159,26 +154,26 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 
 // ResetBoardSection initializes a standard 8x8 chess board at the given position
 func (b *Board) ResetBoardSection(boardX, boardY uint16, includeWhite bool, includeBlack bool) []*PieceState {
-	
+
 	if boardX >= 1000 || boardY >= 1000 {
 		log.Printf("Board section is out of bounds")
 		return nil
 	}
-	
+
 	// Calculate base coordinates
 	baseX := boardX * 8
 	baseY := boardY * 8
-	
+
 	// Track all new pieces for notification
 	newPieces := make([]*PieceState, 0, 32)
-	
+
 	// Clear existing pieces in this section
 	// think about how to do this later when we care...
 	// for y := uint16(0); y < 8; y++ {
 	// 	for x := uint16(0); x < 8; x++ {
 	// 		worldX := baseX + x
 	// 		worldY := baseY + y
-			
+
 	// 		existingPiece := b.pieces[worldY][worldX]
 	// 		if existingPiece != nil {
 	// 			// Skip pieces that shouldn't be reset based on color flags
@@ -189,33 +184,33 @@ func (b *Board) ResetBoardSection(boardX, boardY uint16, includeWhite bool, incl
 	// 		}
 	// 	}
 	// }
-	
+
 	// Place new pieces if we're not excluding their color
 	if includeWhite {
 		// Place white pieces
 		b.setupPiecesForColor(baseX, baseY, true, &newPieces)
 	}
-	
+
 	if includeBlack {
 		// Place black pieces
 		b.setupPiecesForColor(baseX, baseY, false, &newPieces)
 	}
-	
+
 	return newPieces
 }
 
 // setupPiecesForColor sets up the pieces for one color on a board section
 func (b *Board) setupPiecesForColor(baseX, baseY uint16, isWhite bool, newPieces *[]*PieceState) {
 	var pawnRow, pieceRow uint16
-	
+
 	if isWhite {
 		pieceRow = baseY + 7 // Bottom row for white
 		pawnRow = baseY + 6  // Second-to-bottom for white pawns
 	} else {
-		pieceRow = baseY     // Top row for black
-		pawnRow = baseY + 1  // Second row for black pawns
+		pieceRow = baseY    // Top row for black
+		pawnRow = baseY + 1 // Second row for black pawns
 	}
-	
+
 	// Place pawns
 	for x := uint16(0); x < 8; x++ {
 		piece := b.createPiece(Pawn, isWhite)
@@ -226,7 +221,7 @@ func (b *Board) setupPiecesForColor(baseX, baseY uint16, isWhite bool, newPieces
 			Y:     pawnRow,
 		})
 	}
-	
+
 	// Place major pieces
 	pieceTypes := []PieceType{Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook}
 	for x := uint16(0); x < 8; x++ {
@@ -250,11 +245,11 @@ func (b *Board) createPiece(pieceType PieceType, isWhite bool) Piece {
 // GetStats returns a copy of the current game statistics
 func (b *Board) GetStats() GameStats {
 	return GameStats{
-		TotalMoves: b.totalMoves.Load(),
+		TotalMoves:           b.totalMoves.Load(),
 		WhitePiecesRemaining: 32000000 - b.whitePiecesCaptured.Load(),
 		BlackPiecesRemaining: 32000000 - b.blackPiecesCaptured.Load(),
-		WhiteKingsRemaining: 1000000 - b.whiteKingsCaptured.Load(),
-		BlackKingsRemaining: 1000000 - b.blackKingsCaptured.Load(),
+		WhiteKingsRemaining:  1000000 - b.whiteKingsCaptured.Load(),
+		BlackKingsRemaining:  1000000 - b.blackKingsCaptured.Load(),
 	}
 }
 
@@ -265,7 +260,7 @@ func (b *Board) GetStateForPosition(pos Position) StateSnapshot {
 	minY := uint16(0)
 	maxX := uint16(BOARD_SIZE - 1)
 	maxY := uint16(BOARD_SIZE - 1)
-	
+
 	// Adjust for position
 	if pos.X > VIEW_RADIUS {
 		minX = pos.X - VIEW_RADIUS
@@ -279,10 +274,10 @@ func (b *Board) GetStateForPosition(pos Position) StateSnapshot {
 	if pos.Y+VIEW_RADIUS < BOARD_SIZE {
 		maxY = pos.Y + VIEW_RADIUS
 	}
-	
+
 	// Collect pieces in the viewport
 	pieces := make([]PieceState, 0, 100) // Approximate capacity
-	
+
 	for y := minY; y <= maxY; y++ {
 		for x := minX; x <= maxX; x++ {
 			raw := b.pieces[y][x].Load()
@@ -293,140 +288,19 @@ func (b *Board) GetStateForPosition(pos Position) StateSnapshot {
 					X:     x,
 					Y:     y,
 				})
-			} 
+			}
 		}
 	}
-	
+
 	return StateSnapshot{
-		Pieces:    pieces,
-		AreaMinX:  minX,
-		AreaMinY:  minY,
-		AreaMaxX:  maxX,
-		AreaMaxY:  maxY,
+		Pieces:         pieces,
+		AreaMinX:       minX,
+		AreaMinY:       minY,
+		AreaMaxX:       maxX,
+		AreaMaxY:       maxY,
 		StartingSeqNum: startingSeqNum,
-		EndingSeqNum: b.seqNum.Load(),
+		EndingSeqNum:   b.seqNum.Load(),
 	}
-}
-
-type PieceWithCoords struct {
-	RawPiece EncodedPiece
-	Coords uint32
-}
-
-type BoardHeader struct {
-	NextID uint32
-	SeqNum uint64
-	TotalMoves uint64
-	WhitePiecesCaptured uint32
-	BlackPiecesCaptured uint32
-	WhiteKingsCaptured uint32
-	BlackKingsCaptured uint32
-}
-
-func (b *Board) SaveToFile(filename string) error {
-	log.Printf("Saving board to file: %s", filename)
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	start := time.Now()
-	bufferedWriter := bufio.NewWriterSize(file, 32 * 1024 * 1024)
-	header := BoardHeader{
-		NextID: b.nextID,
-		SeqNum: b.seqNum.Load(),
-		TotalMoves: b.totalMoves.Load(),
-		WhitePiecesCaptured: b.whitePiecesCaptured.Load(),
-		BlackPiecesCaptured: b.blackPiecesCaptured.Load(),
-		WhiteKingsCaptured: b.whiteKingsCaptured.Load(),
-		BlackKingsCaptured: b.blackKingsCaptured.Load(),
-	}
-	binary.Write(bufferedWriter, binary.LittleEndian, header)
-	bufferedWriter.Flush()
-
-	// nroyalty: optionally we could only write "real" pieces here...
-	// nroyalty...but it's hard to do that without knowing in advance which
-	// ones to write...
-	for y := uint16(0); y < BOARD_SIZE; y++ {
-		for x := uint16(0); x < BOARD_SIZE; x++ {
-			raw := b.pieces[y][x].Load()
-			encodedPiece := EncodedPiece(raw)
-			if EncodedIsEmpty(encodedPiece) {
-				continue
-			}
-			pieceWithCoords := PieceWithCoords{
-				RawPiece: encodedPiece,
-				Coords: uint32(x) << 16 | uint32(y),
-			}
-			binary.Write(bufferedWriter, binary.LittleEndian, pieceWithCoords)
-		}
-	}
-
-	elapsed := time.Since(start)
-	bufferedWriter.Flush()
-	log.Printf("Time taken to save board: %s", elapsed)
-	return nil;
-}
-
-func (b *Board) LoadFromFile(filename string) error {
-	log.Printf("Loading board from file: %s", filename)
-	file, err := os.Open(filename)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	start := time.Now()
-	// Use a large buffer size to reduce syscalls
-	bufferedReader := bufio.NewReaderSize(file, 32 * 1024 * 1024)
-	
-	// Read header
-	header := BoardHeader{}
-	err = binary.Read(bufferedReader, binary.LittleEndian, &header)
-	if err != nil {
-		return err
-	}
-	
-	// Set board state from header
-	b.nextID = header.NextID
-	b.seqNum.Store(header.SeqNum)
-	b.totalMoves.Store(header.TotalMoves)
-	b.whitePiecesCaptured.Store(header.WhitePiecesCaptured)
-	b.blackPiecesCaptured.Store(header.BlackPiecesCaptured)
-	b.whiteKingsCaptured.Store(header.WhiteKingsCaptured)
-	b.blackKingsCaptured.Store(header.BlackKingsCaptured)
-	
-	// Clear the board first (set all pieces to empty)
-	for y := uint16(0); y < BOARD_SIZE; y++ {
-		for x := uint16(0); x < BOARD_SIZE; x++ {
-			b.pieces[y][x].Store(uint64(EmptyEncodedPiece))
-		}
-	}
-	
-	// Read pieces until EOF
-	pieceWithCoords := PieceWithCoords{}
-	for {
-		err = binary.Read(bufferedReader, binary.LittleEndian, &pieceWithCoords)
-		if err != nil {
-			// EOF is expected when we've read all pieces
-			if err.Error() == "EOF" {
-				break
-			}
-			return err
-		}
-		
-		// Extract coordinates from packed uint32
-		x := uint16(pieceWithCoords.Coords >> 16)
-		y := uint16(pieceWithCoords.Coords & 0xFFFF)
-		
-		// Store the piece at the correct position
-		b.pieces[y][x].Store(uint64(pieceWithCoords.RawPiece))
-	}
-
-	elapsed := time.Since(start)
-	log.Printf("Time taken to load board: %s", elapsed)
-	return nil
 }
 
 func (b *Board) InitializeRandom() {
@@ -436,11 +310,11 @@ func (b *Board) InitializeRandom() {
 	for dx := range 1000 {
 		for dy := range 1000 {
 			random := rand.Intn(1500)
-			includeWhite := random > dy;
-			includeBlack := random > dx;
+			includeWhite := random > dy
+			includeBlack := random > dx
 			// includeWhite := random < 50
 			// includeBlack := random >= 50
-			b.ResetBoardSection(startX + uint16(dx), startY + uint16(dy), includeWhite, includeBlack)
+			b.ResetBoardSection(startX+uint16(dx), startY+uint16(dy), includeWhite, includeBlack)
 		}
 	}
 }
@@ -460,11 +334,11 @@ type Position struct {
 
 // StateSnapshot contains all piece data for a client's view
 type StateSnapshot struct {
-	Pieces    []PieceState
-	AreaMinX  uint16
-	AreaMinY  uint16
-	AreaMaxX  uint16
-	AreaMaxY  uint16
+	Pieces         []PieceState
+	AreaMinX       uint16
+	AreaMinY       uint16
+	AreaMaxX       uint16
+	AreaMaxY       uint16
 	StartingSeqNum uint64
-	EndingSeqNum uint64
+	EndingSeqNum   uint64
 }
