@@ -18,7 +18,7 @@ import (
 const (
 	snapshotInterval      = time.Second * 600
 	moveSerializeInterval = time.Second * 5
-	maxMovesToSerialize   = 400
+	maxMovesToSerialize   = 2500
 	snapshotPrefix        = "board"
 	movePrefix            = "moves"
 	suffix                = ".bin"
@@ -112,8 +112,7 @@ func (b *Board) GetBoardSnapshot() BoardSnapshot {
 	for y := uint16(0); y < BOARD_SIZE; y++ {
 		for x := uint16(0); x < BOARD_SIZE; x++ {
 			raw := b.pieces[y][x].Load()
-			piece := PieceOfEncodedPiece(EncodedPiece(raw))
-			if !piece.Empty {
+			if raw != uint64(EmptyEncodedPiece) {
 				snapshot.PiecesWithCoords = append(snapshot.PiecesWithCoords, PieceWithCoords{
 					RawPiece: EncodedPiece(raw),
 					Coords:   uint32(x)<<16 | uint32(y),
@@ -250,7 +249,7 @@ func NewPersistentBoard(stateDir string) *PersistentBoard {
 	snapshotFilenames, err := GetSortedSnapshotFilenames(stateDir, snapshotPrefix)
 	if err != nil {
 		log.Printf("Error getting snapshot filenames: %v", err)
-		return nil
+		panic(err)
 	}
 
 	if len(snapshotFilenames) == 0 {
@@ -272,7 +271,7 @@ func NewPersistentBoard(stateDir string) *PersistentBoard {
 	moveFilenames, err := GetSortedSnapshotFilenames(stateDir, movePrefix)
 	if err != nil {
 		log.Printf("Error getting move filenames: %v", err)
-		return nil
+		panic(err)
 	}
 
 	for _, moveFilename := range moveFilenames {
@@ -284,8 +283,9 @@ func NewPersistentBoard(stateDir string) *PersistentBoard {
 		moveFile, err := os.Open(path)
 		log.Printf("Loading moves from file %s", path)
 		if err != nil {
-			log.Printf("Error opening move file: %v", err)
-			return nil
+			s := fmt.Sprintf("Error opening move file: %v", err)
+			log.Print(s)
+			panic(s)
 		}
 
 		replayErr := func() error {
@@ -298,10 +298,16 @@ func NewPersistentBoard(stateDir string) *PersistentBoard {
 					if err == io.EOF {
 						break
 					}
-					log.Printf("Error reading move: %v", err)
-					return err
+					s := fmt.Sprintf("Error reading move: %v", err)
+					log.Print(s)
+                    panic(s)
 				}
-				pb.board.ValidateAndApplyMove(move)
+				res := pb.board.ValidateAndApplyMove(move)
+				if !res.Valid {
+					s := fmt.Sprintf("Invalid move (file: %s, move: %v)", moveFilename.toFilename(), move)
+					log.Print(s)
+					panic(s)
+				}
 			}
 			return nil
 		}()
@@ -313,95 +319,6 @@ func NewPersistentBoard(stateDir string) *PersistentBoard {
 	}
 	return pb
 }
-
-// func NewPersistentBoard(stateDir string) *PersistentBoard {
-// 	board := NewBoard()
-// 	files, err := filepath.Glob(filepath.Join(stateDir, "board-*.bin"))
-// 	if err != nil {
-// 		log.Printf("Error getting files: %v", err)
-// 	}
-// 	snapshotExists := false
-// 	snapshotFilename := ""
-// 	lastSeqNum := uint64(0)
-// 	if len(files) > 0 {
-// 		snapshotExists = true
-// 		for _, file := range files {
-// 			withoutExt := strings.TrimSuffix(filepath.Base(file), ".bin")
-// 			seqNum := strings.Split(withoutExt, "-")[1]
-// 			seqNumInt, err := strconv.ParseUint(seqNum, 10, 64)
-// 			if err != nil {
-// 				log.Printf("Error parsing seqNum: %v", err)
-// 			}
-// 			if seqNumInt >= lastSeqNum {
-// 				lastSeqNum = seqNumInt
-// 				snapshotFilename = file
-// 			}
-// 		}
-// 	}
-
-// 	if snapshotExists {
-// 		log.Printf("Loading board from snapshot file %s", snapshotFilename)
-// 		board.LoadFromSnapshotFile(snapshotFilename)
-// 		lastSeqnumFromBoard := board.seqNum.Load()
-// 		if lastSeqNum != lastSeqnumFromBoard {
-// 			log.Printf("ERROR: Last seqNum from board %d does not match last seqNum from file %d", lastSeqnumFromBoard, lastSeqNum)
-// 			lastSeqNum = lastSeqnumFromBoard
-// 		}
-// 	} else {
-// 		board.InitializeRandom()
-// 		snapshot := board.GetBoardSnapshot()
-// 		snapshot.SaveToFile(stateDir, "board", board.seqNum.Load())
-// 	}
-
-// 	pb := &PersistentBoard{board: board,
-// 		movesToApply:           make(chan Move, 8192),
-// 		stateDir:               stateDir,
-// 		movesToSerializeBuffer: make([]Move, 0, 512),
-// 		lastSerializedSeqNum:   atomic.Uint64{}}
-// 	pb.lastSerializedSeqNum.Store(lastSeqNum)
-
-// 	if snapshotExists {
-// 		moveFiles, err := filepath.Glob(filepath.Join(stateDir, "moves-*.bin"))
-// 		if err != nil {
-// 			log.Printf("Error getting files: %v", err)
-// 		}
-// 		filesToApply := make([]string, 0, len(moveFiles))
-// 		for _, file := range moveFiles {
-// 			withoutExt := strings.TrimSuffix(filepath.Base(file), ".bin")
-// 			seqNum := strings.Split(withoutExt, "-")[1]
-// 			seqNumInt, err := strconv.ParseUint(seqNum, 10, 64)
-// 			if err != nil {
-// 				log.Printf("Error parsing seqNum: %v", err)
-// 			} else if seqNumInt >= lastSeqNum {
-// 				filesToApply = append(filesToApply, file)
-// 				log.Printf("Adding move file %s to apply", file)
-// 			} else {
-// 				log.Printf("Skipping move file %s because seqNum %d is less than lastSeqNum %d", file, seqNumInt, lastSeqNum)
-// 			}
-// 		}
-// 		for _, file := range filesToApply {
-// 			moveFile, err := os.Open(file)
-// 			if err != nil {
-// 				log.Printf("Error opening file: %v", err)
-// 			}
-// 			defer moveFile.Close()
-// 			log.Printf("Applying moves from file %s", file)
-// 			bufferedReader := bufio.NewReaderSize(moveFile, 8*1024*1024)
-// 			move := Move{}
-// 			for {
-// 				err = binary.Read(bufferedReader, binary.LittleEndian, &move)
-// 				if err != nil {
-// 					if err.Error() == "EOF" {
-// 						break
-// 					}
-// 					log.Printf("Error reading move: %v", err)
-// 				}
-// 				pb.board.ValidateAndApplyMove(move)
-// 			}
-// 		}
-// 	}
-// 	return pb
-// }
 
 func (pb *PersistentBoard) GetBoardCopy() *Board {
 	board := NewBoard()
