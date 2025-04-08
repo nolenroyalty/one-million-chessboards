@@ -1,5 +1,6 @@
 import React from "react";
 import { clamp, computeInitialArguments } from "../../utils";
+import { useHash } from "../../hooks/use-hash";
 
 const CoordsContext = React.createContext();
 
@@ -14,17 +15,34 @@ export function CoordsContextProvider({ children }) {
     y: initialArgs.y,
   });
 
-  const setCoords = React.useCallback((newCoordsOrFn) => {
+  const hash = useHash();
+  React.useEffect(() => {
+    if (hash && hash !== "") {
+      const initialArgs = computeInitialArguments(hash);
+      const { x, y } = initialArgs;
+      if (x === null || y === null) {
+        return;
+      }
+      setRawCoords({ x, y }, false);
+    }
+  }, [hash]);
+
+  const setCoords = React.useCallback((newCoordsOrFn, updateHash = true) => {
     setRawCoords((prev) => {
       const newCoords =
         typeof newCoordsOrFn === "function"
           ? newCoordsOrFn(prev)
           : newCoordsOrFn;
+      if (newCoords.x === null || newCoords.y === null) {
+        return prev;
+      }
       const x = clamp(newCoords.x, MIN_COORD, MAX_COORD);
       const y = clamp(newCoords.y, MIN_COORD, MAX_COORD);
-      const url = new URL(window.location.href);
-      url.hash = `${x},${y}`;
-      window.history.replaceState({}, "", url);
+      if (updateHash) {
+        const url = new URL(window.location.href);
+        url.hash = `${x},${y}`;
+        window.history.replaceState({}, "", url);
+      }
       return {
         x,
         y,
