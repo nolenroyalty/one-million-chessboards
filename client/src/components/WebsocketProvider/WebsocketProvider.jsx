@@ -137,15 +137,19 @@ function useWebsocket({
       const hostname = window.location.host;
       const wsPath = "/ws";
       const initialArgs = computeInitialArguments();
-      let wsUrl = `${protocol}${hostname}${wsPath}?`;
+      let wsUrl = `${protocol}${hostname}${wsPath}`;
+      const args = [];
       if (initialArgs.x !== null) {
-        wsUrl += `x=${initialArgs.x}&`;
+        args.push(`x=${initialArgs.x}`);
       }
       if (initialArgs.y !== null) {
-        wsUrl += `y=${initialArgs.y}&`;
+        args.push(`y=${initialArgs.y}`);
       }
       if (initialArgs.colorPref !== null) {
-        wsUrl += `colorPref=${initialArgs.colorPref}`;
+        args.push(`colorPref=${initialArgs.colorPref}`);
+      }
+      if (args.length > 0) {
+        wsUrl += `?${args.join("&")}`;
       }
 
       if (websocketRef.current) {
