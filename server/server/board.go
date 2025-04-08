@@ -328,8 +328,8 @@ type PieceState struct {
 
 // Position represents a client's current view position
 type Position struct {
-	X uint16
-	Y uint16
+	X uint16 `json:"x"`
+	Y uint16 `json:"y"`
 }
 
 // StateSnapshot contains all piece data for a client's view

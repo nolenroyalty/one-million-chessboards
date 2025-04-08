@@ -475,3 +475,36 @@ export function getMoveableSquares(piece, pieces) {
 export function clamp(value, min, max) {
   return Math.max(min, Math.min(value, max));
 }
+
+export function getColorPref() {
+  const colorPref = localStorage.getItem("colorPref");
+  if (!colorPref) {
+    return null;
+  }
+  if (colorPref !== "white" && colorPref !== "black") {
+    return null;
+  }
+  return colorPref;
+}
+
+export function storeColorPref(colorPref) {
+  localStorage.setItem("colorPref", colorPref);
+}
+
+export function computeInitialArguments() {
+  const url = new URL(window.location.href);
+  const hash = url.hash.slice(1);
+  const colorPref = getColorPref();
+  if (!hash || hash === "") {
+    return { x: null, y: null, colorPref };
+  }
+  try {
+    const [x, y] = hash.split(",").map(Number);
+    if (x < 0 || x >= 8000 || y < 0 || y >= 8000) {
+      return { x: null, y: null, colorPref };
+    }
+    return { x, y, colorPref };
+  } catch (e) {
+    return { x: null, y: null, colorPref };
+  }
+}

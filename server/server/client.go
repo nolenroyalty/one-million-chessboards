@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -12,37 +14,88 @@ import (
 
 const (
 	PeriodicUpdateInterval = time.Second * 60
+	activityThreshold      = time.Second * 60
 )
+
+type PieceData struct {
+	ID        uint32    `json:"id"`
+	X         uint16    `json:"x"`
+	Y         uint16    `json:"y"`
+	Type      PieceType `json:"type"`
+	IsWhite   bool      `json:"isWhite"`
+	MoveState MoveState `json:"moveState"`
+}
+
+type SnapshotMessage struct {
+	Type           string      `json:"type"`
+	Pieces         []PieceData `json:"pieces"`
+	AreaMinX       uint16      `json:"areaMinX"`
+	AreaMinY       uint16      `json:"areaMinY"`
+	AreaMaxX       uint16      `json:"areaMaxX"`
+	AreaMaxY       uint16      `json:"areaMaxY"`
+	StartingSeqNum uint64      `json:"startingSeqNum"`
+	EndingSeqNum   uint64      `json:"endingSeqNum"`
+}
+
+func (snapshot *StateSnapshot) ToSnapshotMessage() SnapshotMessage {
+	pieces := make([]PieceData, len(snapshot.Pieces))
+	for i, piece := range snapshot.Pieces {
+		pieces[i] = PieceData{
+			ID:        piece.Piece.ID,
+			X:         piece.X,
+			Y:         piece.Y,
+			Type:      piece.Piece.Type,
+			IsWhite:   piece.Piece.IsWhite,
+			MoveState: piece.Piece.MoveState,
+		}
+	}
+
+	message := SnapshotMessage{
+		Type:           "stateSnapshot",
+		Pieces:         pieces,
+		AreaMinX:       snapshot.AreaMinX,
+		AreaMinY:       snapshot.AreaMinY,
+		AreaMaxX:       snapshot.AreaMaxX,
+		AreaMaxY:       snapshot.AreaMaxY,
+		StartingSeqNum: snapshot.StartingSeqNum,
+		EndingSeqNum:   snapshot.EndingSeqNum,
+	}
+
+	return message
+}
 
 // Client represents a connected websocket client
 type Client struct {
-	conn             *websocket.Conn
-	server           *Server
-	send             chan []byte
-	position         Position
-	lastSnapshotTime time.Time
-	currentZones     map[ZoneCoord]struct{}
-	moveBuffer       []PieceMove
-	captureBuffer    []PieceCapture
-	bufferMu         sync.Mutex
-	done             chan struct{}
-	closeMu          sync.Mutex
-	isClosed         bool
+	conn                 *websocket.Conn
+	server               *Server
+	send                 chan []byte
+	position             atomic.Value
+	lastSnapshotPosition atomic.Value
+	lastSnapshotTime     time.Time
+	currentZones         map[ZoneCoord]struct{}
+	moveBuffer           []PieceMove
+	captureBuffer        []PieceCapture
+	bufferMu             sync.Mutex
+	done                 chan struct{}
+	closeMu              sync.Mutex
+	isClosed             bool
+	lastActionTime       atomic.Int64
+	playingWhite         bool
 }
 
 // SubscriptionRequest represents a client request to subscribe to a position
 type SubscriptionRequest struct {
-	Client *Client
-	Zone   ZoneCoord
+	Client   *Client
+	Position Position
 }
 
 // NewClient creates a new client instance
 func NewClient(conn *websocket.Conn, server *Server) *Client {
-	return &Client{
+	c := &Client{
 		conn:             conn,
 		server:           server,
 		send:             make(chan []byte, 256),
-		position:         Position{X: 0, Y: 0},
+		position:         atomic.Value{},
 		currentZones:     make(map[ZoneCoord]struct{}),
 		moveBuffer:       make([]PieceMove, 0, 400),
 		captureBuffer:    make([]PieceCapture, 0, 100),
@@ -51,7 +104,19 @@ func NewClient(conn *websocket.Conn, server *Server) *Client {
 		bufferMu:         sync.Mutex{},
 		closeMu:          sync.Mutex{},
 		lastSnapshotTime: time.Now().Add(-30 * time.Second), // Allow immediate snapshot
+		lastActionTime:   atomic.Int64{},
+		playingWhite:     false,
 	}
+	c.lastActionTime.Store(time.Now().Unix())
+	c.position.Store(Position{X: 0, Y: 0})
+	c.lastSnapshotPosition.Store(Position{X: 0, Y: 0})
+	return c
+}
+
+func (c *Client) InitializeFromPreferences(playingWhite bool, pos Position) {
+	c.playingWhite = playingWhite
+	c.position.Store(pos)
+	c.lastSnapshotPosition.Store(pos)
 }
 
 func (c *Client) Run() {
@@ -59,18 +124,75 @@ func (c *Client) Run() {
 	go c.WritePump()
 	go c.SendPeriodicUpdates()
 	go c.ProcessMoveUpdates()
-	go c.ImmediatelySendStaleAggregation()
-	go c.ImmediatelySendGlobalStats()
+	// CR nroyalty: this should be one update that includes an initial state
+	// snapshot when we move to protobuffs
+	c.sendInitialState()
 }
 
-func (c *Client) ImmediatelySendStaleAggregation() {
+type InitialInfo struct {
+	Type               string          `json:"type"`
+	MinimapAggregation json.RawMessage `json:"minimapAggregation"`
+	GlobalStats        json.RawMessage `json:"globalStats"`
+	Position           Position        `json:"position"`
+	PlayingWhite       bool            `json:"playingWhite"`
+	Snapshot           SnapshotMessage `json:"snapshot"`
+}
+
+func (c *Client) sendInitialState() {
 	aggregation := c.server.RequestStaleAggregation()
-	c.SendMinimapUpdate(aggregation)
+	stats := c.server.RequestStatsSnapshot()
+	currentPosition := c.position.Load().(Position)
+	snapshot := c.server.board.GetStateForPosition(currentPosition)
+
+	initialInfo := InitialInfo{
+		Type:               "initialState",
+		MinimapAggregation: aggregation,
+		GlobalStats:        stats,
+		Position:           currentPosition,
+		PlayingWhite:       c.playingWhite,
+		Snapshot:           snapshot.ToSnapshotMessage(),
+	}
+	data, err := json.Marshal(initialInfo)
+	if err != nil {
+		log.Printf("Error marshaling initial info: %v", err)
+		return
+	}
+	select {
+	case c.send <- data:
+	case <-c.done:
+		return
+	}
 }
 
-func (c *Client) ImmediatelySendGlobalStats() {
-	stats := c.server.RequestStatsSnapshot()
-	c.SendGlobalStats(stats)
+func (c *Client) IsActive() bool {
+	lastActionTime := c.lastActionTime.Load()
+	if lastActionTime == 0 {
+		return false
+	}
+	return time.Since(time.Unix(lastActionTime, 0)) < activityThreshold
+}
+
+func (c *Client) BumpActive() {
+	c.lastActionTime.Store(time.Now().Unix())
+}
+
+const SNAPSHOT_THRESHOLD = 15
+
+func shouldSendSnapshot(lastSnapshotPosition Position, currentPosition Position) bool {
+	dx := math.Abs(float64(lastSnapshotPosition.X) - float64(currentPosition.X))
+	dy := math.Abs(float64(lastSnapshotPosition.Y) - float64(currentPosition.Y))
+	return dx > float64(SNAPSHOT_THRESHOLD) || dy > float64(SNAPSHOT_THRESHOLD)
+}
+
+func (c *Client) UpdatePositionAndMaybeSnapshot(currentZones map[ZoneCoord]struct{}, pos Position) {
+	c.currentZones = currentZones
+	c.position.Store(pos)
+	lastSnapshotPosition := c.lastSnapshotPosition.Load().(Position)
+	if shouldSendSnapshot(lastSnapshotPosition, pos) {
+		snapshot := c.server.board.GetStateForPosition(pos)
+		c.SendStateSnapshot(snapshot)
+		c.lastSnapshotPosition.Store(pos)
+	}
 }
 
 // ReadPump handles incoming messages from the client
@@ -136,6 +258,7 @@ func (c *Client) handleMessage(message []byte) {
 			c.SendError("Invalid coordinates")
 			return
 		}
+		c.BumpActive()
 
 		// Submit the move request
 		c.server.moveRequests <- MoveRequest{
@@ -151,26 +274,28 @@ func (c *Client) handleMessage(message []byte) {
 
 	case "subscribe":
 		// Extract subscription parameters
-		centerX, _ := msg["centerX"].(float64)
-		centerY, _ := msg["centerY"].(float64)
+		centerX, ok := msg["centerX"].(float64)
+		if !ok {
+			c.SendError("Invalid coordinates")
+			return
+		}
+		centerY, ok := msg["centerY"].(float64)
+		if !ok {
+			c.SendError("Invalid coordinates")
+			return
+		}
 
 		// Basic bounds checking
 		if !CoordInBounds(centerX) || !CoordInBounds(centerY) {
 			c.SendError("Invalid coordinates")
 			return
 		}
+		c.BumpActive()
 
 		// Submit the subscription request
 		c.server.subscriptions <- SubscriptionRequest{
-			Client: c,
-			Zone:   ZoneCoord{X: uint16(centerX), Y: uint16(centerY)},
-		}
-
-	case "requestSnapshot":
-		// Rate limit snapshot requests
-		if c.canRequestSnapshot() {
-			snapshot := c.server.board.GetStateForPosition(c.position)
-			c.SendStateSnapshot(snapshot)
+			Client:   c,
+			Position: Position{X: uint16(centerX), Y: uint16(centerY)},
 		}
 
 	case "app-ping":
@@ -236,8 +361,8 @@ func (c *Client) SendPeriodicUpdates() {
 		select {
 		case <-ticker.C:
 			if len(c.currentZones) > 0 {
-				log.Printf("Sending periodic update")
-				snapshot := c.server.board.GetStateForPosition(c.position)
+				log.Printf("Sending periodic update for position: %v", c.position.Load().(Position))
+				snapshot := c.server.board.GetStateForPosition(c.position.Load().(Position))
 				c.SendStateSnapshot(snapshot)
 			} else {
 				log.Printf("No zones to update")
@@ -315,59 +440,13 @@ func (c *Client) AddCaptureToBuffer(capture PieceCapture) {
 
 // SendStateSnapshot sends a state snapshot to the client
 func (c *Client) SendStateSnapshot(snapshot StateSnapshot) {
-	// Create JSON message for state snapshot
-	type PieceData struct {
-		ID        uint32    `json:"id"`
-		X         uint16    `json:"x"`
-		Y         uint16    `json:"y"`
-		Type      PieceType `json:"type"`
-		IsWhite   bool      `json:"isWhite"`
-		MoveState MoveState `json:"moveState"`
-	}
-
-	type SnapshotMessage struct {
-		Type           string      `json:"type"`
-		Pieces         []PieceData `json:"pieces"`
-		AreaMinX       uint16      `json:"areaMinX"`
-		AreaMinY       uint16      `json:"areaMinY"`
-		AreaMaxX       uint16      `json:"areaMaxX"`
-		AreaMaxY       uint16      `json:"areaMaxY"`
-		StartingSeqNum uint64      `json:"startingSeqNum"`
-		EndingSeqNum   uint64      `json:"endingSeqNum"`
-	}
-
-	// Convert pieces to the message format
-	pieces := make([]PieceData, len(snapshot.Pieces))
-	for i, piece := range snapshot.Pieces {
-		pieces[i] = PieceData{
-			ID:        piece.Piece.ID,
-			X:         piece.X,
-			Y:         piece.Y,
-			Type:      piece.Piece.Type,
-			IsWhite:   piece.Piece.IsWhite,
-			MoveState: piece.Piece.MoveState,
-		}
-	}
-
-	message := SnapshotMessage{
-		Type:           "stateSnapshot",
-		Pieces:         pieces,
-		AreaMinX:       snapshot.AreaMinX,
-		AreaMinY:       snapshot.AreaMinY,
-		AreaMaxX:       snapshot.AreaMaxX,
-		AreaMaxY:       snapshot.AreaMaxY,
-		StartingSeqNum: snapshot.StartingSeqNum,
-		EndingSeqNum:   snapshot.EndingSeqNum,
-	}
-
-	// Marshal to JSON
+	message := snapshot.ToSnapshotMessage()
 	data, err := json.Marshal(message)
 	if err != nil {
 		log.Printf("Error marshaling snapshot: %v", err)
 		return
 	}
 
-	// Send through the channel
 	select {
 	case <-c.done:
 		return
@@ -469,17 +548,6 @@ func (c *Client) SendGlobalStats(stats json.RawMessage) {
 		// Buffer full, client might be slow or disconnected
 		c.server.unregister <- c
 	}
-}
-
-// canRequestSnapshot checks if the client can request a snapshot (rate limiting)
-func (c *Client) canRequestSnapshot() bool {
-	return true
-	//now := time.Now()
-	//if now.Sub(c.lastSnapshotTime) < 5*time.Second {
-	//return false
-	//}
-	//c.lastSnapshotTime = now
-	//return true
 }
 
 // Close closes the client connection

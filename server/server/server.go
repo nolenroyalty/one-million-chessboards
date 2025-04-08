@@ -3,8 +3,12 @@ package server
 import (
 	"encoding/json"
 	"log"
+	"math"
+	"math/rand"
 	"net/http"
+	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -14,6 +18,21 @@ const (
 	aggregationInterval = time.Second * 30
 	statsUpdateInterval = time.Second * 5
 )
+
+type ColorPreference int
+
+const (
+	ColorPreferenceWhite ColorPreference = iota
+	ColorPreferenceBlack
+	ColorPreferenceRandom
+)
+
+type RegistrationRequest struct {
+	Client          *Client
+	ColorPreference ColorPreference
+	RequestedXCoord int16
+	RequestedYCoord int16
+}
 
 // Server is the main game server coordinator
 type Server struct {
@@ -25,12 +44,13 @@ type Server struct {
 	clients           map[*Client]struct{}
 
 	// Communication channels
-	register      chan *Client
+	register      chan *RegistrationRequest
 	unregister    chan *Client
 	getClients    chan CurrentClients
 	moveRequests  chan MoveRequest
 	subscriptions chan SubscriptionRequest
-
+	whiteCount    atomic.Uint32
+	blackCount    atomic.Uint32
 	// HTTP server components
 	upgrader websocket.Upgrader
 }
@@ -188,17 +208,19 @@ func GetRelevantZones(pos Position) map[ZoneCoord]struct{} {
 func NewServer(stateDir string) *Server {
 	persistentBoard := NewPersistentBoard(stateDir)
 	board := persistentBoard.GetBoardCopy()
-	return &Server{
+	s := &Server{
 		board:             board,
 		persistentBoard:   persistentBoard,
 		zoneMap:           NewZoneMap(),
 		minimapAggregator: NewMinimapAggregator(),
 		clients:           make(map[*Client]struct{}),
-		register:          make(chan *Client, 512),
+		register:          make(chan *RegistrationRequest, 512),
 		unregister:        make(chan *Client, 512),
 		getClients:        make(chan CurrentClients, 128),
 		moveRequests:      make(chan MoveRequest, 1024),
 		subscriptions:     make(chan SubscriptionRequest, 1024),
+		whiteCount:        atomic.Uint32{},
+		blackCount:        atomic.Uint32{},
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -207,6 +229,9 @@ func NewServer(stateDir string) *Server {
 			},
 		},
 	}
+	s.whiteCount.Store(0)
+	s.blackCount.Store(0)
+	return s
 }
 
 // Run starts all server processes
@@ -231,9 +256,7 @@ func (s *Server) sendPeriodicAggregations() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		log.Printf("Requesting aggregation")
 		aggregation := s.minimapAggregator.RequestAggregation()
-		log.Printf("Sending periodic aggregation")
 		response := <-aggregation
 		clientsReq := CurrentClients{response: make(chan map[*Client]struct{})}
 		s.getClients <- clientsReq
@@ -363,24 +386,12 @@ func (s *Server) processMoves() {
 	}
 }
 
-// handleSubscriptions processes client subscription requests
-// CR nroyalty: this should all just live in client.go at this
-// point?
 func (s *Server) handleSubscriptions() {
 	for sub := range s.subscriptions {
-		// Update the client's position
-		sub.Client.position = Position{X: sub.Zone.X, Y: sub.Zone.Y}
-
-		zones := GetRelevantZones(sub.Client.position)
+		pos := sub.Position
+		zones := GetRelevantZones(pos)
 		s.zoneMap.AddClientToZones(sub.Client, zones)
-		sub.Client.currentZones = zones
-
-		// CR nroyalty: only send a new snapshot if the client has moved a lot?
-		// maybe we can handle this with client-side logic...
-
-		// Send an initial state snapshot
-		snapshot := s.board.GetStateForPosition(sub.Client.position)
-		sub.Client.SendStateSnapshot(snapshot)
+		sub.Client.UpdatePositionAndMaybeSnapshot(zones, pos)
 	}
 }
 
@@ -388,13 +399,119 @@ type CurrentClients struct {
 	response chan map[*Client]struct{}
 }
 
+func applyColorPref(colorPref ColorPreference) bool {
+	switch colorPref {
+	case ColorPreferenceWhite:
+		return true
+	case ColorPreferenceBlack:
+		return false
+	default:
+		return rand.Intn(2) == 0
+	}
+}
+
+func (s *Server) DetermineColor(colorPref ColorPreference) bool {
+	whiteCount := s.whiteCount.Load()
+	blackCount := s.blackCount.Load()
+	total := whiteCount + blackCount
+	if total == 0 {
+		return applyColorPref(colorPref)
+	}
+	diff := math.Abs(float64(int(whiteCount) - int(blackCount)))
+	pct := diff / float64(total)
+	if pct > 0.1 {
+		if whiteCount > blackCount {
+			return false
+		} else {
+			return true
+		}
+	}
+	return applyColorPref(colorPref)
+}
+
+var DEFAULT_COORD_ARRAY = [][]int{
+	{500, 500},
+	{2000, 2000},
+	{4500, 4500},
+	{3000, 1500},
+	{1000, 2000},
+	{2000, 1000},
+}
+
+const (
+	BOARD_EDGE_BUFFER = 20
+	BOARD_MAX_COORD   = BOARD_SIZE - BOARD_EDGE_BUFFER - 1
+	BOARD_MIN_COORD   = BOARD_EDGE_BUFFER
+	POSITION_JITTER   = 4
+)
+
+func IncrOrDecrPosition(n uint16) uint16 {
+	if rand.Intn(2) == 0 {
+		if n < BOARD_MAX_COORD {
+			return n + POSITION_JITTER
+		}
+	} else {
+		if n > BOARD_MIN_COORD {
+			return n - POSITION_JITTER
+		}
+	}
+	return n
+}
+
+func (s *Server) GetDefaultCoords() Position {
+	activeClientPositions := make([]Position, 0, 100)
+	count := 0
+	for client := range s.clients {
+		if count > 100 {
+			break
+		}
+		if client.IsActive() {
+			pos := client.position.Load().(Position)
+			activeClientPositions = append(activeClientPositions, pos)
+			count++
+		}
+	}
+
+	if len(activeClientPositions) == 0 {
+		idx := rand.Intn(len(DEFAULT_COORD_ARRAY))
+		return Position{X: uint16(DEFAULT_COORD_ARRAY[idx][0]), Y: uint16(DEFAULT_COORD_ARRAY[idx][1])}
+	}
+
+	idx := rand.Intn(len(activeClientPositions))
+	pos := activeClientPositions[idx]
+	pos.X = IncrOrDecrPosition(pos.X)
+	pos.Y = IncrOrDecrPosition(pos.Y)
+	return pos
+}
+
+func (s *Server) GetMaybeRequestedCoords(requestedXCoord int16, requestedYCoord int16) Position {
+	if requestedXCoord == -1 || requestedYCoord == -1 {
+		ret := s.GetDefaultCoords()
+		return ret
+	}
+	if requestedXCoord < 0 || requestedXCoord >= BOARD_SIZE || requestedYCoord < 0 || requestedYCoord >= BOARD_SIZE {
+		ret := s.GetDefaultCoords()
+		return ret
+	}
+	return Position{X: uint16(requestedXCoord), Y: uint16(requestedYCoord)}
+}
+
 func (s *Server) handleClientRegistrations() {
 	for {
 		select {
-		case client := <-s.register:
-			s.clients[client] = struct{}{}
+		case req := <-s.register:
+			pos := s.GetMaybeRequestedCoords(req.RequestedXCoord, req.RequestedYCoord)
+			playingWhite := s.DetermineColor(req.ColorPreference)
+			req.Client.InitializeFromPreferences(playingWhite, pos)
+			s.clients[req.Client] = struct{}{}
 			log.Printf("Client registered, total: %d", len(s.clients))
-			go client.Run()
+			go req.Client.Run()
+			subscribeReq := SubscriptionRequest{
+				Client:   req.Client,
+				Position: pos,
+			}
+			log.Printf("subscribing client to position: %v", pos)
+			s.subscriptions <- subscribeReq
 		case client := <-s.unregister:
 			delete(s.clients, client)
 			log.Printf("Client unregistered, total: %d", len(s.clients))
@@ -420,14 +537,47 @@ func (s *Server) ServeWs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create a new client
+	requestedXCoord := int16(-1)
+	requestedYCoord := int16(-1)
+	if xCoord, err := strconv.Atoi(r.URL.Query().Get("x")); err == nil {
+		if xCoord >= 0 && xCoord < 8000 {
+			requestedXCoord = int16(xCoord)
+		}
+	}
+	if yCoord, err := strconv.Atoi(r.URL.Query().Get("y")); err == nil {
+		if yCoord >= 0 && yCoord < 8000 {
+			requestedYCoord = int16(yCoord)
+		}
+	}
+	if requestedXCoord == -1 || requestedYCoord == -1 {
+		requestedXCoord = -1
+		requestedYCoord = -1
+	}
+
+	colorPref := ColorPreferenceRandom
+	if colorPrefStr := r.URL.Query().Get("colorPref"); colorPrefStr != "" {
+		switch colorPrefStr {
+		case "white":
+			colorPref = ColorPreferenceWhite
+		case "black":
+			colorPref = ColorPreferenceBlack
+		default:
+			colorPref = ColorPreferenceRandom
+		}
+	}
+
 	client := NewClient(conn, s)
 
-	// Register the client
-	s.register <- client
+	req := RegistrationRequest{
+		Client:          client,
+		ColorPreference: colorPref,
+		RequestedXCoord: requestedXCoord,
+		RequestedYCoord: requestedYCoord,
+	}
+
+	s.register <- &req
 }
 
-// ServeHTTP serves the static HTML/JS/CSS files
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request, staticDir string) {
 	if r.URL.Path == "/ws" {
 		s.ServeWs(w, r)
@@ -437,16 +587,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request, staticDir str
 	// Serve static files
 	http.FileServer(http.Dir(staticDir)).ServeHTTP(w, r)
 }
-
-// InitializeBoards sets up a number of random boards for testing
-// func (s *Server) InitializeBoards(count int) {
-// 	// Initialize some random boards for testing
-// 	for i := range count {
-// 		boardX := uint16(i % 100)
-// 		boardY := uint16(i / 100)
-// 		s.board.ResetBoardSection(boardX, boardY, false, false)
-// 	}
-// }
 
 func (s *Server) Testing_GetPiece(x, y uint16) *Piece {
 	return s.board.GetPiece(x, y)

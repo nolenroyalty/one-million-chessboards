@@ -51,6 +51,7 @@ const CoordsWrapper = styled.div`
   font-size: 0.75rem;
   padding: 0.125rem;
   min-width: 9ch;
+  min-height: 1.4rem;
   text-align: center;
   border-radius: 0.25rem;
   background-color: var(--color-neutral-950);
@@ -58,11 +59,11 @@ const CoordsWrapper = styled.div`
 `;
 
 function CoordsDisplay({ coords }) {
+  const s =
+    coords.x !== null && coords.y !== null ? `${coords.x},${coords.y}` : "";
   return (
     <CoordsWrapper>
-      <p>
-        {coords.x},{coords.y}
-      </p>
+      <p>{s}</p>
     </CoordsWrapper>
   );
 }

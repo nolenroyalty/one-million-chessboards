@@ -9,6 +9,7 @@ import PanzoomBox from "../PanzoomBox/PanzoomBox";
 import useBoardSizeParams from "../../hooks/use-board-size-params";
 import CoordsContext from "../CoordsContext/CoordsContext";
 import ShowLargeBoardContext from "../ShowLargeBoardContext/ShowLargeBoardContext";
+import { WebsocketContext } from "../WebsocketProvider/WebsocketProvider";
 
 const Outer = styled.div`
   width: 100%;
@@ -39,7 +40,7 @@ const SizedInner = styled.div`
   position: relative;
 `;
 
-function Board({ submitMove }) {
+function Board() {
   const outerRef = React.useRef(null);
   const sizedInnerRef = React.useRef(null);
   const [smallHidden, setSmallHidden] = React.useState(false);
@@ -47,10 +48,12 @@ function Board({ submitMove }) {
   const [largeMounted, setLargeMounted] = React.useState(false);
   const [smallOpacity, setSmallOpacity] = React.useState(1);
   const [largeOpacity, setLargeOpacity] = React.useState(0);
-  const { setCoords } = React.useContext(CoordsContext);
+  const { coords, setCoords } = React.useContext(CoordsContext);
   const { showLargeBoard, setShowLargeBoard } = React.useContext(
     ShowLargeBoardContext
   );
+  const ctx = React.useContext(WebsocketContext);
+  const submitMove = ctx.submitMove;
   const boardSizeParams = useBoardSizeParams({ outerRef });
 
   React.useEffect(() => {
@@ -222,6 +225,10 @@ function Board({ submitMove }) {
     };
   }, [setShowLargeBoard, showLargeBoard, zoomInOnBoard]);
 
+  const coordsAreNotNull = React.useMemo(() => {
+    return coords.x !== null && coords.y !== null;
+  }, [coords]);
+
   return (
     <Outer ref={outerRef}>
       <SizedInner
@@ -231,33 +238,37 @@ function Board({ submitMove }) {
         }}
         ref={sizedInnerRef}
       >
-        {smallMounted && (
-          <BoardCanvas
-            pxWidth={boardSizeParams.pxWidth}
-            pxHeight={boardSizeParams.pxHeight}
-            boardSizeParams={boardSizeParams}
-            opacity={smallOpacity}
-          />
-        )}
-        {largeMounted && (
-          <ZoomedOutOverview
-            opacity={largeOpacity}
-            boardSizeParams={boardSizeParams}
-          />
-        )}
-        <PanzoomBox />
-        {smallMounted && (
+        {coordsAreNotNull && (
           <>
-            <PieceDisplay
-              boardSizeParams={boardSizeParams}
-              opacity={smallOpacity}
-              hidden={smallHidden}
-            />
-            <PieceMoveButtons
-              boardSizeParams={boardSizeParams}
-              submitMove={submitMove}
-              opacity={smallOpacity}
-            />
+            {smallMounted && (
+              <BoardCanvas
+                pxWidth={boardSizeParams.pxWidth}
+                pxHeight={boardSizeParams.pxHeight}
+                boardSizeParams={boardSizeParams}
+                opacity={smallOpacity}
+              />
+            )}
+            {largeMounted && (
+              <ZoomedOutOverview
+                opacity={largeOpacity}
+                boardSizeParams={boardSizeParams}
+              />
+            )}
+            <PanzoomBox />
+            {smallMounted && (
+              <>
+                <PieceDisplay
+                  boardSizeParams={boardSizeParams}
+                  opacity={smallOpacity}
+                  hidden={smallHidden}
+                />
+                <PieceMoveButtons
+                  boardSizeParams={boardSizeParams}
+                  submitMove={submitMove}
+                  opacity={smallOpacity}
+                />
+              </>
+            )}
           </>
         )}
       </SizedInner>

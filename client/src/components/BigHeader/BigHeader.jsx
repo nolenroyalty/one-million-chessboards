@@ -66,12 +66,10 @@ const Subheader = styled.h2`
   color: var(--color-neutral-400);
 `;
 
-function BigHeader({ runBot }) {
+function BigHeader() {
   return (
     <Wrapper>
-      <Title style={{ color: runBot ? "var(--color-yellow-300)" : null }}>
-        One Million Chessboards
-      </Title>
+      <Title>One Million Chessboards</Title>
       <Subheader>moving a piece moves it for everyone!</Subheader>
     </Wrapper>
   );
