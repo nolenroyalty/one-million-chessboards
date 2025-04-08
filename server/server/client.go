@@ -136,6 +136,7 @@ type InitialInfo struct {
 	Position           Position        `json:"position"`
 	PlayingWhite       bool            `json:"playingWhite"`
 	Snapshot           SnapshotMessage `json:"snapshot"`
+	ConnectedUsers     uint32          `json:"connectedUsers"`
 }
 
 func (c *Client) sendInitialState() {
@@ -146,6 +147,7 @@ func (c *Client) sendInitialState() {
 
 	initialInfo := InitialInfo{
 		Type:               "initialState",
+		ConnectedUsers:     c.server.connectedUsers.Load(),
 		MinimapAggregation: aggregation,
 		GlobalStats:        stats,
 		Position:           currentPosition,

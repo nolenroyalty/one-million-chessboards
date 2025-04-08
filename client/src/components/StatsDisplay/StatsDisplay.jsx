@@ -140,6 +140,10 @@ function TextLine({ label, value }) {
 function TextLines({ stats }) {
   return (
     <TextLinesWrapper>
+      <TextLine
+        label="Players Online"
+        value={stats.connectedUsers === 0 ? "" : stats.connectedUsers}
+      />
       <TextLine label="Your Captures" value={stats.yourCaptures} />
       <TextLine label="Your Moves" value={stats.yourMoves} />
       <TextLine label="Total Moves" value={stats.totalMoves} />

@@ -36,7 +36,8 @@ const Wrapper = styled.div`
   padding-top: 15px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  justify-self: stretch;
 
   @media (${QUERY.VERY_SMALL}) {
     align-items: flex-start;
@@ -70,13 +71,10 @@ function CoordsDisplay({ coords }) {
 
 const CanvasWrapper = styled(BoardControlsPanel)`
   height: 100%;
+  max-height: 100%;
+  max-width: 100%;
   aspect-ratio: 1 / 1;
   position: relative;
-
-  @media (${QUERY.VERY_SMALL}) {
-    height: auto;
-    width: 100%;
-  }
 `;
 
 const CoordsCanvas = styled.canvas`

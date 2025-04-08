@@ -8,6 +8,7 @@ class StatsHandler {
     this.blackPiecesRemaining = 0;
     this.whiteKingsRemaining = 0;
     this.blackKingsRemaining = 0;
+    this.connectedUsers = 0;
     try {
       const yourMoves = localStorage.getItem(YOUR_MOVES_KEY);
       this.yourMoves = yourMoves ? parseInt(yourMoves) : 0;
@@ -85,6 +86,7 @@ class StatsHandler {
       hasReceivedUpdate: this.hasReceivedUpdate,
       yourMoves: this.yourMoves,
       yourCaptures: this.yourCaptures,
+      connectedUsers: this.connectedUsers,
     };
   }
 
@@ -160,6 +162,7 @@ class StatsHandler {
     this.blackPiecesRemaining = stats.blackPiecesRemaining;
     this.whiteKingsRemaining = stats.whiteKingsRemaining;
     this.blackKingsRemaining = stats.blackKingsRemaining;
+    this.connectedUsers = stats.connectedUsers;
     this.hasReceivedUpdate = true;
     this.resetLocalDelta();
     this.resetPieceHandlerDelta();

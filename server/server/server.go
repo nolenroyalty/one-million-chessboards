@@ -44,13 +44,14 @@ type Server struct {
 	clients           map[*Client]struct{}
 
 	// Communication channels
-	register      chan *RegistrationRequest
-	unregister    chan *Client
-	getClients    chan CurrentClients
-	moveRequests  chan MoveRequest
-	subscriptions chan SubscriptionRequest
-	whiteCount    atomic.Uint32
-	blackCount    atomic.Uint32
+	register       chan *RegistrationRequest
+	unregister     chan *Client
+	getClients     chan CurrentClients
+	moveRequests   chan MoveRequest
+	subscriptions  chan SubscriptionRequest
+	whiteCount     atomic.Uint32
+	blackCount     atomic.Uint32
+	connectedUsers atomic.Uint32
 	// HTTP server components
 	upgrader websocket.Upgrader
 }
@@ -276,6 +277,7 @@ type StatsUpdate struct {
 	BlackPiecesRemaining uint32 `json:"blackPiecesRemaining"`
 	WhiteKingsRemaining  uint32 `json:"whiteKingsRemaining"`
 	BlackKingsRemaining  uint32 `json:"blackKingsRemaining"`
+	ConnectedUsers       uint32 `json:"connectedUsers"`
 }
 
 func (s *Server) createStatsUpdate() StatsUpdate {
@@ -287,6 +289,7 @@ func (s *Server) createStatsUpdate() StatsUpdate {
 		BlackPiecesRemaining: stats.BlackPiecesRemaining,
 		WhiteKingsRemaining:  stats.WhiteKingsRemaining,
 		BlackKingsRemaining:  stats.BlackKingsRemaining,
+		ConnectedUsers:       s.connectedUsers.Load(),
 	}
 }
 
@@ -505,6 +508,7 @@ func (s *Server) handleClientRegistrations() {
 			req.Client.InitializeFromPreferences(playingWhite, pos)
 			s.clients[req.Client] = struct{}{}
 			log.Printf("Client registered, total: %d", len(s.clients))
+			s.connectedUsers.Store(uint32(len(s.clients)))
 			go req.Client.Run()
 			subscribeReq := SubscriptionRequest{
 				Client:   req.Client,
@@ -515,6 +519,7 @@ func (s *Server) handleClientRegistrations() {
 		case client := <-s.unregister:
 			delete(s.clients, client)
 			log.Printf("Client unregistered, total: %d", len(s.clients))
+			s.connectedUsers.Store(uint32(len(s.clients)))
 			go func() {
 				s.zoneMap.RemoveClientFromZones(client)
 				client.Close()

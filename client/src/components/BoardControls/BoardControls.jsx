@@ -30,6 +30,7 @@ const Wrapper = styled.div`
   gap: 0.5rem;
   --padding: 0.5rem;
   @media (${QUERY.VERY_SMALL}) {
+    --inner-height: 185px;
     --padding: 0.25rem;
   }
   // we set height manually and refer to it for our first column width
@@ -56,7 +57,13 @@ const Wrapper = styled.div`
   @media (${QUERY.VERY_SMALL}) {
     grid-template-areas: "minimap buttons buttons" "minimap stats stats" "by stats stats";
     grid-template-rows: auto auto auto;
-    grid-template-columns: auto auto auto;
+    grid-template-columns: 125px auto 1fr;
+    border: none;
+    border-top: 1px solid var(--color-sky-700);
+    border-radius: unset;
+    width: calc(100% + 2 * var(--main-side-padding));
+    margin-left: calc(-1 * var(--main-side-padding));
+    margin-right: calc(-1 * var(--main-side-padding));
   }
 
   justify-content: space-between;

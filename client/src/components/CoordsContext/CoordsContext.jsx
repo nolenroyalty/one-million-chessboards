@@ -9,6 +9,7 @@ const MAX_COORD = 7997;
 
 export function CoordsContextProvider({ children }) {
   const initialArgs = React.useMemo(computeInitialArguments, []);
+  const replaceStateTimeoutRef = React.useRef(null);
 
   const [coords, setRawCoords] = React.useState({
     x: initialArgs.x,
@@ -38,10 +39,15 @@ export function CoordsContextProvider({ children }) {
       }
       const x = clamp(newCoords.x, MIN_COORD, MAX_COORD);
       const y = clamp(newCoords.y, MIN_COORD, MAX_COORD);
+
       if (updateHash) {
-        const url = new URL(window.location.href);
-        url.hash = `${x},${y}`;
-        window.history.replaceState({}, "", url);
+        clearTimeout(replaceStateTimeoutRef.current);
+        replaceStateTimeoutRef.current = setTimeout(() => {
+          // we get a security error if we don't debounce this lol
+          const url = new URL(window.location.href);
+          url.hash = `${x},${y}`;
+          window.history.replaceState({}, "", url);
+        }, 120);
       }
       return {
         x,
