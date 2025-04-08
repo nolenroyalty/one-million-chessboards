@@ -15,6 +15,7 @@ const MAX_ANIMATION_DURATION = 1200;
 const MIN_ANIMATION_DURATION = 500;
 const MAX_DMOVE = 25;
 const BORDER_COLOR = "#0a0a0a";
+const BACKGROUND_COLOR = "#0a0a0a";
 const DARK_STROKE_COLOR = "#171717";
 const LIGHT_STROKE_COLOR = "#f5f5f5";
 
@@ -102,7 +103,7 @@ function ZoomedOutOverview({ opacity, boardSizeParams }) {
       return;
     }
     const ctx = boardCanvasRef.current.getContext("2d");
-    ctx.fillStyle = "slategrey"; //  CR nroyalty: fix colors
+    ctx.fillStyle = BACKGROUND_COLOR;
     ctx.fillRect(0, 0, boardSizeParams.pxWidth, boardSizeParams.pxHeight);
     ctx.fillStyle = BORDER_COLOR;
 
@@ -112,7 +113,13 @@ function ZoomedOutOverview({ opacity, boardSizeParams }) {
     let yOff = 8 - yMod;
 
     for (let x = startingX + xOff - 8; x < endingX; x += 8) {
+      if (x < 0 || x >= 8000) {
+        continue;
+      }
       for (let y = startingY + yOff - 8; y < endingY; y += 8) {
+        if (y < 0 || y >= 8000) {
+          continue;
+        }
         let { x: screenX, y: screenY } = getScreenRelativeCoords({
           x,
           y,
@@ -133,6 +140,9 @@ function ZoomedOutOverview({ opacity, boardSizeParams }) {
 
     ctx.fillStyle = BORDER_COLOR;
     for (let x = startingX + xOff; x < endingX; x += 8) {
+      if (x < 0 || x >= 8000) {
+        continue;
+      }
       const { x: screenX } = getScreenRelativeCoords({
         x,
         y: 0,
@@ -144,6 +154,9 @@ function ZoomedOutOverview({ opacity, boardSizeParams }) {
       ctx.fillRect(starting, 0, ending - starting, ctx.canvas.height);
     }
     for (let y = startingY + yOff; y < endingY; y += 8) {
+      if (y < 0 || y >= 8000) {
+        continue;
+      }
       const { y: screenY } = getScreenRelativeCoords({
         x: 0,
         y,

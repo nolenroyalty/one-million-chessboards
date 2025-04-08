@@ -22,6 +22,8 @@ const (
 	snapshotPrefix        = "board"
 	movePrefix            = "moves"
 	suffix                = ".bin"
+    // CR nroyalty: un-disable!
+    disabled = true
 )
 
 type PersistentBoard struct {
@@ -237,7 +239,22 @@ func GetSortedSnapshotFilenames(stateDir, prefix string) ([]FileWithSeqNumAndTim
 	return filesWithSeqNumAndTimestamp, nil
 }
 
+func NewFakePersistentBoard() *PersistentBoard {
+	board := NewBoard()
+	pb := &PersistentBoard{board: board,
+		movesToApply:           make(chan Move, 8192),
+		stateDir:               "",
+		movesToSerializeBuffer: make([]Move, 0, 512),
+		lastSerializedSeqNum:   atomic.Uint64{},
+	}
+    pb.board.InitializeRandom()
+	return pb
+}
+
 func NewPersistentBoard(stateDir string) *PersistentBoard {
+	if disabled {
+		return NewFakePersistentBoard()
+	}
 	board := NewBoard()
 	pb := &PersistentBoard{board: board,
 		movesToApply:           make(chan Move, 8192),
@@ -376,6 +393,9 @@ func (pb *PersistentBoard) Run() {
 	for {
 		select {
 		case move := <-pb.movesToApply:
+			if disabled {
+				continue
+			}
 			res := pb.board.ValidateAndApplyMove(move)
 			if !res.Valid {
 				log.Printf("TRIED TO APPLY INVALID MOVE: %v", move)
@@ -390,12 +410,18 @@ func (pb *PersistentBoard) Run() {
 				go pb.SerializeMoves(moves, lastSeqNum)
 			}
 		case <-snapshotTicker.C:
+			if disabled {
+				continue
+			}
 			snapshot := pb.board.GetBoardSnapshot()
 			pb.lastSerializedSeqNum.Store(snapshot.SeqNum)
 			go func() {
 				snapshot.SaveToFile(pb.stateDir, "board", snapshot.SeqNum)
 			}()
 		case <-moveSerializeTicker.C:
+			if disabled {
+				continue
+			}
 			if len(pb.movesToSerializeBuffer) > 0 {
 				moves := make([]Move, len(pb.movesToSerializeBuffer))
 				copy(moves, pb.movesToSerializeBuffer)

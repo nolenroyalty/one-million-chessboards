@@ -19,7 +19,7 @@ const Canvas = styled.canvas`
   height: 100%;
 `;
 
-// const BOARD_BORDER_COLOR = "#0a0a0a";
+const BOARD_BACKGROUND_COLOR = "#0a0a0a";
 const BOARD_BORDER_COLOR = "#171717";
 const MOVEABLE_SQUARE_COLOR = "#3b82f6";
 const SELECTED_PIECE_COLOR = "#fbbf24";
@@ -38,6 +38,10 @@ function BoardCanvas({ pxWidth, pxHeight, boardSizeParams, opacity }) {
     const canvas = ref.current;
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, pxWidth, pxHeight);
+    ctx.save();
+    ctx.fillStyle = BOARD_BACKGROUND_COLOR;
+    ctx.fillRect(0, 0, pxWidth, pxHeight);
+    ctx.restore();
     const { startingX, startingY, endingX, endingY } =
       getStartingAndEndingCoords({
         coords,
@@ -45,7 +49,13 @@ function BoardCanvas({ pxWidth, pxHeight, boardSizeParams, opacity }) {
         height: boardSizeParams.squareHeight,
       });
     for (let x = startingX; x < endingX; x++) {
+      if (x < 0 || x >= 8000) {
+        continue;
+      }
       for (let y = startingY; y < endingY; y++) {
+        if (y < 0 || y >= 8000) {
+          continue;
+        }
         let color = getSquareColor(x, y);
         const { x: screenX, y: screenY } = getScreenRelativeCoords({
           x,
