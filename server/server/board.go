@@ -63,14 +63,17 @@ type CaptureResult struct {
 
 type MovedPieceResult struct {
 	Piece Piece
-	X     uint16
-	Y     uint16
+	FromX uint16
+	FromY uint16
+	ToX   uint16
+	ToY   uint16
 }
 
 // MoveResult represents the outcome of a move validation
 type MoveResult struct {
 	Valid         bool
-	MovedPiece    MovedPieceResult
+	MovedPieces   [2]MovedPieceResult
+	Length        uint16
 	CapturedPiece CaptureResult
 	SeqNum        uint64
 }
@@ -319,10 +322,18 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 	b.seqNum.Add(1)
 
 	seqNum := b.seqNum.Load()
-	movedPieceResult := MovedPieceResult{Piece: movedPiece, X: move.ToX, Y: move.ToY}
+	movedPieceResult := MovedPieceResult{
+		Piece: movedPiece,
+		FromX: move.FromX,
+		FromY: move.FromY,
+		ToX:   move.ToX,
+		ToY:   move.ToY,
+	}
+	movedPieces := [2]MovedPieceResult{movedPieceResult}
 
 	if !capturedPiece.IsEmpty() {
-		return MoveResult{Valid: true, MovedPiece: movedPieceResult,
+		return MoveResult{Valid: true, MovedPieces: movedPieces,
+			Length: 1,
 			CapturedPiece: CaptureResult{
 				Piece: capturedPiece,
 				X:     move.ToX,
@@ -331,7 +342,7 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 			SeqNum: seqNum,
 		}
 	} else {
-		return MoveResult{Valid: true, MovedPiece: movedPieceResult, SeqNum: seqNum}
+		return MoveResult{Valid: true, MovedPieces: movedPieces, Length: 1, SeqNum: seqNum}
 	}
 }
 

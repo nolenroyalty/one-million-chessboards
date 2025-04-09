@@ -13,8 +13,8 @@ type MinimapCell struct {
 	BlackCount uint16
 }
 
-type MoveAndMaybeCapture struct {
-	Move    *PieceMove
+type MovesAndMaybeCapture struct {
+	Moves   []PieceMove
 	Capture *PieceCapture
 }
 
@@ -38,7 +38,7 @@ type CachedAggregationRequest struct {
 
 type MinimapAggregator struct {
 	cells                     [NUMBER_OF_CELLS][NUMBER_OF_CELLS]MinimapCell
-	moveUpdates               chan MoveAndMaybeCapture
+	moveUpdates               chan MovesAndMaybeCapture
 	aggregationRequests       chan AggregationRequest
 	cachedAggregationRequests chan CachedAggregationRequest
 	lastAggregation           json.RawMessage
@@ -46,9 +46,9 @@ type MinimapAggregator struct {
 
 func NewMinimapAggregator() *MinimapAggregator {
 	return &MinimapAggregator{
-		moveUpdates:               make(chan MoveAndMaybeCapture),
-		aggregationRequests:       make(chan AggregationRequest),
-		cachedAggregationRequests: make(chan CachedAggregationRequest),
+		moveUpdates:               make(chan MovesAndMaybeCapture, 1024),
+		aggregationRequests:       make(chan AggregationRequest, 1024),
+		cachedAggregationRequests: make(chan CachedAggregationRequest, 1024),
 		lastAggregation:           json.RawMessage{},
 	}
 }
@@ -112,15 +112,17 @@ func (m *MinimapAggregator) updateForAggregatorCoords(coords AggregatorCoords, i
 	}
 }
 
-func (m *MinimapAggregator) processMoveUpdate(pieceMove *PieceMove, capture *PieceCapture) {
-	if pieceMove == nil {
+func (m *MinimapAggregator) processMoveUpdate(moves []PieceMove, capture *PieceCapture) {
+	if len(moves) == 0 {
 		return
 	}
-	fromCoords := getAggregatorCoords(pieceMove.FromX, pieceMove.FromY)
-	toCoords := getAggregatorCoords(pieceMove.ToX, pieceMove.ToY)
-	if fromCoords != toCoords {
-		m.updateForAggregatorCoords(fromCoords, pieceMove.IsWhite, true)
-		m.updateForAggregatorCoords(toCoords, pieceMove.IsWhite, false)
+	for _, pieceMove := range moves {
+		fromCoords := getAggregatorCoords(pieceMove.FromX, pieceMove.FromY)
+		toCoords := getAggregatorCoords(pieceMove.ToX, pieceMove.ToY)
+		if fromCoords != toCoords {
+			m.updateForAggregatorCoords(fromCoords, pieceMove.IsWhite, true)
+			m.updateForAggregatorCoords(toCoords, pieceMove.IsWhite, false)
+		}
 	}
 	if capture != nil {
 		captureCoords := getAggregatorCoords(capture.X, capture.Y)
@@ -170,7 +172,7 @@ func (m *MinimapAggregator) Run() {
 		case request := <-m.aggregationRequests:
 			m.handleAggregationRequest(request)
 		case moveUpdate := <-m.moveUpdates:
-			m.processMoveUpdate(moveUpdate.Move, moveUpdate.Capture)
+			m.processMoveUpdate(moveUpdate.Moves, moveUpdate.Capture)
 		case request := <-m.cachedAggregationRequests:
 			m.handleCachedAggregationRequest(request)
 		}
@@ -183,8 +185,8 @@ func (m *MinimapAggregator) RequestAggregation() <-chan json.RawMessage {
 	return response
 }
 
-func (m *MinimapAggregator) UpdateForMove(move *PieceMove, capture *PieceCapture) {
-	m.moveUpdates <- MoveAndMaybeCapture{Move: move, Capture: capture}
+func (m *MinimapAggregator) UpdateForMove(moves []PieceMove, capture *PieceCapture) {
+	m.moveUpdates <- MovesAndMaybeCapture{Moves: moves, Capture: capture}
 }
 
 func (m *MinimapAggregator) GetCachedAggregation() json.RawMessage {

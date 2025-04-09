@@ -338,24 +338,24 @@ func (s *Server) processMoves() {
 			moveReq.Client.SendError("Invalid move")
 			continue
 		}
-		movedPiece := moveResult.MovedPiece
 		capturedPiece := moveResult.CapturedPiece
-
-		pieceMove := PieceMove{
-			PieceID:   movedPiece.Piece.ID,
-			FromX:     moveReq.Move.FromX,
-			FromY:     moveReq.Move.FromY,
-			ToX:       moveReq.Move.ToX,
-			ToY:       moveReq.Move.ToY,
-			PieceType: movedPiece.Piece.Type,
-			IsWhite:   movedPiece.Piece.IsWhite,
-			MoveState: movedPiece.Piece.MoveState,
-			SeqNum:    moveResult.SeqNum,
+		movedPieces := make([]PieceMove, moveResult.Length)
+		for i := 0; i < int(moveResult.Length); i++ {
+			movedPieces[i] = PieceMove{
+				PieceID:   moveResult.MovedPieces[i].Piece.ID,
+				FromX:     moveResult.MovedPieces[i].FromX,
+				FromY:     moveResult.MovedPieces[i].FromY,
+				ToX:       moveResult.MovedPieces[i].ToX,
+				ToY:       moveResult.MovedPieces[i].ToY,
+				PieceType: moveResult.MovedPieces[i].Piece.Type,
+				IsWhite:   moveResult.MovedPieces[i].Piece.IsWhite,
+				MoveState: moveResult.MovedPieces[i].Piece.MoveState,
+				SeqNum:    moveResult.SeqNum,
+			}
 		}
 
 		var captureMove *PieceCapture = nil
 		if !capturedPiece.Piece.IsEmpty() {
-			log.Printf("captured piece: %v", capturedPiece.Piece)
 			captureMove = &PieceCapture{
 				CapturedPieceID: capturedPiece.Piece.ID,
 				X:               capturedPiece.X,
@@ -366,23 +366,18 @@ func (s *Server) processMoves() {
 			}
 		}
 
-		s.minimapAggregator.UpdateForMove(&pieceMove, captureMove)
+		s.minimapAggregator.UpdateForMove(movedPieces, captureMove)
 		s.persistentBoard.ApplyMove(moveReq.Move, moveResult.SeqNum)
 
 		affectedZones := s.zoneMap.GetAffectedZones(moveReq.Move)
 		interestedClients := s.zoneMap.GetClientsForZones(affectedZones)
-		// Run client notifications in a separate goroutine
-		go func(clients map[*Client]struct{}, move PieceMove, capture *PieceCapture) {
+
+		go func(clients map[*Client]struct{}, moves []PieceMove, capture *PieceCapture) {
 			for client := range clients {
-				client.AddMoveToBuffer(move)
-			}
-			if capture != nil {
-				for client := range clients {
-					client.AddCaptureToBuffer(*capture)
-				}
+				client.AddMovesToBuffer(moves, capture)
 			}
 			s.zoneMap.ReturnClientMap(interestedClients)
-		}(interestedClients, pieceMove, captureMove)
+		}(interestedClients, movedPieces, captureMove)
 	}
 }
 

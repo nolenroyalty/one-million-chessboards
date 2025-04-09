@@ -415,15 +415,17 @@ func (c *Client) ProcessMoveUpdates() {
 	}
 }
 
-// AddMoveToBuffer adds a move to the client's move buffer
-func (c *Client) AddMoveToBuffer(move PieceMove) {
+func (c *Client) AddMovesToBuffer(moves []PieceMove, capture *PieceCapture) {
 	c.bufferMu.Lock()
 	defer c.bufferMu.Unlock()
 
-	c.moveBuffer = append(c.moveBuffer, move)
+	c.moveBuffer = append(c.moveBuffer, moves...)
+	if capture != nil {
+		c.captureBuffer = append(c.captureBuffer, *capture)
+	}
 
 	// Send immediately if buffer gets large
-	if len(c.moveBuffer) >= 400 {
+	if len(c.moveBuffer) >= 400 || len(c.captureBuffer) >= 200 {
 		moves := make([]PieceMove, len(c.moveBuffer))
 		copy(moves, c.moveBuffer)
 		c.moveBuffer = c.moveBuffer[:0]
@@ -435,14 +437,6 @@ func (c *Client) AddMoveToBuffer(move PieceMove) {
 		// Launch goroutine to avoid blocking
 		go c.SendMoveUpdates(moves, captures)
 	}
-}
-
-// AddCaptureToBuffer adds a capture to the client's capture buffer
-func (c *Client) AddCaptureToBuffer(capture PieceCapture) {
-	c.bufferMu.Lock()
-	defer c.bufferMu.Unlock()
-
-	c.captureBuffer = append(c.captureBuffer, capture)
 }
 
 // SendStateSnapshot sends a state snapshot to the client
