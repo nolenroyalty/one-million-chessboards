@@ -158,7 +158,12 @@ export function getZoomedInScreenAbsoluteCoords({
   };
 }
 
-export function createMoveRequest(piece, toX, toY) {
+export function createMoveRequest(
+  piece,
+  toX,
+  toY,
+  moveType = MOVE_TYPES.NORMAL
+) {
   return {
     type: "move",
     pieceId: piece.id,
@@ -166,6 +171,7 @@ export function createMoveRequest(piece, toX, toY) {
     fromY: piece.y,
     toX,
     toY,
+    moveType,
   };
 }
 
@@ -292,8 +298,7 @@ function addMoveableSquaresForPawn({ piece, pieces, squares }) {
       })
     ) {
       addSquare(squares, x + dx, y + dy, MOVE_TYPES.NORMAL);
-    }
-    if (
+    } else if (
       enPassantable({
         pieces,
         weAreWhite: isWhite,

@@ -333,7 +333,7 @@ function WebsocketProvider({ children }) {
 
   const submitMove = React.useCallback(
     ({ piece, toX, toY, moveType }) => {
-      const move = createMoveRequest(piece, toX, toY);
+      const move = createMoveRequest(piece, toX, toY, moveType);
       safelySendJSON(move);
     },
     [safelySendJSON]

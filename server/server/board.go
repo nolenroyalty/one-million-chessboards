@@ -257,92 +257,181 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 		return MoveResult{Valid: false}
 	}
 
-	capturedRaw := b.pieces[move.ToY][move.ToX].Load()
-	capturedPiece := PieceOfEncodedPiece(EncodedPiece(capturedRaw))
+	switch move.MoveType {
 
-	if !capturedPiece.IsEmpty() {
-		// must capture pieces of the opposite color
-		if capturedPiece.IsWhite == movedPiece.IsWhite {
-			log.Printf("Invalid move: Captured piece is not the same color")
-			return MoveResult{Valid: false}
-		}
-
-		startBoardX := move.FromX / 8
-		startBoardY := move.FromY / 8
-		endBoardX := move.ToX / 8
-		endBoardY := move.ToY / 8
-
-		// captures must be on the same sub-board
-		if startBoardX != endBoardX || startBoardY != endBoardY {
-			return MoveResult{Valid: false}
-		}
-	}
-
-	// Must satisfy move rules
-	if !b.satisfiesMoveRules(movedPiece, capturedPiece, move) {
-		log.Printf("Invalid move: Move does not satisfy basic move rules")
+	case MoveTypeCastle:
 		return MoveResult{Valid: false}
-	}
-
-	if movedPiece.MoveState == Unmoved || movedPiece.MoveState == DoubleMoved {
-		if movedPiece.Type == Pawn {
-			dy := int32(move.ToY) - int32(move.FromY)
-			if dy == 2 || dy == -2 {
-				movedPiece.MoveState = DoubleMoved
-			} else {
-				movedPiece.MoveState = Moved
-			}
-		} else {
-			movedPiece.MoveState = Moved
+	case MoveTypeEnPassant:
+		// Must be a pawn
+		if movedPiece.Type != Pawn {
+			return MoveResult{Valid: false}
 		}
-	}
+		// dy must be 1 (black) or -1 (white)
+		dy := int32(move.ToY) - int32(move.FromY)
+		if movedPiece.IsWhite && dy != -1 || !movedPiece.IsWhite && dy != 1 {
+			return MoveResult{Valid: false}
+		}
 
-	// Actually apply the move!
-	// Do the store before the swap so that if we have a race, we don't have
-	// a duplicate piece on the board. This does mean that we potentially
-	// have a race where a piece disappears from the board, but I think that's
-	// fine since we'll send the move information to the client.
-	b.pieces[move.FromY][move.FromX].Store(uint64(EmptyEncodedPiece))
-	b.pieces[move.ToY][move.ToX].Store(uint64(movedPiece.Encode()))
+		// dx must be 1 or -1
+		dx := int32(move.ToX) - int32(move.FromX)
+		if dx != 1 && dx != -1 {
+			return MoveResult{Valid: false}
+		}
 
-	if !capturedPiece.IsEmpty() {
+		// There can't be a piece in the way
+		otherPiece := b.pieces[move.ToY][move.ToX].Load()
+		if !EncodedIsEmpty(EncodedPiece(otherPiece)) {
+			return MoveResult{Valid: false}
+		}
+
+		// there must be a piece at dx + current x, current y
+		capturedX := move.FromX + uint16(dx)
+		capturedY := move.FromY
+		capturedRaw := b.pieces[capturedY][capturedX].Load()
+		capturedPiece := PieceOfEncodedPiece(EncodedPiece(capturedRaw))
+
+		if capturedPiece.IsEmpty() {
+			return MoveResult{Valid: false}
+		}
+
+		// must be a pawn of the opposite color
+		if capturedPiece.IsWhite == movedPiece.IsWhite {
+			return MoveResult{Valid: false}
+		}
+
+		// must be a pawn
+		if capturedPiece.Type != Pawn {
+			return MoveResult{Valid: false}
+		}
+
+		// must have double moved
+		if capturedPiece.MoveState != DoubleMoved {
+			return MoveResult{Valid: false}
+		}
+
+		// That's it! Apply the move
+		movedPiece.MoveState = Moved
+		b.pieces[move.ToY][move.ToX].Store(uint64(movedPiece.Encode()))
+		b.pieces[move.FromY][move.FromX].Store(uint64(EmptyEncodedPiece))
+		b.pieces[capturedY][capturedX].Store(uint64(EmptyEncodedPiece))
+
 		if capturedPiece.IsWhite {
 			b.whitePiecesCaptured.Add(1)
-			if capturedPiece.Type == King {
-				b.whiteKingsCaptured.Add(1)
-			}
 		} else {
 			b.blackPiecesCaptured.Add(1)
-			if capturedPiece.Type == King {
-				b.blackKingsCaptured.Add(1)
-			}
 		}
-	}
-	b.totalMoves.Add(1)
-	b.seqNum.Add(1)
+		b.totalMoves.Add(1)
+		b.seqNum.Add(1)
 
-	seqNum := b.seqNum.Load()
-	movedPieceResult := MovedPieceResult{
-		Piece: movedPiece,
-		FromX: move.FromX,
-		FromY: move.FromY,
-		ToX:   move.ToX,
-		ToY:   move.ToY,
-	}
-	movedPieces := [2]MovedPieceResult{movedPieceResult}
+		seqNum := b.seqNum.Load()
 
-	if !capturedPiece.IsEmpty() {
-		return MoveResult{Valid: true, MovedPieces: movedPieces,
-			Length: 1,
+		movedPieceResult := MovedPieceResult{
+			Piece: movedPiece,
+			FromX: move.FromX,
+			FromY: move.FromY,
+			ToX:   move.ToX,
+			ToY:   move.ToY,
+		}
+		movedPieces := [2]MovedPieceResult{movedPieceResult}
+
+		return MoveResult{Valid: true, MovedPieces: movedPieces, Length: 1,
 			CapturedPiece: CaptureResult{
 				Piece: capturedPiece,
-				X:     move.ToX,
-				Y:     move.ToY,
+				X:     capturedX,
+				Y:     capturedY,
 			},
 			SeqNum: seqNum,
 		}
-	} else {
-		return MoveResult{Valid: true, MovedPieces: movedPieces, Length: 1, SeqNum: seqNum}
+
+	case MoveTypeNormal:
+		capturedRaw := b.pieces[move.ToY][move.ToX].Load()
+		capturedPiece := PieceOfEncodedPiece(EncodedPiece(capturedRaw))
+
+		if !capturedPiece.IsEmpty() {
+			// must capture pieces of the opposite color
+			if capturedPiece.IsWhite == movedPiece.IsWhite {
+				return MoveResult{Valid: false}
+			}
+
+			startBoardX := move.FromX / 8
+			startBoardY := move.FromY / 8
+			endBoardX := move.ToX / 8
+			endBoardY := move.ToY / 8
+
+			// captures must be on the same sub-board
+			if startBoardX != endBoardX || startBoardY != endBoardY {
+				return MoveResult{Valid: false}
+			}
+		}
+
+		// Must satisfy move rules
+		if !b.satisfiesMoveRules(movedPiece, capturedPiece, move) {
+			return MoveResult{Valid: false}
+		}
+
+		if movedPiece.MoveState == Unmoved || movedPiece.MoveState == DoubleMoved {
+			if movedPiece.Type == Pawn {
+				dy := int32(move.ToY) - int32(move.FromY)
+				if dy == 2 || dy == -2 {
+					movedPiece.MoveState = DoubleMoved
+				} else {
+					movedPiece.MoveState = Moved
+				}
+			} else {
+				movedPiece.MoveState = Moved
+			}
+		}
+
+		// Actually apply the move!
+		// Do the store before the swap so that if we have a race, we don't have
+		// a duplicate piece on the board. This does mean that we potentially
+		// have a race where a piece disappears from the board, but I think that's
+		// fine since we'll send the move information to the client.
+		b.pieces[move.FromY][move.FromX].Store(uint64(EmptyEncodedPiece))
+		b.pieces[move.ToY][move.ToX].Store(uint64(movedPiece.Encode()))
+
+		if !capturedPiece.IsEmpty() {
+			if capturedPiece.IsWhite {
+				b.whitePiecesCaptured.Add(1)
+				if capturedPiece.Type == King {
+					b.whiteKingsCaptured.Add(1)
+				}
+			} else {
+				b.blackPiecesCaptured.Add(1)
+				if capturedPiece.Type == King {
+					b.blackKingsCaptured.Add(1)
+				}
+			}
+		}
+		b.totalMoves.Add(1)
+		b.seqNum.Add(1)
+
+		seqNum := b.seqNum.Load()
+		movedPieceResult := MovedPieceResult{
+			Piece: movedPiece,
+			FromX: move.FromX,
+			FromY: move.FromY,
+			ToX:   move.ToX,
+			ToY:   move.ToY,
+		}
+		movedPieces := [2]MovedPieceResult{movedPieceResult}
+
+		if !capturedPiece.IsEmpty() {
+			return MoveResult{Valid: true, MovedPieces: movedPieces,
+				Length: 1,
+				CapturedPiece: CaptureResult{
+					Piece: capturedPiece,
+					X:     move.ToX,
+					Y:     move.ToY,
+				},
+				SeqNum: seqNum,
+			}
+		} else {
+			return MoveResult{Valid: true, MovedPieces: movedPieces, Length: 1, SeqNum: seqNum}
+		}
+	default:
+		log.Printf("Invalid move: Move type not supported")
+		return MoveResult{Valid: false}
 	}
 }
 

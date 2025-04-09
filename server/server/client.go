@@ -255,6 +255,7 @@ func (c *Client) handleMessage(message []byte) {
 		toY, _ := msg["toY"].(float64)
 		moveType, _ := msg["moveType"].(float64)
 		moveTypeEnum := MoveType(int(moveType))
+		log.Printf("moveType: %v", moveTypeEnum)
 
 		// Basic bounds checking
 		if !CoordInBounds(fromX) || !CoordInBounds(fromY) ||
