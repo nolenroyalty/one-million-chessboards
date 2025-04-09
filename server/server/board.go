@@ -141,8 +141,15 @@ func (b *Board) satisfiesPawnMoveRules(movedPiece Piece, capturedPiece Piece, mo
 	return b.crossedSquaresAreEmpty(move.FromX, move.FromY, move.ToX, move.ToY)
 }
 
-func (b *Board) satisfiesKnightMoveRules(movedPiece Piece, move Move) bool {
-	return true
+func (b *Board) satisfiesKnightMoveRules(move Move) bool {
+	dx := int32(move.ToX) - int32(move.FromX)
+	dy := int32(move.ToY) - int32(move.FromY)
+	absDx := int32(math.Abs(float64(dx)))
+	absDy := int32(math.Abs(float64(dy)))
+	if absDx == 2 && absDy == 1 || absDx == 1 && absDy == 2 {
+		return true
+	}
+	return false
 }
 
 func (b *Board) satisfiesBishopMoveRules_aux(move Move) bool {
@@ -173,7 +180,21 @@ func (b *Board) satisfiesQueenMoveRules(move Move) bool {
 	return b.crossedSquaresAreEmpty(move.FromX, move.FromY, move.ToX, move.ToY)
 }
 
-func (b *Board) satisfiesKingMoveRules(movedPiece Piece, move Move) bool {
+func (b *Board) satisfiesKingMoveRules(move Move) bool {
+	dx := int32(move.ToX) - int32(move.FromX)
+	dy := int32(move.ToY) - int32(move.FromY)
+	absDx := int32(math.Abs(float64(dx)))
+	absDy := int32(math.Abs(float64(dy)))
+	if absDx > 1 || absDy > 1 {
+		return false
+	}
+	startBoardX := move.FromX / 8
+	startBoardY := move.FromY / 8
+	endBoardX := move.ToX / 8
+	endBoardY := move.ToY / 8
+	if startBoardX != endBoardX || startBoardY != endBoardY {
+		return false
+	}
 	return true
 }
 
@@ -182,7 +203,7 @@ func (b *Board) satisfiesMoveRules(movedPiece Piece, capturedPiece Piece, move M
 	case Pawn:
 		return b.satisfiesPawnMoveRules(movedPiece, capturedPiece, move)
 	case Knight:
-		return b.satisfiesKnightMoveRules(movedPiece, move)
+		return b.satisfiesKnightMoveRules(move)
 	case Bishop:
 		return b.satisfiesBishopMoveRules(move)
 	case Rook:
@@ -190,7 +211,7 @@ func (b *Board) satisfiesMoveRules(movedPiece Piece, capturedPiece Piece, move M
 	case Queen:
 		return b.satisfiesQueenMoveRules(move)
 	case King:
-		return b.satisfiesKingMoveRules(movedPiece, move)
+		return b.satisfiesKingMoveRules(move)
 	}
 	return true
 }

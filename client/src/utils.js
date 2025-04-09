@@ -439,8 +439,8 @@ function boundsCheckMoveableSquares({ squares }) {
 function LieAboutMoveableSquaresAndJustGive2By2Region(piece, squares) {
   const x = piece.x;
   const y = piece.y;
-  for (const dx of [-2, -1, 0, 1, 2]) {
-    for (const dy of [-2, -1, 0, 1, 2]) {
+  for (const dx of [-3, -2, -1, 0, 1, 2, 3]) {
+    for (const dy of [-3, -2, -1, 0, 1, 2, 3]) {
       if (dx === 0 && dy === 0) {
         continue;
       }
