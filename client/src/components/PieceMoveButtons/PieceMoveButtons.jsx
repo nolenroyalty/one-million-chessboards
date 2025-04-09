@@ -11,7 +11,6 @@ import {
   incrementPieceCapture,
   pieceKey,
   TYPE_TO_NAME,
-  MOVE_TYPES,
 } from "../../utils";
 import styled from "styled-components";
 import { WebsocketContext } from "../WebsocketProvider/WebsocketProvider";

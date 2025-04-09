@@ -259,7 +259,104 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 
 	switch move.MoveType {
 	case MoveTypeCastle:
-		return MoveResult{Valid: false}
+		// Must be a king
+		if movedPiece.Type != King {
+			return MoveResult{Valid: false}
+		}
+		// Must be unmoved
+		if movedPiece.MoveState != Unmoved {
+			return MoveResult{Valid: false}
+		}
+		// Must be moving 2 squares horizontally and none vertically
+		dx := int32(move.ToX) - int32(move.FromX)
+		dy := int32(move.ToY) - int32(move.FromY)
+		if dx != 2 && dx != -2 {
+			return MoveResult{Valid: false}
+		}
+
+		if dy != 0 {
+			return MoveResult{Valid: false}
+		}
+		// Must have a piece in the correct position
+		rookFromX := int32(move.FromX)
+		rookFromY := uint16(move.FromY)
+		if dx == 2 {
+			rookFromX += 3
+		} else {
+			rookFromX -= 4
+		}
+
+		if rookFromX < 0 || rookFromX >= BOARD_SIZE {
+			return MoveResult{Valid: false}
+		}
+
+		rookPieceRaw := b.pieces[rookFromY][rookFromX].Load()
+		if EncodedIsEmpty(EncodedPiece(rookPieceRaw)) {
+			return MoveResult{Valid: false}
+		}
+
+		rookPiece := PieceOfEncodedPiece(EncodedPiece(rookPieceRaw))
+		// Piece must be a rook
+		if rookPiece.Type != Rook {
+			return MoveResult{Valid: false}
+		}
+
+		// Rook must be of the correct color
+		if rookPiece.IsWhite != movedPiece.IsWhite {
+			return MoveResult{Valid: false}
+		}
+
+		// Rook must be unmoved
+		if rookPiece.MoveState != Unmoved {
+			return MoveResult{Valid: false}
+		}
+
+		// Back rank on the relevant side must be empty
+		backEmpty := b.crossedSquaresAreEmpty(move.FromX, move.FromY, uint16(rookFromX), uint16(rookFromY))
+		if !backEmpty {
+			return MoveResult{Valid: false}
+		}
+
+		rookToY := uint16(move.ToY)
+		rookToX := uint16(move.ToX)
+
+		if dx == 2 {
+			rookToX -= 1
+		} else {
+			rookToX += 1
+		}
+
+		// That's it! Apply the move
+		movedPiece.MoveState = Moved
+		rookPiece.MoveState = Moved
+		b.pieces[move.FromY][move.FromX].Store(uint64(EmptyEncodedPiece))
+		b.pieces[rookFromY][rookFromX].Store(uint64(EmptyEncodedPiece))
+		b.pieces[move.ToY][move.ToX].Store(uint64(movedPiece.Encode()))
+		b.pieces[rookToY][rookToX].Store(uint64(rookPiece.Encode()))
+
+		b.totalMoves.Add(1)
+		b.seqNum.Add(1)
+
+		seqNum := b.seqNum.Load()
+
+		kingMoveResult := MovedPieceResult{
+			Piece: movedPiece,
+			FromX: move.FromX,
+			FromY: move.FromY,
+			ToX:   move.ToX,
+			ToY:   move.ToY,
+		}
+		rookMoveResult := MovedPieceResult{
+			Piece: rookPiece,
+			FromX: uint16(rookFromX),
+			FromY: rookFromY,
+			ToX:   rookToX,
+			ToY:   rookToY,
+		}
+		movedPieces := [2]MovedPieceResult{kingMoveResult, rookMoveResult}
+
+		return MoveResult{Valid: true, MovedPieces: movedPieces, Length: 2, SeqNum: seqNum}
+
 	case MoveTypeEnPassant:
 		// Must be a pawn
 		if movedPiece.Type != Pawn {
