@@ -27,7 +27,6 @@ type Piece struct {
 	Type      PieceType
 	IsWhite   bool
 	MoveState MoveState
-	Empty     bool
 }
 
 type EncodedPiece uint64
@@ -69,7 +68,10 @@ func PieceOfEncodedPiece(encodedPiece EncodedPiece) Piece {
 
 	if empty {
 		return Piece{
-			Empty: true,
+			ID:        0,
+			Type:      Pawn,
+			IsWhite:   false,
+			MoveState: Unmoved,
 		}
 	}
 	var p Piece
@@ -77,12 +79,15 @@ func PieceOfEncodedPiece(encodedPiece EncodedPiece) Piece {
 	p.Type = PieceType((raw & typeMask) >> PieceTypeShift)
 	p.IsWhite = ((raw & isWhiteMask) >> IsWhiteShift) != 0
 	p.MoveState = MoveState((raw & moveStateMask) >> MoveStateShift)
-	p.Empty = false
 	return p
 }
 
+func (p *Piece) IsEmpty() bool {
+	return p.ID == 0
+}
+
 func (p *Piece) Encode() EncodedPiece {
-	if p.Empty {
+	if p.IsEmpty() {
 		return EmptyEncodedPiece
 	}
 	whiteInt := 0

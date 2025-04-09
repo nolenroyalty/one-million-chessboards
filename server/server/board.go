@@ -49,22 +49,28 @@ func (b *Board) GetPiece(x, y uint16) *Piece {
 
 	raw := b.pieces[y][x].Load()
 	piece := PieceOfEncodedPiece(EncodedPiece(raw))
-	if piece.Empty {
+	if piece.IsEmpty() {
 		return nil
 	}
 	return &piece
 }
 
 type CaptureResult struct {
-	CapturedPiece Piece
-	X             uint16
-	Y             uint16
+	Piece Piece
+	X     uint16
+	Y     uint16
+}
+
+type MovedPieceResult struct {
+	Piece Piece
+	X     uint16
+	Y     uint16
 }
 
 // MoveResult represents the outcome of a move validation
 type MoveResult struct {
 	Valid         bool
-	MovedPiece    Piece
+	MovedPiece    MovedPieceResult
 	CapturedPiece CaptureResult
 	SeqNum        uint64
 }
@@ -121,9 +127,9 @@ func (b *Board) satisfiesPawnMoveRules(movedPiece Piece, capturedPiece Piece, mo
 		return false
 	}
 
-	if absDx == 1 && capturedPiece.Empty {
+	if absDx == 1 && capturedPiece.IsEmpty() {
 		return false
-	} else if absDx == 0 && !capturedPiece.Empty {
+	} else if absDx == 0 && !capturedPiece.IsEmpty() {
 		return false
 	}
 
@@ -219,43 +225,43 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 	// Must be in bounds
 	if !move.BoundsCheck() {
 		log.Printf("Invalid move: Move is out of bounds")
-		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: CaptureResult{}}
+		return MoveResult{Valid: false}
 	}
 
 	if move.ExceedsMaxMoveDistance() {
 		log.Printf("Invalid move: Move is too long")
-		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: CaptureResult{}}
+		return MoveResult{Valid: false}
 	}
 
 	// can't move 0 squares
 	if move.FromX == move.ToX && move.FromY == move.ToY {
 		log.Printf("Invalid move: no movement!")
-		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: CaptureResult{}}
+		return MoveResult{Valid: false}
 	}
 
 	raw := b.pieces[move.FromY][move.FromX].Load()
 	movedPiece := PieceOfEncodedPiece(EncodedPiece(raw))
 
 	// can't move an empty piece
-	if movedPiece.Empty {
+	if movedPiece.IsEmpty() {
 		log.Printf("Invalid move: No piece at from position (expected id %d)", move.PieceID)
-		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: CaptureResult{}}
+		return MoveResult{Valid: false}
 	}
 
 	// piece ID must match
 	if movedPiece.ID != move.PieceID {
 		log.Printf("Invalid move: Piece ID does not match")
-		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: CaptureResult{}}
+		return MoveResult{Valid: false}
 	}
 
 	capturedRaw := b.pieces[move.ToY][move.ToX].Load()
 	capturedPiece := PieceOfEncodedPiece(EncodedPiece(capturedRaw))
 
-	if !capturedPiece.Empty {
+	if !capturedPiece.IsEmpty() {
 		// must capture pieces of the opposite color
 		if capturedPiece.IsWhite == movedPiece.IsWhite {
 			log.Printf("Invalid move: Captured piece is not the same color")
-			return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: CaptureResult{}}
+			return MoveResult{Valid: false}
 		}
 
 		startBoardX := move.FromX / 8
@@ -265,14 +271,14 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 
 		// captures must be on the same sub-board
 		if startBoardX != endBoardX || startBoardY != endBoardY {
-			return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: CaptureResult{}}
+			return MoveResult{Valid: false}
 		}
 	}
 
 	// Must satisfy move rules
 	if !b.satisfiesMoveRules(movedPiece, capturedPiece, move) {
 		log.Printf("Invalid move: Move does not satisfy basic move rules")
-		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: CaptureResult{}}
+		return MoveResult{Valid: false}
 	}
 
 	if movedPiece.MoveState == Unmoved || movedPiece.MoveState == DoubleMoved {
@@ -296,7 +302,7 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 	b.pieces[move.FromY][move.FromX].Store(uint64(EmptyEncodedPiece))
 	b.pieces[move.ToY][move.ToX].Store(uint64(movedPiece.Encode()))
 
-	if !capturedPiece.Empty {
+	if !capturedPiece.IsEmpty() {
 		if capturedPiece.IsWhite {
 			b.whitePiecesCaptured.Add(1)
 			if capturedPiece.Type == King {
@@ -313,16 +319,19 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 	b.seqNum.Add(1)
 
 	seqNum := b.seqNum.Load()
-	if !capturedPiece.Empty {
-		return MoveResult{Valid: true, MovedPiece: movedPiece, CapturedPiece: CaptureResult{
-			CapturedPiece: capturedPiece,
-			X:             move.ToX,
-			Y:             move.ToY,
-		},
+	movedPieceResult := MovedPieceResult{Piece: movedPiece, X: move.ToX, Y: move.ToY}
+
+	if !capturedPiece.IsEmpty() {
+		return MoveResult{Valid: true, MovedPiece: movedPieceResult,
+			CapturedPiece: CaptureResult{
+				Piece: capturedPiece,
+				X:     move.ToX,
+				Y:     move.ToY,
+			},
 			SeqNum: seqNum,
 		}
 	} else {
-		return MoveResult{Valid: true, MovedPiece: movedPiece, CapturedPiece: CaptureResult{}, SeqNum: seqNum}
+		return MoveResult{Valid: true, MovedPiece: movedPieceResult, SeqNum: seqNum}
 	}
 }
 
@@ -456,7 +465,7 @@ func (b *Board) GetStateForPosition(pos Position) StateSnapshot {
 		for x := minX; x <= maxX; x++ {
 			raw := b.pieces[y][x].Load()
 			piece := PieceOfEncodedPiece(EncodedPiece(raw))
-			if !piece.Empty {
+			if !piece.IsEmpty() {
 				pieces = append(pieces, PieceState{
 					Piece: piece,
 					X:     x,

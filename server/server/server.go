@@ -329,9 +329,6 @@ func (s *Server) RequestStaleAggregation() json.RawMessage {
 	return resp
 }
 
-// processMoves handles move validation and application
-// PERFORMANCE: there are a few allocations here; if we're running into
-// issues we could avoid allocations
 func (s *Server) processMoves() {
 	for moveReq := range s.moveRequests {
 		// Validate the move
@@ -345,25 +342,26 @@ func (s *Server) processMoves() {
 		capturedPiece := moveResult.CapturedPiece
 
 		pieceMove := PieceMove{
-			PieceID:   movedPiece.ID,
+			PieceID:   movedPiece.Piece.ID,
 			FromX:     moveReq.Move.FromX,
 			FromY:     moveReq.Move.FromY,
 			ToX:       moveReq.Move.ToX,
 			ToY:       moveReq.Move.ToY,
-			PieceType: movedPiece.Type,
-			IsWhite:   movedPiece.IsWhite,
-			MoveState: movedPiece.MoveState,
+			PieceType: movedPiece.Piece.Type,
+			IsWhite:   movedPiece.Piece.IsWhite,
+			MoveState: movedPiece.Piece.MoveState,
 			SeqNum:    moveResult.SeqNum,
 		}
 
 		var captureMove *PieceCapture = nil
-		if !capturedPiece.CapturedPiece.Empty {
+		if !capturedPiece.Piece.IsEmpty() {
+			log.Printf("captured piece: %v", capturedPiece.Piece)
 			captureMove = &PieceCapture{
-				CapturedPieceID: capturedPiece.CapturedPiece.ID,
+				CapturedPieceID: capturedPiece.Piece.ID,
 				X:               capturedPiece.X,
 				Y:               capturedPiece.Y,
-				CapturedType:    capturedPiece.CapturedPiece.Type,
-				WasWhite:        capturedPiece.CapturedPiece.IsWhite,
+				CapturedType:    capturedPiece.Piece.Type,
+				WasWhite:        capturedPiece.Piece.IsWhite,
 				SeqNum:          moveResult.SeqNum,
 			}
 		}
