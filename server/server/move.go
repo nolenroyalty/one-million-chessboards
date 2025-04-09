@@ -70,13 +70,12 @@ type PieceMove struct {
 
 // PieceCapture represents a capture update to send to clients
 type PieceCapture struct {
-	CapturedPieceID  uint32    `json:"capturedPieceId"`
-	X                uint16    `json:"x"`
-	Y                uint16    `json:"y"`
-	CapturedType     PieceType `json:"capturedType"`
-	WasWhite         bool      `json:"wasWhite"`
-	CapturingPieceID uint32    `json:"capturingPieceId"`
-	SeqNum           uint64    `json:"seqNum"`
+	CapturedPieceID uint32    `json:"capturedPieceId"`
+	X               uint16    `json:"x"`
+	Y               uint16    `json:"y"`
+	CapturedType    PieceType `json:"capturedType"`
+	WasWhite        bool      `json:"wasWhite"`
+	SeqNum          uint64    `json:"seqNum"`
 }
 
 // MoveUpdates contains batched move updates to send to clients

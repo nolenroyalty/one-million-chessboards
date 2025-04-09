@@ -43,7 +43,6 @@ func NewBoard() *Board {
 
 // GetPiece returns the piece at the given coordinates
 func (b *Board) GetPiece(x, y uint16) *Piece {
-
 	if x >= BOARD_SIZE || y >= BOARD_SIZE {
 		return nil
 	}
@@ -56,17 +55,17 @@ func (b *Board) GetPiece(x, y uint16) *Piece {
 	return &piece
 }
 
-type ApplyMoveResult struct {
+type CaptureResult struct {
 	CapturedPiece Piece
-	MovedPiece    Piece
-	NoMove        bool
+	X             uint16
+	Y             uint16
 }
 
 // MoveResult represents the outcome of a move validation
 type MoveResult struct {
 	Valid         bool
 	MovedPiece    Piece
-	CapturedPiece Piece
+	CapturedPiece CaptureResult
 	SeqNum        uint64
 }
 
@@ -220,18 +219,18 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 	// Must be in bounds
 	if !move.BoundsCheck() {
 		log.Printf("Invalid move: Move is out of bounds")
-		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
+		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: CaptureResult{}}
 	}
 
 	if move.ExceedsMaxMoveDistance() {
 		log.Printf("Invalid move: Move is too long")
-		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
+		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: CaptureResult{}}
 	}
 
 	// can't move 0 squares
 	if move.FromX == move.ToX && move.FromY == move.ToY {
 		log.Printf("Invalid move: no movement!")
-		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
+		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: CaptureResult{}}
 	}
 
 	raw := b.pieces[move.FromY][move.FromX].Load()
@@ -240,13 +239,13 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 	// can't move an empty piece
 	if movedPiece.Empty {
 		log.Printf("Invalid move: No piece at from position (expected id %d)", move.PieceID)
-		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
+		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: CaptureResult{}}
 	}
 
 	// piece ID must match
 	if movedPiece.ID != move.PieceID {
 		log.Printf("Invalid move: Piece ID does not match")
-		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
+		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: CaptureResult{}}
 	}
 
 	capturedRaw := b.pieces[move.ToY][move.ToX].Load()
@@ -256,7 +255,7 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 		// must capture pieces of the opposite color
 		if capturedPiece.IsWhite == movedPiece.IsWhite {
 			log.Printf("Invalid move: Captured piece is not the same color")
-			return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
+			return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: CaptureResult{}}
 		}
 
 		startBoardX := move.FromX / 8
@@ -266,14 +265,14 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 
 		// captures must be on the same sub-board
 		if startBoardX != endBoardX || startBoardY != endBoardY {
-			return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
+			return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: CaptureResult{}}
 		}
 	}
 
 	// Must satisfy move rules
 	if !b.satisfiesMoveRules(movedPiece, capturedPiece, move) {
 		log.Printf("Invalid move: Move does not satisfy basic move rules")
-		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
+		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: CaptureResult{}}
 	}
 
 	if movedPiece.MoveState == Unmoved || movedPiece.MoveState == DoubleMoved {
@@ -314,7 +313,17 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 	b.seqNum.Add(1)
 
 	seqNum := b.seqNum.Load()
-	return MoveResult{Valid: true, MovedPiece: movedPiece, CapturedPiece: capturedPiece, SeqNum: seqNum}
+	if !capturedPiece.Empty {
+		return MoveResult{Valid: true, MovedPiece: movedPiece, CapturedPiece: CaptureResult{
+			CapturedPiece: capturedPiece,
+			X:             move.ToX,
+			Y:             move.ToY,
+		},
+			SeqNum: seqNum,
+		}
+	} else {
+		return MoveResult{Valid: true, MovedPiece: movedPiece, CapturedPiece: CaptureResult{}, SeqNum: seqNum}
+	}
 }
 
 // ResetBoardSection initializes a standard 8x8 chess board at the given position

@@ -356,24 +356,23 @@ func (s *Server) processMoves() {
 			SeqNum:    moveResult.SeqNum,
 		}
 
-		affectedZones := s.zoneMap.GetAffectedZones(moveReq.Move)
-		interestedClients := s.zoneMap.GetClientsForZones(affectedZones)
 		var captureMove *PieceCapture = nil
-		if !capturedPiece.Empty {
+		if !capturedPiece.CapturedPiece.Empty {
 			captureMove = &PieceCapture{
-				CapturedPieceID:  capturedPiece.ID,
-				X:                moveReq.Move.ToX,
-				Y:                moveReq.Move.ToY,
-				CapturedType:     capturedPiece.Type,
-				WasWhite:         capturedPiece.IsWhite,
-				CapturingPieceID: movedPiece.ID,
-				SeqNum:           moveResult.SeqNum,
+				CapturedPieceID: capturedPiece.CapturedPiece.ID,
+				X:               capturedPiece.X,
+				Y:               capturedPiece.Y,
+				CapturedType:    capturedPiece.CapturedPiece.Type,
+				WasWhite:        capturedPiece.CapturedPiece.IsWhite,
+				SeqNum:          moveResult.SeqNum,
 			}
 		}
 
 		s.minimapAggregator.UpdateForMove(&pieceMove, captureMove)
 		s.persistentBoard.ApplyMove(moveReq.Move, moveResult.SeqNum)
 
+		affectedZones := s.zoneMap.GetAffectedZones(moveReq.Move)
+		interestedClients := s.zoneMap.GetClientsForZones(affectedZones)
 		// Run client notifications in a separate goroutine
 		go func(clients map[*Client]struct{}, move PieceMove, capture *PieceCapture) {
 			for client := range clients {

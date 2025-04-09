@@ -460,7 +460,7 @@ function LieAboutMoveableSquaresAndJustGive2By2Region(piece, squares) {
   return squares;
 }
 
-const DEBUG_LIE_ABOUT_MOVEABLE_SQUARES = true;
+const DEBUG_LIE_ABOUT_MOVEABLE_SQUARES = false;
 export function getMoveableSquares(piece, pieces) {
   const squares = [];
   const pieceType = piece.type;
