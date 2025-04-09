@@ -4,13 +4,22 @@ import "math"
 
 const MAX_MOVE_DISTANCE = 36
 
+type MoveType int
+
+const (
+	MoveTypeNormal MoveType = iota
+	MoveTypeCastle
+	MoveTypeEnPassant
+)
+
 // Move represents a chess piece move
 type Move struct {
-	PieceID uint32
-	FromX   uint16
-	FromY   uint16
-	ToX     uint16
-	ToY     uint16
+	PieceID  uint32
+	FromX    uint16
+	FromY    uint16
+	ToX      uint16
+	ToY      uint16
+	MoveType MoveType
 }
 
 // MoveRequest combines a move with the client that requested it

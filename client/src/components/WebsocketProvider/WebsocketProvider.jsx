@@ -332,7 +332,7 @@ function WebsocketProvider({ children }) {
   useUpdateCoords({ connected, safelySendJSON });
 
   const submitMove = React.useCallback(
-    ({ piece, toX, toY }) => {
+    ({ piece, toX, toY, moveType }) => {
       const move = createMoveRequest(piece, toX, toY);
       safelySendJSON(move);
     },

@@ -9,7 +9,6 @@ import PanzoomBox from "../PanzoomBox/PanzoomBox";
 import useBoardSizeParams from "../../hooks/use-board-size-params";
 import CoordsContext from "../CoordsContext/CoordsContext";
 import ShowLargeBoardContext from "../ShowLargeBoardContext/ShowLargeBoardContext";
-import { WebsocketContext } from "../WebsocketProvider/WebsocketProvider";
 
 const Outer = styled.div`
   width: 100%;
@@ -52,8 +51,6 @@ function Board() {
   const { showLargeBoard, setShowLargeBoard } = React.useContext(
     ShowLargeBoardContext
   );
-  const ctx = React.useContext(WebsocketContext);
-  const submitMove = ctx.submitMove;
   const boardSizeParams = useBoardSizeParams({ outerRef });
 
   React.useEffect(() => {
@@ -264,7 +261,6 @@ function Board() {
                 />
                 <PieceMoveButtons
                   boardSizeParams={boardSizeParams}
-                  submitMove={submitMove}
                   opacity={smallOpacity}
                 />
               </>

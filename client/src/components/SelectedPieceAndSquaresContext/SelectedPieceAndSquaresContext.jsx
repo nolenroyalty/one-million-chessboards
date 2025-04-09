@@ -8,14 +8,14 @@ export function SelectedPieceAndSquaresContextProvider({ children }) {
   const { pieceHandler } = React.useContext(HandlersContext);
   const [selectedPieceAndSquares, setSelectedPieceAndSquares] = React.useState({
     selectedPiece: null,
-    moveableSquares: new Set(),
+    moveableSquares: new Map(),
   });
   const { showLargeBoard } = React.useContext(ShowLargeBoardContext);
 
   const clearSelectedPiece = React.useCallback(() => {
     setSelectedPieceAndSquares({
       selectedPiece: null,
-      moveableSquares: new Set(),
+      moveableSquares: new Map(),
     });
   }, []);
 
@@ -34,7 +34,7 @@ export function SelectedPieceAndSquaresContextProvider({ children }) {
       if (prev.selectedPiece?.id === id) {
         return {
           selectedPiece: null,
-          moveableSquares: new Set(),
+          moveableSquares: new Map(),
         };
       }
       return prev;

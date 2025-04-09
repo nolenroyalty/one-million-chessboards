@@ -1,4 +1,9 @@
 const MAX_MOVE_DISTANCE = 36;
+export const MOVE_TYPES = {
+  NORMAL: 0,
+  CASTLE: 1,
+  EN_PASSANT: 2,
+};
 
 export function pieceKey(x, y) {
   return `${x}-${y}`;
@@ -258,6 +263,10 @@ function enPassantable({ pieces, weAreWhite, fromX, fromY, toX, toY, dy }) {
   return true;
 }
 
+function addSquare(squares, x, y, moveType) {
+  squares.push([x, y, moveType]);
+}
+
 // only partially handles en passant
 // needs to specify that we're doing a capture for it (?)
 function addMoveableSquaresForPawn({ piece, pieces, squares }) {
@@ -266,9 +275,9 @@ function addMoveableSquaresForPawn({ piece, pieces, squares }) {
   const y = piece.y;
   const dy = isWhite ? -1 : 1;
   if (empty({ pieces, x, y: y + dy })) {
-    squares.push([x, y + dy]);
+    addSquare(squares, x, y + dy, MOVE_TYPES.NORMAL);
     if (empty({ pieces, x, y: y + 2 * dy }) && piece.moveState === 0) {
-      squares.push([x, y + 2 * dy]);
+      addSquare(squares, x, y + 2 * dy, MOVE_TYPES.NORMAL);
     }
   }
   for (const dx of [-1, 1]) {
@@ -282,7 +291,7 @@ function addMoveableSquaresForPawn({ piece, pieces, squares }) {
         toY: y + dy,
       })
     ) {
-      squares.push([x + dx, y + dy]);
+      addSquare(squares, x + dx, y + dy, MOVE_TYPES.NORMAL);
     }
     if (
       enPassantable({
@@ -295,7 +304,7 @@ function addMoveableSquaresForPawn({ piece, pieces, squares }) {
         dy,
       })
     ) {
-      squares.push([x + dx, y + dy]);
+      addSquare(squares, x + dx, y + dy, MOVE_TYPES.EN_PASSANT);
     }
   }
 }
@@ -326,10 +335,10 @@ function addMoveableSquaresForKnight({ piece, pieces, squares }) {
         toY,
       })
     ) {
-      squares.push([toX, toY]);
+      addSquare(squares, toX, toY, MOVE_TYPES.NORMAL);
     }
     if (empty({ pieces, x: toX, y: toY })) {
-      squares.push([toX, toY]);
+      addSquare(squares, toX, toY, MOVE_TYPES.NORMAL);
     }
   }
 }
@@ -353,11 +362,11 @@ function addMoveableSquaresForBishop({ piece, pieces, squares }) {
           toY,
         });
         if (isCapturable) {
-          squares.push([toX, toY]);
+          addSquare(squares, toX, toY, MOVE_TYPES.NORMAL);
           break;
         }
         if (isEmpty) {
-          squares.push([toX, toY]);
+          addSquare(squares, toX, toY, MOVE_TYPES.NORMAL);
         } else {
           break;
         }
@@ -390,11 +399,11 @@ function addMoveableSquaresForRook({ piece, pieces, squares }) {
         toY,
       });
       if (isCapturable) {
-        squares.push([toX, toY]);
+        addSquare(squares, toX, toY, MOVE_TYPES.NORMAL);
         break;
       }
       if (isEmpty) {
-        squares.push([toX, toY]);
+        addSquare(squares, toX, toY, MOVE_TYPES.NORMAL);
       } else {
         break;
       }
@@ -403,7 +412,8 @@ function addMoveableSquaresForRook({ piece, pieces, squares }) {
   }
 }
 
-// doesn't handle castling
+// CR nroyalty: handle castling
+// CR nroyalty: lock to the current board
 function addMoveableSquaresForKing({ piece, pieces, squares }) {
   const x = piece.x;
   const y = piece.y;
@@ -423,10 +433,10 @@ function addMoveableSquaresForKing({ piece, pieces, squares }) {
         toY,
       });
       if (isCapturable) {
-        squares.push([toX, toY]);
+        addSquare(squares, toX, toY, MOVE_TYPES.NORMAL);
       }
       if (empty({ pieces, x: toX, y: toY })) {
-        squares.push([toX, toY]);
+        addSquare(squares, toX, toY, MOVE_TYPES.NORMAL);
       }
     }
   }
@@ -444,7 +454,7 @@ function LieAboutMoveableSquaresAndJustGive2By2Region(piece, squares) {
       if (dx === 0 && dy === 0) {
         continue;
       }
-      squares.push([x + dx, y + dy]);
+      addSquare(squares, x + dx, y + dy, MOVE_TYPES.NORMAL);
     }
   }
   return squares;
@@ -484,9 +494,9 @@ export function getMoveableSquares(piece, pieces) {
     }
   }
   const checked = boundsCheckMoveableSquares({ squares });
-  const ret = new Set();
-  for (const [x, y] of checked) {
-    ret.add(pieceKey(x, y));
+  const ret = new Map();
+  for (const [x, y, moveType] of checked) {
+    ret.set(pieceKey(x, y), moveType);
   }
   return ret;
 }

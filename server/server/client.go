@@ -253,6 +253,8 @@ func (c *Client) handleMessage(message []byte) {
 		fromY, _ := msg["fromY"].(float64)
 		toX, _ := msg["toX"].(float64)
 		toY, _ := msg["toY"].(float64)
+		moveType, _ := msg["moveType"].(float64)
+		moveTypeEnum := MoveType(int(moveType))
 
 		// Basic bounds checking
 		if !CoordInBounds(fromX) || !CoordInBounds(fromY) ||
@@ -263,11 +265,12 @@ func (c *Client) handleMessage(message []byte) {
 		c.BumpActive()
 
 		move := Move{
-			PieceID: uint32(pieceID),
-			FromX:   uint16(fromX),
-			FromY:   uint16(fromY),
-			ToX:     uint16(toX),
-			ToY:     uint16(toY),
+			PieceID:  uint32(pieceID),
+			FromX:    uint16(fromX),
+			FromY:    uint16(fromY),
+			ToX:      uint16(toX),
+			ToY:      uint16(toY),
+			MoveType: moveTypeEnum,
 		}
 
 		// Submit the move request

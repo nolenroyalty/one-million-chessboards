@@ -11,8 +11,10 @@ import {
   incrementPieceCapture,
   pieceKey,
   TYPE_TO_NAME,
+  MOVE_TYPES,
 } from "../../utils";
 import styled from "styled-components";
+import { WebsocketContext } from "../WebsocketProvider/WebsocketProvider";
 
 const MoveButton = styled.button`
   all: unset;
@@ -29,9 +31,10 @@ const MoveButton = styled.button`
   transition: opacity 0.3s ease-in-out;
 `;
 
-function PieceMoveButtons({ boardSizeParams, submitMove, hidden }) {
+function PieceMoveButtons({ boardSizeParams, hidden }) {
   const { coords } = React.useContext(CoordsContext);
   const { pieceHandler, statsHandler } = React.useContext(HandlersContext);
+  const { submitMove } = React.useContext(WebsocketContext);
   const { selectedPiece, moveableSquares, clearSelectedPiece } =
     React.useContext(SelectedPieceAndSquaresContext);
   const { startingX, startingY } = getStartingAndEndingCoords({
@@ -41,7 +44,7 @@ function PieceMoveButtons({ boardSizeParams, submitMove, hidden }) {
   });
 
   const moveAndClear = React.useCallback(
-    ({ piece, toX, toY }) => {
+    ({ piece, toX, toY, moveType }) => {
       let dMoves = 1;
       let dWhitePieces = 0;
       let dBlackPieces = 0;
@@ -81,13 +84,13 @@ function PieceMoveButtons({ boardSizeParams, submitMove, hidden }) {
         incrLocalMoves,
         incrLocalCaptures,
       });
-      submitMove({ piece, toX, toY });
+      submitMove({ piece, toX, toY, moveType });
       clearSelectedPiece();
     },
     [statsHandler, submitMove, pieceHandler, clearSelectedPiece]
   );
 
-  return Array.from(moveableSquares.values()).map((key) => {
+  return Array.from(moveableSquares.keys()).map((key) => {
     const [x, y] = keyToCoords(key);
     const { x: screenX, y: screenY } = getScreenRelativeCoords({
       x,
@@ -113,7 +116,12 @@ function PieceMoveButtons({ boardSizeParams, submitMove, hidden }) {
         }}
         onClick={(e) => {
           e.stopPropagation();
-          moveAndClear({ piece: selectedPiece, toX: x, toY: y });
+          moveAndClear({
+            piece: selectedPiece,
+            toX: x,
+            toY: y,
+            moveType: MOVE_TYPES.NORMAL,
+          });
         }}
       />
     );
