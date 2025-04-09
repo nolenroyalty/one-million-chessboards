@@ -2,6 +2,7 @@ package server
 
 import (
 	"log"
+	"math"
 	"math/rand"
 	"sync/atomic"
 )
@@ -61,38 +62,221 @@ type ApplyMoveResult struct {
 	NoMove        bool
 }
 
-// ApplyMove applies a move to the board, returning the captured piece if any
-func (b *Board) _ApplyMove(piece Piece, move Move) ApplyMoveResult {
+// MoveResult represents the outcome of a move validation
+type MoveResult struct {
+	Valid         bool
+	MovedPiece    Piece
+	CapturedPiece Piece
+	SeqNum        uint64
+}
 
-	// Get the piece to move
-	if piece.Empty {
-		return ApplyMoveResult{NoMove: true}
+func (b *Board) crossedSquaresAreEmpty(fromX, fromY, toX, toY uint16) bool {
+	dx := int32(0)
+	if fromX < toX {
+		dx = 1
+	} else if fromX > toX {
+		dx = -1
 	}
 
-	if piece.MoveState == Unmoved || piece.MoveState == DoubleMoved {
-		if piece.Type == Pawn {
-			dy := int32(move.ToY) - int32(move.FromY)
-			if dy == 2 || dy == -2 {
-				piece.MoveState = DoubleMoved
-			} else {
-				piece.MoveState = Moved
-			}
-		} else {
-			piece.MoveState = Moved
+	dy := int32(0)
+	if fromY < toY {
+		dy = 1
+	} else if fromY > toY {
+		dy = -1
+	}
+
+	if dx == 0 && dy == 0 {
+		log.Printf("BUG: crossedSquaresAreEmpty: %d %d %d %d", fromX, fromY, toX, toY)
+		return false
+	}
+
+	x := int32(fromX) + dx
+	y := int32(fromY) + dy
+	for x != int32(toX) || y != int32(toY) {
+		if x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE {
+			log.Printf("BUG: crossedSquaresAreEmpty out of bounds: %d %d %d %d", fromX, fromY, toX, toY)
+			return false
+		}
+		raw := b.pieces[y][x].Load()
+		if !EncodedIsEmpty(EncodedPiece(raw)) {
+			return false
+		}
+
+		x += dx
+		y += dy
+	}
+	return true
+}
+
+func (b *Board) satisfiesPawnMoveRules(movedPiece Piece, capturedPiece Piece, move Move) bool {
+	dy := int32(move.ToY) - int32(move.FromY)
+	absDy := int32(math.Abs(float64(dy)))
+	// at most 2 squares vertically
+	if absDy != 1 && absDy != 2 {
+		return false
+	}
+	dx := int32(move.ToX) - int32(move.FromX)
+	absDx := int32(math.Abs(float64(dx)))
+	// at most 1 square horizontally
+	if absDx != 0 && absDx != 1 {
+		return false
+	}
+
+	if absDx == 1 && capturedPiece.Empty {
+		return false
+	} else if absDx == 0 && !capturedPiece.Empty {
+		return false
+	}
+
+	// white pawns move up, black pawns move down
+	if dy < 0 && !movedPiece.IsWhite || dy > 0 && movedPiece.IsWhite {
+		return false
+	}
+
+	// pawns can only move 2 squares if they haven't moved yet
+	if absDy == 2 && movedPiece.MoveState != Unmoved {
+		return false
+	}
+
+	return b.crossedSquaresAreEmpty(move.FromX, move.FromY, move.ToX, move.ToY)
+}
+
+func (b *Board) satisfiesKnightMoveRules(movedPiece Piece, move Move) bool {
+	return true
+}
+
+func (b *Board) satisfiesBishopMoveRules_aux(move Move) bool {
+	absDx := int32(math.Abs(float64(move.ToX) - float64(move.FromX)))
+	absDy := int32(math.Abs(float64(move.ToY) - float64(move.FromY)))
+	return absDx == absDy
+}
+
+func (b *Board) satisfiesBishopMoveRules(move Move) bool {
+	return b.satisfiesBishopMoveRules_aux(move) && b.crossedSquaresAreEmpty(move.FromX, move.FromY, move.ToX, move.ToY)
+}
+
+func (b *Board) satisfiesRookMoveRules_aux(move Move) bool {
+	return move.FromX == move.ToX || move.FromY == move.ToY
+}
+
+func (b *Board) satisfiesRookMoveRules(move Move) bool {
+	if !b.satisfiesRookMoveRules_aux(move) {
+		return false
+	}
+	return b.crossedSquaresAreEmpty(move.FromX, move.FromY, move.ToX, move.ToY)
+}
+
+func (b *Board) satisfiesQueenMoveRules(move Move) bool {
+	if !b.satisfiesBishopMoveRules_aux(move) && !b.satisfiesRookMoveRules_aux(move) {
+		return false
+	}
+	return b.crossedSquaresAreEmpty(move.FromX, move.FromY, move.ToX, move.ToY)
+}
+
+func (b *Board) satisfiesKingMoveRules(movedPiece Piece, move Move) bool {
+	return true
+}
+
+func (b *Board) satisfiesMoveRules(movedPiece Piece, capturedPiece Piece, move Move) bool {
+	switch movedPiece.Type {
+	case Pawn:
+		return b.satisfiesPawnMoveRules(movedPiece, capturedPiece, move)
+	case Knight:
+		return b.satisfiesKnightMoveRules(movedPiece, move)
+	case Bishop:
+		return b.satisfiesBishopMoveRules(move)
+	case Rook:
+		return b.satisfiesRookMoveRules(move)
+	case Queen:
+		return b.satisfiesQueenMoveRules(move)
+	case King:
+		return b.satisfiesKingMoveRules(movedPiece, move)
+	}
+	return true
+}
+
+func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
+	// Must be in bounds
+	if !move.BoundsCheck() {
+		log.Printf("Invalid move: Move is out of bounds")
+		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
+	}
+
+	if move.ExceedsMaxMoveDistance() {
+		log.Printf("Invalid move: Move is too long")
+		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
+	}
+
+	// can't move 0 squares
+	if move.FromX == move.ToX && move.FromY == move.ToY {
+		log.Printf("Invalid move: no movement!")
+		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
+	}
+
+	raw := b.pieces[move.FromY][move.FromX].Load()
+	movedPiece := PieceOfEncodedPiece(EncodedPiece(raw))
+
+	// can't move an empty piece
+	if movedPiece.Empty {
+		log.Printf("Invalid move: No piece at from position (expected id %d)", move.PieceID)
+		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
+	}
+
+	// piece ID must match
+	if movedPiece.ID != move.PieceID {
+		log.Printf("Invalid move: Piece ID does not match")
+		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
+	}
+
+	capturedRaw := b.pieces[move.ToY][move.ToX].Load()
+	capturedPiece := PieceOfEncodedPiece(EncodedPiece(capturedRaw))
+
+	if !capturedPiece.Empty {
+		// must capture pieces of the opposite color
+		if capturedPiece.IsWhite == movedPiece.IsWhite {
+			log.Printf("Invalid move: Captured piece is not the same color")
+			return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
+		}
+
+		startBoardX := move.FromX / 8
+		startBoardY := move.FromY / 8
+		endBoardX := move.ToX / 8
+		endBoardY := move.ToY / 8
+
+		// captures must be on the same sub-board
+		if startBoardX != endBoardX || startBoardY != endBoardY {
+			return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
 		}
 	}
 
+	// Must satisfy move rules
+	if !b.satisfiesMoveRules(movedPiece, capturedPiece, move) {
+		log.Printf("Invalid move: Move does not satisfy basic move rules")
+		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
+	}
+
+	if movedPiece.MoveState == Unmoved || movedPiece.MoveState == DoubleMoved {
+		if movedPiece.Type == Pawn {
+			dy := int32(move.ToY) - int32(move.FromY)
+			if dy == 2 || dy == -2 {
+				movedPiece.MoveState = DoubleMoved
+			} else {
+				movedPiece.MoveState = Moved
+			}
+		} else {
+			movedPiece.MoveState = Moved
+		}
+	}
+
+	// Actually apply the move!
 	// Do the store before the swap so that if we have a race, we don't have
 	// a duplicate piece on the board. This does mean that we potentially
 	// have a race where a piece disappears from the board, but I think that's
 	// fine since we'll send the move information to the client.
 	b.pieces[move.FromY][move.FromX].Store(uint64(EmptyEncodedPiece))
-	capturedEncodedPiece := b.pieces[move.ToY][move.ToX].Swap(uint64(piece.Encode()))
-	capturedPiece := PieceOfEncodedPiece(EncodedPiece(capturedEncodedPiece))
+	b.pieces[move.ToY][move.ToX].Store(uint64(movedPiece.Encode()))
 
 	if !capturedPiece.Empty {
-
-		// Update capture statistics
 		if capturedPiece.IsWhite {
 			b.whitePiecesCaptured.Add(1)
 			if capturedPiece.Type == King {
@@ -105,51 +289,11 @@ func (b *Board) _ApplyMove(piece Piece, move Move) ApplyMoveResult {
 			}
 		}
 	}
-
-	// Increment move counter
 	b.totalMoves.Add(1)
 	b.seqNum.Add(1)
 
-	return ApplyMoveResult{CapturedPiece: capturedPiece, MovedPiece: piece, NoMove: false}
-}
-
-// MoveResult represents the outcome of a move validation
-type MoveResult struct {
-	Valid         bool
-	MovedPiece    Piece
-	CapturedPiece Piece
-	SeqNum        uint64
-}
-
-func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
-	if !BoundsCheck(move) {
-		log.Printf("Invalid move: Move is out of bounds")
-		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
-	}
-
-	raw := b.pieces[move.FromY][move.FromX].Load()
-	movedPiece := PieceOfEncodedPiece(EncodedPiece(raw))
-	if movedPiece.Empty {
-		log.Printf("Invalid move: No piece at from position (expected id %d)", move.PieceID)
-		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
-	}
-
-	if movedPiece.ID != move.PieceID {
-		log.Printf("Invalid move: Piece ID does not match")
-		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
-	}
-
-	// Check if the move is valid
-	if !SatisfiesBasicMoveRules(b, move) {
-		log.Printf("Invalid move: Move does not satisfy basic move rules")
-		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
-	}
-	result := b._ApplyMove(movedPiece, move)
-	if result.NoMove {
-		return MoveResult{Valid: false, MovedPiece: Piece{}, CapturedPiece: Piece{}}
-	}
 	seqNum := b.seqNum.Load()
-	return MoveResult{Valid: true, MovedPiece: result.MovedPiece, CapturedPiece: result.CapturedPiece, SeqNum: seqNum}
+	return MoveResult{Valid: true, MovedPiece: movedPiece, CapturedPiece: capturedPiece, SeqNum: seqNum}
 }
 
 // ResetBoardSection initializes a standard 8x8 chess board at the given position

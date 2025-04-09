@@ -262,15 +262,17 @@ func (c *Client) handleMessage(message []byte) {
 		}
 		c.BumpActive()
 
+		move := Move{
+			PieceID: uint32(pieceID),
+			FromX:   uint16(fromX),
+			FromY:   uint16(fromY),
+			ToX:     uint16(toX),
+			ToY:     uint16(toY),
+		}
+
 		// Submit the move request
 		c.server.moveRequests <- MoveRequest{
-			Move: Move{
-				PieceID: uint32(pieceID),
-				FromX:   uint16(fromX),
-				FromY:   uint16(fromY),
-				ToX:     uint16(toX),
-				ToY:     uint16(toY),
-			},
+			Move:   move,
 			Client: c,
 		}
 

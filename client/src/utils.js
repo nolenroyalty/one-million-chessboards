@@ -436,33 +436,52 @@ function boundsCheckMoveableSquares({ squares }) {
   return squares.filter(([x, y]) => x >= 0 && x <= 7999 && y >= 0 && y <= 7999);
 }
 
+function LieAboutMoveableSquaresAndJustGive2By2Region(piece, squares) {
+  const x = piece.x;
+  const y = piece.y;
+  for (const dx of [-2, -1, 0, 1, 2]) {
+    for (const dy of [-2, -1, 0, 1, 2]) {
+      if (dx === 0 && dy === 0) {
+        continue;
+      }
+      squares.push([x + dx, y + dy]);
+    }
+  }
+  return squares;
+}
+
+const DEBUG_LIE_ABOUT_MOVEABLE_SQUARES = true;
 export function getMoveableSquares(piece, pieces) {
   const squares = [];
   const pieceType = piece.type;
   const name = TYPE_TO_NAME[pieceType];
 
-  switch (name) {
-    case "pawn":
-      addMoveableSquaresForPawn({ piece, pieces, squares });
-      break;
-    case "knight":
-      addMoveableSquaresForKnight({ piece, pieces, squares });
-      break;
-    case "bishop":
-      addMoveableSquaresForBishop({ piece, pieces, squares });
-      break;
-    case "rook":
-      addMoveableSquaresForRook({ piece, pieces, squares });
-      break;
-    case "queen":
-      addMoveableSquaresForBishop({ piece, pieces, squares });
-      addMoveableSquaresForRook({ piece, pieces, squares });
-      break;
-    case "king":
-      addMoveableSquaresForKing({ piece, pieces, squares });
-      break;
-    default:
-      break;
+  if (DEBUG_LIE_ABOUT_MOVEABLE_SQUARES) {
+    LieAboutMoveableSquaresAndJustGive2By2Region(piece, squares);
+  } else {
+    switch (name) {
+      case "pawn":
+        addMoveableSquaresForPawn({ piece, pieces, squares });
+        break;
+      case "knight":
+        addMoveableSquaresForKnight({ piece, pieces, squares });
+        break;
+      case "bishop":
+        addMoveableSquaresForBishop({ piece, pieces, squares });
+        break;
+      case "rook":
+        addMoveableSquaresForRook({ piece, pieces, squares });
+        break;
+      case "queen":
+        addMoveableSquaresForBishop({ piece, pieces, squares });
+        addMoveableSquaresForRook({ piece, pieces, squares });
+        break;
+      case "king":
+        addMoveableSquaresForKing({ piece, pieces, squares });
+        break;
+      default:
+        break;
+    }
   }
   const checked = boundsCheckMoveableSquares({ squares });
   const ret = new Set();

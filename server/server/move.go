@@ -1,5 +1,9 @@
 package server
 
+import "math"
+
+const MAX_MOVE_DISTANCE = 36
+
 // Move represents a chess piece move
 type Move struct {
 	PieceID uint32
@@ -21,7 +25,7 @@ type ValidatedMove struct {
 	Client *Client
 }
 
-func BoundsCheck(move Move) bool {
+func (move *Move) BoundsCheck() bool {
 	if move.FromX >= BOARD_SIZE || move.FromY >= BOARD_SIZE ||
 		move.ToX >= BOARD_SIZE || move.ToY >= BOARD_SIZE {
 		return false
@@ -29,12 +33,18 @@ func BoundsCheck(move Move) bool {
 	return true
 }
 
+func (move *Move) ExceedsMaxMoveDistance() bool {
+	dx := int32(move.ToX) - int32(move.FromX)
+	dy := int32(move.ToY) - int32(move.FromY)
+	return math.Abs(float64(dx)) > MAX_MOVE_DISTANCE || math.Abs(float64(dy)) > MAX_MOVE_DISTANCE
+}
+
 // IsValidMove checks if a move is valid
 // For now, we just do basic bounds checking
-func SatisfiesBasicMoveRules(board *Board, move Move) bool {
-	// For now, all moves are allowed
-	return true
-}
+// func SatisfiesBasicMoveRules(board *Board, move Move) bool {
+// 	// For now, all moves are allowed
+// 	return true
+// }
 
 // PieceMove represents a move update to send to clients
 type PieceMove struct {

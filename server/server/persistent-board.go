@@ -22,8 +22,8 @@ const (
 	snapshotPrefix        = "board"
 	movePrefix            = "moves"
 	suffix                = ".bin"
-    // CR nroyalty: un-disable!
-    disabled = true
+	// CR nroyalty: un-disable!
+	disabled = true
 )
 
 type PersistentBoard struct {
@@ -247,7 +247,7 @@ func NewFakePersistentBoard() *PersistentBoard {
 		movesToSerializeBuffer: make([]Move, 0, 512),
 		lastSerializedSeqNum:   atomic.Uint64{},
 	}
-    pb.board.InitializeRandom()
+	pb.board.InitializeRandom()
 	return pb
 }
 
@@ -317,7 +317,7 @@ func NewPersistentBoard(stateDir string) *PersistentBoard {
 					}
 					s := fmt.Sprintf("Error reading move: %v", err)
 					log.Print(s)
-                    panic(s)
+					panic(s)
 				}
 				res := pb.board.ValidateAndApplyMove(move)
 				if !res.Valid {
