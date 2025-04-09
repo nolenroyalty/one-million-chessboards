@@ -104,7 +104,6 @@ function PieceMoveButtons({ boardSizeParams, hidden }) {
       screenY,
       boardSizeParams,
     });
-    console.log(`moveType: ${moveType}`);
     return (
       <MoveButton
         key={key}

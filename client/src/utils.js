@@ -1,8 +1,15 @@
 const MAX_MOVE_DISTANCE = 36;
+
 export const MOVE_TYPES = {
   NORMAL: 0,
   CASTLE: 1,
   EN_PASSANT: 2,
+};
+
+export const MOVE_STATE = {
+  UNMOVED: 0,
+  MOVED: 1,
+  DOUBLE_MOVED: 2,
 };
 
 export function pieceKey(x, y) {
@@ -220,7 +227,7 @@ export function colorForPieceType({ pieceType, isWhite }) {
   return isWhite ? WHITE_PIECE_COLORS[name] : BLACK_PIECE_COLORS[name];
 }
 
-function spawnsTwoBoards({ fromX, fromY, toX, toY }) {
+function spansTwoBoards({ fromX, fromY, toX, toY }) {
   const fromBoardX = Math.floor(fromX / 8);
   const fromBoardY = Math.floor(fromY / 8);
   const toBoardX = Math.floor(toX / 8);
@@ -236,7 +243,7 @@ function capturable({ pieces, weAreWhite, fromX, fromY, toX, toY }) {
   if (piece.isWhite === weAreWhite) {
     return false;
   }
-  if (spawnsTwoBoards({ fromX, fromY, toX, toY })) {
+  if (spansTwoBoards({ fromX, fromY, toX, toY })) {
     return false;
   }
   return true;
@@ -257,10 +264,10 @@ function enPassantable({ pieces, weAreWhite, fromX, fromY, toX, toY, dy }) {
   if (TYPE_TO_NAME[piece.type] !== "pawn") {
     return false;
   }
-  if (piece.moveState !== 2) {
+  if (piece.moveState !== MOVE_STATE.DOUBLE_MOVED) {
     return false;
   }
-  if (spawnsTwoBoards({ fromX, fromY, toX, toY })) {
+  if (spansTwoBoards({ fromX, fromY, toX, toY })) {
     return false;
   }
   if (pieces.has(pieceKey(toX, toY + dy))) {
@@ -282,7 +289,10 @@ function addMoveableSquaresForPawn({ piece, pieces, squares }) {
   const dy = isWhite ? -1 : 1;
   if (empty({ pieces, x, y: y + dy })) {
     addSquare(squares, x, y + dy, MOVE_TYPES.NORMAL);
-    if (empty({ pieces, x, y: y + 2 * dy }) && piece.moveState === 0) {
+    if (
+      empty({ pieces, x, y: y + 2 * dy }) &&
+      piece.moveState === MOVE_STATE.UNMOVED
+    ) {
       addSquare(squares, x, y + 2 * dy, MOVE_TYPES.NORMAL);
     }
   }
@@ -417,8 +427,6 @@ function addMoveableSquaresForRook({ piece, pieces, squares }) {
   }
 }
 
-// CR nroyalty: handle castling
-// CR nroyalty: lock to the current board
 function addMoveableSquaresForKing({ piece, pieces, squares }) {
   const x = piece.x;
   const y = piece.y;
@@ -429,6 +437,9 @@ function addMoveableSquaresForKing({ piece, pieces, squares }) {
       }
       const toX = x + dx;
       const toY = y + dy;
+      if (spansTwoBoards({ fromX: x, fromY: y, toX, toY })) {
+        continue;
+      }
       const isCapturable = capturable({
         pieces,
         weAreWhite: piece.isWhite,
@@ -444,6 +455,48 @@ function addMoveableSquaresForKing({ piece, pieces, squares }) {
         addSquare(squares, toX, toY, MOVE_TYPES.NORMAL);
       }
     }
+  }
+
+  const kingHasMoved = piece.moveState !== MOVE_STATE.UNMOVED;
+  if (kingHasMoved) {
+    return;
+  }
+
+  // handle castling
+  for (const moveLeft of [true, false]) {
+    const dx = moveLeft ? -2 : 2;
+    const toX = x + dx;
+    const toY = y;
+    const rookDX = moveLeft ? -4 : 3;
+    const maybeRookX = x + rookDX;
+    if (empty({ pieces, x: maybeRookX, y: toY })) {
+      continue;
+    }
+    const moveDx = moveLeft ? -1 : 1;
+    let checkX = x + moveDx;
+    let notEmpty = false;
+    while (checkX !== maybeRookX) {
+      if (!empty({ pieces, x: checkX, y: toY })) {
+        notEmpty = true;
+        break;
+      }
+      checkX += moveDx;
+    }
+    if (notEmpty) {
+      continue;
+    }
+    const maybeRook = pieces.get(pieceKey(maybeRookX, toY));
+    const pieceType = TYPE_TO_NAME[maybeRook.type];
+    if (pieceType !== "rook") {
+      continue;
+    }
+    if (maybeRook.moveState === MOVE_STATE.MOVED) {
+      continue;
+    }
+    if (maybeRook.isWhite !== piece.isWhite) {
+      continue;
+    }
+    addSquare(squares, toX, toY, MOVE_TYPES.CASTLE);
   }
 }
 

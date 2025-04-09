@@ -258,7 +258,6 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 	}
 
 	switch move.MoveType {
-
 	case MoveTypeCastle:
 		return MoveResult{Valid: false}
 	case MoveTypeEnPassant:
