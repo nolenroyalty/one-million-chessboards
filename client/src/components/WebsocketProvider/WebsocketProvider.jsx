@@ -191,8 +191,16 @@ function useWebsocket({
           minimapHandler.current.setState({
             state: data.minimapAggregation.aggregations,
           });
-          statsHandler.current.setGlobalStats({ stats: data.globalStats });
           // CR nroyalty: handle playing white / black
+          statsHandler.current.setGlobalStats({ stats: data.globalStats });
+        } else if (data.type === "validMove") {
+          //   pieceHandler.current.confirmOptimisticMove({
+          //     moveToken: data.moveToken,
+          //   });
+        } else if (data.type === "invalidMove") {
+          //   pieceHandler.current.rejectOptimisticMove({
+          //     moveToken: data.moveToken,
+          //   });
         }
       };
 
@@ -368,10 +376,11 @@ function WebsocketProvider({ children }) {
         incrLocalMoves,
         incrLocalCaptures,
       });
-      const move = createMoveRequest(piece, toX, toY, moveType);
+      const moveToken = pieceHandler.current.getIncrMoveToken();
+      const move = createMoveRequest({ piece, toX, toY, moveType, moveToken });
       safelySendJSON(move);
     },
-    [safelySendJSON, statsHandler]
+    [pieceHandler, safelySendJSON, statsHandler]
   );
 
   const value = React.useMemo(

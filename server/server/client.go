@@ -255,7 +255,7 @@ func (c *Client) handleMessage(message []byte) {
 		toY, _ := msg["toY"].(float64)
 		moveType, _ := msg["moveType"].(float64)
 		moveTypeEnum := MoveType(int(moveType))
-		moveId, _ := msg["moveId"].(float64)
+		moveToken, _ := msg["moveToken"].(float64)
 
 		// Basic bounds checking
 		if !CoordInBounds(fromX) || !CoordInBounds(fromY) ||
@@ -266,13 +266,13 @@ func (c *Client) handleMessage(message []byte) {
 		c.BumpActive()
 
 		move := Move{
-			PieceID:  uint32(pieceID),
-			FromX:    uint16(fromX),
-			FromY:    uint16(fromY),
-			ToX:      uint16(toX),
-			ToY:      uint16(toY),
-			MoveType: moveTypeEnum,
-			MoveID:   uint32(moveId),
+			PieceID:   uint32(pieceID),
+			FromX:     uint16(fromX),
+			FromY:     uint16(fromY),
+			ToX:       uint16(toX),
+			ToY:       uint16(toY),
+			MoveType:  moveTypeEnum,
+			MoveToken: uint32(moveToken),
 		}
 
 		// Submit the move request
@@ -499,13 +499,13 @@ func (c *Client) SendMoveUpdates(moves []PieceMove, captures []PieceCapture) {
 	}
 }
 
-func (c *Client) SendInvalidMove(moveId uint32) {
+func (c *Client) SendInvalidMove(moveToken uint32) {
 	message := struct {
-		Type   string `json:"type"`
-		MoveId uint32 `json:"moveId"`
+		Type      string `json:"type"`
+		MoveToken uint32 `json:"moveToken"`
 	}{
-		Type:   "invalidMove",
-		MoveId: moveId,
+		Type:      "invalidMove",
+		MoveToken: moveToken,
 	}
 
 	data, err := json.Marshal(message)
@@ -523,18 +523,18 @@ func (c *Client) SendInvalidMove(moveId uint32) {
 	}
 }
 
-func (c *Client) SendValidMove(moveId uint32) {
+func (c *Client) SendValidMove(moveToken uint32) {
 	message := struct {
-		Type   string `json:"type"`
-		MoveId uint32 `json:"moveId"`
+		Type      string `json:"type"`
+		MoveToken uint32 `json:"moveToken"`
 	}{
-		Type:   "validMove",
-		MoveId: moveId,
+		Type:      "validMove",
+		MoveToken: moveToken,
 	}
 
 	data, err := json.Marshal(message)
 	if err != nil {
-		log.Printf("Error marshaling invalid move: %v", err)
+		log.Printf("Error marshaling validated move: %v", err)
 		return
 	}
 

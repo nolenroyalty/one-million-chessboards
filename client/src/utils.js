@@ -83,12 +83,13 @@ export function getZoomedInScreenAbsoluteCoords({
   };
 }
 
-export function createMoveRequest(
+export function createMoveRequest({
   piece,
   toX,
   toY,
-  moveType = MOVE_TYPES.NORMAL
-) {
+  moveType = MOVE_TYPES.NORMAL,
+  moveToken,
+}) {
   return {
     type: "move",
     pieceId: piece.id,
@@ -97,6 +98,7 @@ export function createMoveRequest(
     toX,
     toY,
     moveType,
+    moveToken,
   };
 }
 

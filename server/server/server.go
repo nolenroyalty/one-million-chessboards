@@ -334,7 +334,7 @@ func (s *Server) processMoves() {
 		// Validate the move
 		moveResult := s.board.ValidateAndApplyMove(moveReq.Move)
 		if !moveResult.Valid {
-			moveReq.Client.SendInvalidMove(moveReq.Move.MoveID)
+			moveReq.Client.SendInvalidMove(moveReq.Move.MoveToken)
 			continue
 		}
 
