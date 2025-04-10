@@ -22,6 +22,7 @@ const Main = styled.main`
   margin: 0 auto;
   background-color: var(--color-neutral-950);
   height: 100svh;
+  gap: 0.125rem;
   max-height: 1500px;
   --main-side-padding: 0.5rem;
   padding: 0 var(--main-side-padding);
