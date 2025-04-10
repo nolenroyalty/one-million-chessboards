@@ -4,6 +4,7 @@ import {
   createMoveRequest,
   keyToCoords,
   computeInitialArguments,
+  TYPE_TO_NAME,
 } from "../../utils";
 import CoordsContext from "../CoordsContext/CoordsContext";
 
@@ -44,7 +45,8 @@ function useStartBot({ pieceHandler, submitMove, onlyId }) {
             const squares = Array.from(moveableSquaresAndMoveType.keys());
             targetSquare =
               Array.from(squares)[Math.floor(Math.random() * squares.length)];
-            targetMoveType = moveableSquaresAndMoveType.get(targetSquare);
+            const data = moveableSquaresAndMoveType.get(targetSquare);
+            targetMoveType = data.moveType;
             const [x, y] = keyToCoords(targetSquare);
             submitMove({
               piece: targetPiece,
@@ -69,7 +71,8 @@ function useStartBot({ pieceHandler, submitMove, onlyId }) {
               const squares = Array.from(moveableSquaresAndMoveType.keys());
               targetSquare =
                 Array.from(squares)[Math.floor(Math.random() * squares.length)];
-              targetMoveType = moveableSquaresAndMoveType.get(targetSquare);
+              const data = moveableSquaresAndMoveType.get(targetSquare);
+              targetMoveType = data.moveType;
               break;
             }
             attempts++;
@@ -332,11 +335,43 @@ function WebsocketProvider({ children }) {
   useUpdateCoords({ connected, safelySendJSON });
 
   const submitMove = React.useCallback(
-    ({ piece, toX, toY, moveType }) => {
+    ({ piece, toX, toY, moveType, capturedPiece, additionalMovedPiece }) => {
+      let dMoves = 1;
+      let dWhitePieces = 0;
+      let dBlackPieces = 0;
+      let dWhiteKings = 0;
+      let dBlackKings = 0;
+      let incrLocalMoves = true;
+      let incrLocalCaptures = false;
+      if (capturedPiece) {
+        incrLocalCaptures = true;
+        const pieceType = TYPE_TO_NAME[capturedPiece.type];
+        const isKing = pieceType === "king";
+        if (capturedPiece.isWhite) {
+          dWhitePieces--;
+          if (isKing) {
+            dWhiteKings--;
+          }
+        } else {
+          dBlackPieces--;
+          if (isKing) {
+            dBlackKings--;
+          }
+        }
+      }
+      statsHandler.current.applyLocalDelta({
+        dMoves,
+        dWhitePieces,
+        dBlackPieces,
+        dWhiteKings,
+        dBlackKings,
+        incrLocalMoves,
+        incrLocalCaptures,
+      });
       const move = createMoveRequest(piece, toX, toY, moveType);
       safelySendJSON(move);
     },
-    [safelySendJSON]
+    [safelySendJSON, statsHandler]
   );
 
   const value = React.useMemo(

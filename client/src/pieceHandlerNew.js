@@ -227,6 +227,9 @@ class PieceHandler {
         const ourPiece = this.piecesById.get(move.pieceId);
         let simulatedMove = null;
         if (ourPiece === undefined) {
+          const dy = Math.abs(move.toY - move.fromY);
+          const justDoubleMoved =
+            dy === 2 && TYPE_TO_NAME[move.pieceType] === "pawn";
           const piece = {
             id: move.pieceId,
             x: move.toX,
@@ -235,6 +238,7 @@ class PieceHandler {
             isWhite: move.isWhite,
             moveCount: move.moveCount,
             captureCount: move.captureCount,
+            justDoubleMoved,
           };
           simulatedAppearances.push({
             piece,
@@ -266,7 +270,10 @@ class PieceHandler {
           ourPiece.y = move.toY;
           ourPiece.moveCount = move.moveCount;
           ourPiece.captureCount = move.captureCount;
-
+          const dy = Math.abs(move.toY - move.fromY);
+          const justDoubleMoved =
+            dy === 2 && TYPE_TO_NAME[move.pieceType] === "pawn";
+          ourPiece.justDoubleMoved = justDoubleMoved;
           this.piecesByLocation.set(pieceKey(move.toX, move.toY), ourPiece);
           this.piecesById.set(ourPiece.id, ourPiece);
         }

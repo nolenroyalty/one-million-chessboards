@@ -1,14 +1,11 @@
 import React from "react";
 import CoordsContext from "../CoordsContext/CoordsContext";
-import HandlersContext from "../HandlersContext/HandlersContext";
 import SelectedPieceAndSquaresContext from "../SelectedPieceAndSquaresContext/SelectedPieceAndSquaresContext";
 import {
   keyToCoords,
   getStartingAndEndingCoords,
   getScreenRelativeCoords,
   getZoomedInScreenAbsoluteCoords,
-  pieceKey,
-  TYPE_TO_NAME,
 } from "../../utils";
 import styled from "styled-components";
 import { WebsocketContext } from "../WebsocketProvider/WebsocketProvider";
@@ -30,7 +27,6 @@ const MoveButton = styled.button`
 
 function PieceMoveButtons({ boardSizeParams, hidden }) {
   const { coords } = React.useContext(CoordsContext);
-  const { pieceHandler, statsHandler } = React.useContext(HandlersContext);
   const { submitMove } = React.useContext(WebsocketContext);
   const { selectedPiece, moveableSquares, clearSelectedPiece } =
     React.useContext(SelectedPieceAndSquaresContext);
@@ -44,49 +40,24 @@ function PieceMoveButtons({ boardSizeParams, hidden }) {
   // But also we can move most of this logic to pieceHandlerNew when it starts
   // handling optimistic updates
   const moveAndClear = React.useCallback(
-    ({ piece, toX, toY, moveType }) => {
-      let dMoves = 1;
-      let dWhitePieces = 0;
-      let dBlackPieces = 0;
-      let dWhiteKings = 0;
-      let dBlackKings = 0;
-      let incrLocalMoves = true;
-      let incrLocalCaptures = false;
-      const capturedPiece = pieceHandler.current.getPieceByLocation(toX, toY);
-      if (capturedPiece) {
-        incrLocalCaptures = true;
-        const pieceType = TYPE_TO_NAME[capturedPiece.type];
-        const isKing = pieceType === "king";
-        if (capturedPiece.isWhite) {
-          dWhitePieces--;
-          if (isKing) {
-            dWhiteKings--;
-          }
-        } else {
-          dBlackPieces--;
-          if (isKing) {
-            dBlackKings--;
-          }
-        }
-      }
-      statsHandler.current.applyLocalDelta({
-        dMoves,
-        dWhitePieces,
-        dBlackPieces,
-        dWhiteKings,
-        dBlackKings,
-        incrLocalMoves,
-        incrLocalCaptures,
+    ({ piece, toX, toY, moveType, capturedPiece, additionalMovedPiece }) => {
+      submitMove({
+        piece,
+        toX,
+        toY,
+        moveType,
+        capturedPiece,
+        additionalMovedPiece,
       });
-      submitMove({ piece, toX, toY, moveType });
       clearSelectedPiece();
     },
-    [statsHandler, submitMove, pieceHandler, clearSelectedPiece]
+    [submitMove, clearSelectedPiece]
   );
 
   return Array.from(moveableSquares.keys()).map((key) => {
     const [x, y] = keyToCoords(key);
-    const moveType = moveableSquares.get(key);
+    const { moveType, capturedPiece, additionalMovedPiece } =
+      moveableSquares.get(key);
     const { x: screenX, y: screenY } = getScreenRelativeCoords({
       x,
       y,
@@ -115,7 +86,9 @@ function PieceMoveButtons({ boardSizeParams, hidden }) {
             piece: selectedPiece,
             toX: x,
             toY: y,
-            moveType: moveType,
+            moveType,
+            capturedPiece,
+            additionalMovedPiece,
           });
         }}
       />

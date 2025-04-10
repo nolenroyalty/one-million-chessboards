@@ -361,13 +361,11 @@ func (s *Server) processMoves() {
 				CapturedPieceID: capturedPiece.Piece.ID,
 				X:               capturedPiece.X,
 				Y:               capturedPiece.Y,
-				CapturedType:    capturedPiece.Piece.Type,
-				WasWhite:        capturedPiece.Piece.IsWhite,
 				SeqNum:          moveResult.SeqNum,
 			}
 		}
 
-		s.minimapAggregator.UpdateForMove(movedPieces, captureMove)
+		s.minimapAggregator.UpdateForMove(movedPieces, capturedPiece)
 		s.persistentBoard.ApplyMove(moveReq.Move, moveResult.SeqNum)
 
 		affectedZones := s.zoneMap.GetAffectedZones(moveReq.Move)

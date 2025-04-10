@@ -15,7 +15,7 @@ type MinimapCell struct {
 
 type MovesAndMaybeCapture struct {
 	Moves   []PieceMove
-	Capture *PieceCapture
+	Capture CaptureResult
 }
 
 type SingleAggregation struct {
@@ -112,7 +112,7 @@ func (m *MinimapAggregator) updateForAggregatorCoords(coords AggregatorCoords, i
 	}
 }
 
-func (m *MinimapAggregator) processMoveUpdate(moves []PieceMove, capture *PieceCapture) {
+func (m *MinimapAggregator) processMoveUpdate(moves []PieceMove, capture CaptureResult) {
 	if len(moves) == 0 {
 		return
 	}
@@ -124,9 +124,9 @@ func (m *MinimapAggregator) processMoveUpdate(moves []PieceMove, capture *PieceC
 			m.updateForAggregatorCoords(toCoords, pieceMove.IsWhite, false)
 		}
 	}
-	if capture != nil {
+	if !capture.Piece.IsEmpty() {
 		captureCoords := getAggregatorCoords(capture.X, capture.Y)
-		m.updateForAggregatorCoords(captureCoords, capture.WasWhite, true)
+		m.updateForAggregatorCoords(captureCoords, capture.Piece.IsWhite, true)
 	}
 }
 
@@ -185,7 +185,7 @@ func (m *MinimapAggregator) RequestAggregation() <-chan json.RawMessage {
 	return response
 }
 
-func (m *MinimapAggregator) UpdateForMove(moves []PieceMove, capture *PieceCapture) {
+func (m *MinimapAggregator) UpdateForMove(moves []PieceMove, capture CaptureResult) {
 	m.moveUpdates <- MovesAndMaybeCapture{Moves: moves, Capture: capture}
 }
 

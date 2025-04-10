@@ -526,7 +526,7 @@ func (c *Client) SendInvalidMove(moveId uint32) {
 func (c *Client) SendValidMove(moveId uint32) {
 	message := struct {
 		Type   string `json:"type"`
-		MoveId uint32 `json:moveId"`
+		MoveId uint32 `json:"moveId"`
 	}{
 		Type:   "validMove",
 		MoveId: moveId,
