@@ -28,12 +28,6 @@ type MoveRequest struct {
 	Client *Client
 }
 
-// ValidatedMove represents a move that has been validated
-type ValidatedMove struct {
-	Move   Move
-	Client *Client
-}
-
 func (move *Move) BoundsCheck() bool {
 	if move.FromX >= BOARD_SIZE || move.FromY >= BOARD_SIZE ||
 		move.ToX >= BOARD_SIZE || move.ToY >= BOARD_SIZE {
@@ -57,15 +51,16 @@ func (move *Move) ExceedsMaxMoveDistance() bool {
 
 // PieceMove represents a move update to send to clients
 type PieceMove struct {
-	PieceID   uint32    `json:"pieceId"`
-	FromX     uint16    `json:"fromX"`
-	FromY     uint16    `json:"fromY"`
-	ToX       uint16    `json:"toX"`
-	ToY       uint16    `json:"toY"`
-	PieceType PieceType `json:"pieceType"`
-	IsWhite   bool      `json:"isWhite"`
-	MoveState MoveState `json:"moveState"`
-	SeqNum    uint64    `json:"seqNum"`
+	PieceID      uint32    `json:"pieceId"`
+	FromX        uint16    `json:"fromX"`
+	FromY        uint16    `json:"fromY"`
+	ToX          uint16    `json:"toX"`
+	ToY          uint16    `json:"toY"`
+	PieceType    PieceType `json:"pieceType"`
+	IsWhite      bool      `json:"isWhite"`
+	MoveCount    uint8     `json:"moveCount"`
+	CaptureCount uint8     `json:"captureCount"`
+	SeqNum       uint64    `json:"seqNum"`
 }
 
 // PieceCapture represents a capture update to send to clients

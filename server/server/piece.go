@@ -12,21 +12,14 @@ const (
 	King
 )
 
-// MoveState tracks special move conditions
-type MoveState int
-
-const (
-	Unmoved MoveState = iota
-	Moved
-	DoubleMoved // For pawns that just made a two-square move (for en passant)
-)
-
 // Piece represents a chess piece
 type Piece struct {
-	ID        uint32
-	Type      PieceType
-	IsWhite   bool
-	MoveState MoveState
+	ID              uint32
+	Type            PieceType
+	IsWhite         bool
+	JustDoubleMoved bool
+	MoveCount       uint8
+	CaptureCount    uint8
 }
 
 type EncodedPiece uint64
@@ -34,28 +27,22 @@ type EncodedPiece uint64
 const EmptyEncodedPiece = EncodedPiece(0)
 
 const (
-	PieceIdShift   = 0  // always 32 bits
-	PieceTypeShift = 32 // give it 4 bits (6 piece types)
-	IsWhiteShift   = 36 // only 1 bit ever
-	MoveStateShift = 37 // let's leave 4 bits here (room for more, only 3 right now)
-	// plenty of room for extra metadata...
+	PieceIdShift         = 0  // always 32 bits
+	PieceTypeShift       = 32 // give it 4 bits (6 piece types)
+	IsWhiteShift         = 36 // only 1 bit ever
+	JustDoubleMovedShift = 37 // 1 bit (only needed for pawns)
+	MoveCountShift       = 38 // 8 bits
+	CaptureCountShift    = 46 // 8 bits
+	PromotedShift        = 54 // 1 bit
 
-	idMask        = uint64(^uint32(0))
-	typeMask      = 0xF << PieceTypeShift
-	isWhiteMask   = 1 << IsWhiteShift
-	moveStateMask = 0xF << MoveStateShift
+	idMask              = uint64(^uint32(0))
+	typeMask            = 0xF << PieceTypeShift
+	isWhiteMask         = 1 << IsWhiteShift
+	justDoubleMovedMask = 1 << JustDoubleMovedShift
+	moveCountMask       = 0xFF << MoveCountShift
+	captureCountMask    = 0xFF << CaptureCountShift
+	promotedMask        = 1 << PromotedShift
 )
-
-func NewEncodedPiece(id uint32, pieceType PieceType, isWhite bool, moveState MoveState) EncodedPiece {
-	whiteInt := 0
-	if isWhite {
-		whiteInt = 1
-	}
-	return EncodedPiece(uint64(id)<<PieceIdShift |
-		uint64(pieceType)<<PieceTypeShift |
-		uint64(whiteInt)<<IsWhiteShift |
-		uint64(moveState)<<MoveStateShift)
-}
 
 func EncodedIsEmpty(encodedPiece EncodedPiece) bool {
 	return encodedPiece == EmptyEncodedPiece
@@ -68,17 +55,21 @@ func PieceOfEncodedPiece(encodedPiece EncodedPiece) Piece {
 
 	if empty {
 		return Piece{
-			ID:        0,
-			Type:      Pawn,
-			IsWhite:   false,
-			MoveState: Unmoved,
+			ID:              0,
+			Type:            Pawn,
+			IsWhite:         false,
+			JustDoubleMoved: false,
+			MoveCount:       0,
+			CaptureCount:    0,
 		}
 	}
 	var p Piece
 	p.ID = uint32((raw & idMask) >> PieceIdShift)
 	p.Type = PieceType((raw & typeMask) >> PieceTypeShift)
 	p.IsWhite = ((raw & isWhiteMask) >> IsWhiteShift) != 0
-	p.MoveState = MoveState((raw & moveStateMask) >> MoveStateShift)
+	p.JustDoubleMoved = ((raw & justDoubleMovedMask) >> JustDoubleMovedShift) != 0
+	p.MoveCount = uint8((raw & moveCountMask) >> MoveCountShift)
+	p.CaptureCount = uint8((raw & captureCountMask) >> CaptureCountShift)
 	return p
 }
 
@@ -94,19 +85,39 @@ func (p *Piece) Encode() EncodedPiece {
 	if p.IsWhite {
 		whiteInt = 1
 	}
+	justDoubleMovedInt := 0
+	if p.JustDoubleMoved {
+		justDoubleMovedInt = 1
+	}
 	raw := uint64(p.ID)<<PieceIdShift |
 		uint64(p.Type)<<PieceTypeShift |
 		uint64(whiteInt)<<IsWhiteShift |
-		uint64(p.MoveState)<<MoveStateShift
+		uint64(justDoubleMovedInt)<<JustDoubleMovedShift |
+		uint64(p.MoveCount)<<MoveCountShift |
+		uint64(p.CaptureCount)<<CaptureCountShift
 	return EncodedPiece(raw)
+}
+
+func (p *Piece) IncrementMoveCount() {
+	if p.MoveCount < 250 {
+		p.MoveCount++
+	}
+}
+
+func (p *Piece) IncrementCaptureCount() {
+	if p.CaptureCount < 250 {
+		p.CaptureCount++
+	}
 }
 
 // NewPiece creates a new piece with default values
 func NewPiece(id uint32, pieceType PieceType, isWhite bool) Piece {
 	return Piece{
-		ID:        id,
-		Type:      pieceType,
-		IsWhite:   isWhite,
-		MoveState: Unmoved,
+		ID:              id,
+		Type:            pieceType,
+		IsWhite:         isWhite,
+		JustDoubleMoved: false,
+		MoveCount:       0,
+		CaptureCount:    0,
 	}
 }

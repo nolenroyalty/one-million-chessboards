@@ -7,8 +7,6 @@ import {
   getStartingAndEndingCoords,
   getScreenRelativeCoords,
   getZoomedInScreenAbsoluteCoords,
-  incrementPieceMove,
-  incrementPieceCapture,
   pieceKey,
   TYPE_TO_NAME,
 } from "../../utils";
@@ -51,11 +49,9 @@ function PieceMoveButtons({ boardSizeParams, hidden }) {
       let dBlackKings = 0;
       let incrLocalMoves = true;
       let incrLocalCaptures = false;
-      incrementPieceMove(piece.id);
       const toKey = pieceKey(toX, toY);
       const pieces = pieceHandler.current.getPieces();
       if (pieces.has(toKey)) {
-        incrementPieceCapture(piece.id);
         incrLocalCaptures = true;
         const capturedPiece = pieces.get(toKey);
         if (capturedPiece) {

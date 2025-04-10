@@ -342,15 +342,16 @@ func (s *Server) processMoves() {
 		movedPieces := make([]PieceMove, moveResult.Length)
 		for i := 0; i < int(moveResult.Length); i++ {
 			movedPieces[i] = PieceMove{
-				PieceID:   moveResult.MovedPieces[i].Piece.ID,
-				FromX:     moveResult.MovedPieces[i].FromX,
-				FromY:     moveResult.MovedPieces[i].FromY,
-				ToX:       moveResult.MovedPieces[i].ToX,
-				ToY:       moveResult.MovedPieces[i].ToY,
-				PieceType: moveResult.MovedPieces[i].Piece.Type,
-				IsWhite:   moveResult.MovedPieces[i].Piece.IsWhite,
-				MoveState: moveResult.MovedPieces[i].Piece.MoveState,
-				SeqNum:    moveResult.SeqNum,
+				PieceID:      moveResult.MovedPieces[i].Piece.ID,
+				FromX:        moveResult.MovedPieces[i].FromX,
+				FromY:        moveResult.MovedPieces[i].FromY,
+				ToX:          moveResult.MovedPieces[i].ToX,
+				ToY:          moveResult.MovedPieces[i].ToY,
+				PieceType:    moveResult.MovedPieces[i].Piece.Type,
+				IsWhite:      moveResult.MovedPieces[i].Piece.IsWhite,
+				MoveCount:    moveResult.MovedPieces[i].Piece.MoveCount,
+				CaptureCount: moveResult.MovedPieces[i].Piece.CaptureCount,
+				SeqNum:       moveResult.SeqNum,
 			}
 		}
 

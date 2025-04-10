@@ -6,12 +6,6 @@ export const MOVE_TYPES = {
   EN_PASSANT: 2,
 };
 
-export const MOVE_STATE = {
-  UNMOVED: 0,
-  MOVED: 1,
-  DOUBLE_MOVED: 2,
-};
-
 export function pieceKey(x, y) {
   return `${x}-${y}`;
 }
@@ -73,35 +67,6 @@ function getIndividualPieceState(pieceState, pieceId) {
     savePieceState(pieceState);
   }
   return pieceState.pieces[pieceId];
-}
-
-export function incrementPieceMove(pieceId) {
-  // update local storage
-  const pieceState = getPieceState();
-  const pieceStateForPiece = getIndividualPieceState(pieceState, pieceId);
-  pieceStateForPiece.move++;
-  pieceStateForPiece.accessAt = performance.now();
-  savePieceState(pieceState);
-}
-
-export function incrementPieceCapture(pieceId) {
-  const pieceState = getPieceState();
-  const pieceStateForPiece = getIndividualPieceState(pieceState, pieceId);
-  pieceStateForPiece.capture++;
-  pieceStateForPiece.accessAt = performance.now();
-  savePieceState(pieceState);
-}
-
-export function getPieceMoves(pieceId) {
-  const pieceState = getPieceState();
-  const pieceStateForPiece = getIndividualPieceState(pieceState, pieceId);
-  return pieceStateForPiece.move;
-}
-
-export function getPieceCaptures(pieceId) {
-  const pieceState = getPieceState();
-  const pieceStateForPiece = getIndividualPieceState(pieceState, pieceId);
-  return pieceStateForPiece.capture;
 }
 
 export function computeAnimationDuration({
@@ -264,7 +229,7 @@ function enPassantable({ pieces, weAreWhite, fromX, fromY, toX, toY, dy }) {
   if (TYPE_TO_NAME[piece.type] !== "pawn") {
     return false;
   }
-  if (piece.moveState !== MOVE_STATE.DOUBLE_MOVED) {
+  if (!piece.justDoubleMoved) {
     return false;
   }
   if (spansTwoBoards({ fromX, fromY, toX, toY })) {
@@ -289,10 +254,7 @@ function addMoveableSquaresForPawn({ piece, pieces, squares }) {
   const dy = isWhite ? -1 : 1;
   if (empty({ pieces, x, y: y + dy })) {
     addSquare(squares, x, y + dy, MOVE_TYPES.NORMAL);
-    if (
-      empty({ pieces, x, y: y + 2 * dy }) &&
-      piece.moveState === MOVE_STATE.UNMOVED
-    ) {
+    if (empty({ pieces, x, y: y + 2 * dy }) && piece.moveCount === 0) {
       addSquare(squares, x, y + 2 * dy, MOVE_TYPES.NORMAL);
     }
   }
@@ -457,7 +419,7 @@ function addMoveableSquaresForKing({ piece, pieces, squares }) {
     }
   }
 
-  const kingHasMoved = piece.moveState !== MOVE_STATE.UNMOVED;
+  const kingHasMoved = piece.moveCount !== 0;
   if (kingHasMoved) {
     return;
   }
@@ -490,7 +452,7 @@ function addMoveableSquaresForKing({ piece, pieces, squares }) {
     if (pieceType !== "rook") {
       continue;
     }
-    if (maybeRook.moveState === MOVE_STATE.MOVED) {
+    if (maybeRook.moveCount !== 0) {
       continue;
     }
     if (maybeRook.isWhite !== piece.isWhite) {

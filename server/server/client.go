@@ -18,21 +18,19 @@ const (
 )
 
 type PieceData struct {
-	ID        uint32    `json:"id"`
-	X         uint16    `json:"x"`
-	Y         uint16    `json:"y"`
-	Type      PieceType `json:"type"`
-	IsWhite   bool      `json:"isWhite"`
-	MoveState MoveState `json:"moveState"`
+	ID              uint32    `json:"id"`
+	X               uint16    `json:"x"`
+	Y               uint16    `json:"y"`
+	Type            PieceType `json:"type"`
+	JustDoubleMoved bool      `json:"justDoubleMoved"`
+	IsWhite         bool      `json:"isWhite"`
+	MoveCount       uint8     `json:"moveCount"`
+	CaptureCount    uint8     `json:"captureCount"`
 }
 
 type SnapshotMessage struct {
 	Type           string      `json:"type"`
 	Pieces         []PieceData `json:"pieces"`
-	AreaMinX       uint16      `json:"areaMinX"`
-	AreaMinY       uint16      `json:"areaMinY"`
-	AreaMaxX       uint16      `json:"areaMaxX"`
-	AreaMaxY       uint16      `json:"areaMaxY"`
 	StartingSeqNum uint64      `json:"startingSeqNum"`
 	EndingSeqNum   uint64      `json:"endingSeqNum"`
 }
@@ -41,22 +39,20 @@ func (snapshot *StateSnapshot) ToSnapshotMessage() SnapshotMessage {
 	pieces := make([]PieceData, len(snapshot.Pieces))
 	for i, piece := range snapshot.Pieces {
 		pieces[i] = PieceData{
-			ID:        piece.Piece.ID,
-			X:         piece.X,
-			Y:         piece.Y,
-			Type:      piece.Piece.Type,
-			IsWhite:   piece.Piece.IsWhite,
-			MoveState: piece.Piece.MoveState,
+			ID:              piece.Piece.ID,
+			X:               piece.X,
+			Y:               piece.Y,
+			Type:            piece.Piece.Type,
+			IsWhite:         piece.Piece.IsWhite,
+			JustDoubleMoved: piece.Piece.JustDoubleMoved,
+			MoveCount:       piece.Piece.MoveCount,
+			CaptureCount:    piece.Piece.CaptureCount,
 		}
 	}
 
 	message := SnapshotMessage{
 		Type:           "stateSnapshot",
 		Pieces:         pieces,
-		AreaMinX:       snapshot.AreaMinX,
-		AreaMinY:       snapshot.AreaMinY,
-		AreaMaxX:       snapshot.AreaMaxX,
-		AreaMaxY:       snapshot.AreaMaxY,
 		StartingSeqNum: snapshot.StartingSeqNum,
 		EndingSeqNum:   snapshot.EndingSeqNum,
 	}

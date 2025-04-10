@@ -142,7 +142,7 @@ func (b *Board) satisfiesPawnMoveRules(movedPiece Piece, capturedPiece Piece, mo
 	}
 
 	// pawns can only move 2 squares if they haven't moved yet
-	if absDy == 2 && movedPiece.MoveState != Unmoved {
+	if absDy == 2 && movedPiece.MoveCount != 0 {
 		return false
 	}
 
@@ -227,18 +227,15 @@ func (b *Board) satisfiesMoveRules(movedPiece Piece, capturedPiece Piece, move M
 func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 	// Must be in bounds
 	if !move.BoundsCheck() {
-		log.Printf("Invalid move: Move is out of bounds")
 		return MoveResult{Valid: false}
 	}
 
 	if move.ExceedsMaxMoveDistance() {
-		log.Printf("Invalid move: Move is too long")
 		return MoveResult{Valid: false}
 	}
 
 	// can't move 0 squares
 	if move.FromX == move.ToX && move.FromY == move.ToY {
-		log.Printf("Invalid move: no movement!")
 		return MoveResult{Valid: false}
 	}
 
@@ -264,7 +261,7 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 			return MoveResult{Valid: false}
 		}
 		// Must be unmoved
-		if movedPiece.MoveState != Unmoved {
+		if movedPiece.MoveCount != 0 {
 			return MoveResult{Valid: false}
 		}
 		// Must be moving 2 squares horizontally and none vertically
@@ -307,7 +304,7 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 		}
 
 		// Rook must be unmoved
-		if rookPiece.MoveState != Unmoved {
+		if rookPiece.MoveCount != 0 {
 			return MoveResult{Valid: false}
 		}
 
@@ -327,8 +324,8 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 		}
 
 		// That's it! Apply the move
-		movedPiece.MoveState = Moved
-		rookPiece.MoveState = Moved
+		movedPiece.MoveCount = 1
+		rookPiece.MoveCount = 1
 		b.pieces[move.FromY][move.FromX].Store(uint64(EmptyEncodedPiece))
 		b.pieces[rookFromY][rookFromX].Store(uint64(EmptyEncodedPiece))
 		b.pieces[move.ToY][move.ToX].Store(uint64(movedPiece.Encode()))
@@ -401,12 +398,12 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 		}
 
 		// must have double moved
-		if capturedPiece.MoveState != DoubleMoved {
+		if !capturedPiece.JustDoubleMoved {
 			return MoveResult{Valid: false}
 		}
 
 		// That's it! Apply the move
-		movedPiece.MoveState = Moved
+		movedPiece.IncrementMoveCount()
 		b.pieces[move.ToY][move.ToX].Store(uint64(movedPiece.Encode()))
 		b.pieces[move.FromY][move.FromX].Store(uint64(EmptyEncodedPiece))
 		b.pieces[capturedY][capturedX].Store(uint64(EmptyEncodedPiece))
@@ -465,28 +462,18 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 			return MoveResult{Valid: false}
 		}
 
-		if movedPiece.MoveState == Unmoved || movedPiece.MoveState == DoubleMoved {
-			if movedPiece.Type == Pawn {
-				dy := int32(move.ToY) - int32(move.FromY)
-				if dy == 2 || dy == -2 {
-					movedPiece.MoveState = DoubleMoved
-				} else {
-					movedPiece.MoveState = Moved
-				}
+		if movedPiece.Type == Pawn {
+			dy := int32(move.ToY) - int32(move.FromY)
+			if dy == 2 || dy == -2 {
+				movedPiece.JustDoubleMoved = true
 			} else {
-				movedPiece.MoveState = Moved
+				movedPiece.JustDoubleMoved = false
 			}
 		}
-
-		// Actually apply the move!
-		// Do the store before the swap so that if we have a race, we don't have
-		// a duplicate piece on the board. This does mean that we potentially
-		// have a race where a piece disappears from the board, but I think that's
-		// fine since we'll send the move information to the client.
-		b.pieces[move.FromY][move.FromX].Store(uint64(EmptyEncodedPiece))
-		b.pieces[move.ToY][move.ToX].Store(uint64(movedPiece.Encode()))
+		movedPiece.IncrementMoveCount()
 
 		if !capturedPiece.IsEmpty() {
+			movedPiece.IncrementCaptureCount()
 			if capturedPiece.IsWhite {
 				b.whitePiecesCaptured.Add(1)
 				if capturedPiece.Type == King {
@@ -499,6 +486,15 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 				}
 			}
 		}
+
+		// Actually apply the move!
+		// Do the store before the swap so that if we have a race, we don't have
+		// a duplicate piece on the board. This does mean that we potentially
+		// have a race where a piece disappears from the board, but I think that's
+		// fine since we'll send the move information to the client.
+		b.pieces[move.FromY][move.FromX].Store(uint64(EmptyEncodedPiece))
+		b.pieces[move.ToY][move.ToX].Store(uint64(movedPiece.Encode()))
+
 		b.totalMoves.Add(1)
 		b.seqNum.Add(1)
 
@@ -655,7 +651,7 @@ func (b *Board) GetStateForPosition(pos Position) StateSnapshot {
 	}
 
 	// Collect pieces in the viewport
-	pieces := make([]PieceState, 0, 100) // Approximate capacity
+	pieces := make([]PieceState, 0, 200) // Approximate capacity
 
 	for y := minY; y <= maxY; y++ {
 		for x := minX; x <= maxX; x++ {
@@ -673,10 +669,6 @@ func (b *Board) GetStateForPosition(pos Position) StateSnapshot {
 
 	return StateSnapshot{
 		Pieces:         pieces,
-		AreaMinX:       minX,
-		AreaMinY:       minY,
-		AreaMaxX:       maxX,
-		AreaMaxY:       maxY,
 		StartingSeqNum: startingSeqNum,
 		EndingSeqNum:   b.seqNum.Load(),
 	}
@@ -711,13 +703,8 @@ type Position struct {
 	Y uint16 `json:"y"`
 }
 
-// StateSnapshot contains all piece data for a client's view
 type StateSnapshot struct {
 	Pieces         []PieceState
-	AreaMinX       uint16
-	AreaMinY       uint16
-	AreaMaxX       uint16
-	AreaMaxY       uint16
 	StartingSeqNum uint64
 	EndingSeqNum   uint64
 }

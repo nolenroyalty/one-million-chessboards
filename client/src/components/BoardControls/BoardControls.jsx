@@ -15,7 +15,7 @@ import {
   Mail,
   Twitter,
 } from "lucide-react";
-import { TYPE_TO_NAME, getPieceMoves, getPieceCaptures } from "../../utils";
+import { TYPE_TO_NAME } from "../../utils";
 import BoardControlsPanel from "../BoardControlsPanel/BoardControlsPanel";
 import Minimap from "../Minimap/Minimap";
 import StatsDisplay from "../StatsDisplay/StatsDisplay";
@@ -24,6 +24,9 @@ import { QUERY } from "../../constants";
 import CoordsContext from "../CoordsContext/CoordsContext";
 import ShowLargeBoardContext from "../ShowLargeBoardContext/ShowLargeBoardContext";
 import SelectedPieceAndSquaresContext from "../SelectedPieceAndSquaresContext/SelectedPieceAndSquaresContext";
+
+const MAX_CAPTURE_MOVE_COUNT = 250;
+
 const Wrapper = styled.div`
   width: 100%;
   --inner-height: 170px;
@@ -227,7 +230,7 @@ const PieceName = styled.p`
   line-height: 1.1;
 `;
 
-const YourStats = styled.div`
+const PieceStats = styled.div`
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -246,7 +249,7 @@ const StatSquareOuter = styled.div`
   padding: 2px;
 `;
 
-const YourStatSquare = styled.div`
+const StatSquareInner = styled.div`
   --size: 2rem;
   width: var(--size);
   height: var(--size);
@@ -270,7 +273,7 @@ const YourStatSquare = styled.div`
   }
 `;
 
-const YourStatSquareLabel = styled.p`
+const StatSquareLabel = styled.p`
   font-size: 0.75rem;
   color: var(--color-gray-200);
   text-align: right;
@@ -283,7 +286,7 @@ const YourStatSquareLabel = styled.p`
   right: -4px;
   border-top: 1px solid var(--color-sky-700);
   border-left: 1px solid var(--color-sky-700);
-  border-radius: 2px;
+  border-radius: 2px 0 4px 0;
   padding: 1px 4px 1px 4px;
   z-index: 2;
   line-height: 1;
@@ -351,12 +354,17 @@ function AllBoardButtons() {
 }
 
 function StatSquare({ icon, getLabel }) {
+  let value = getLabel();
+  const isMax = value >= MAX_CAPTURE_MOVE_COUNT;
+  if (isMax) {
+    value = `${MAX_CAPTURE_MOVE_COUNT}+`;
+  }
   return (
     <StatSquareOuter>
-      <YourStatSquare>
+      <StatSquareInner>
         {icon}
-        <YourStatSquareLabel>{getLabel()}</YourStatSquareLabel>
-      </YourStatSquare>
+        <StatSquareLabel>{value}</StatSquareLabel>
+      </StatSquareInner>
     </StatSquareOuter>
   );
 }
@@ -418,16 +426,16 @@ function SelectedPiece() {
           <>
             <PieceName>{pieceName}</PieceName>
             <PieceId>{pieceId}</PieceId>
-            <YourStats>
+            <PieceStats>
               <StatSquare
                 icon={<ArrowDownUp />}
-                getLabel={() => getPieceMoves(selectedPiece.id)}
+                getLabel={() => selectedPiece.moveCount}
               />
               <StatSquare
                 icon={<Axe />}
-                getLabel={() => getPieceCaptures(selectedPiece.id)}
+                getLabel={() => selectedPiece.captureCount}
               />
-            </YourStats>
+            </PieceStats>
           </>
         )}
       </PieceInfoOuter>

@@ -92,7 +92,9 @@ class PieceHandler {
       y: toY,
       type: move.pieceType,
       isWhite: move.isWhite,
-      moveState: move.moveState,
+      justDoubleMoved: move.justDoubleMoved,
+      moveCount: move.moveCount,
+      captureCount: move.captureCount,
     };
     pieces.set(toKey, piece);
     piecesById.set(move.pieceId, piece);
