@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	PeriodicUpdateInterval = time.Second * 1
+	PeriodicUpdateInterval = time.Second * 60
 	activityThreshold      = time.Second * 60
 )
 
