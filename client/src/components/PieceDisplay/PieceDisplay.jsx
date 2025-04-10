@@ -1,5 +1,5 @@
 import React from "react";
-import styled, { keyframes } from "styled-components";
+import styled from "styled-components";
 import HandlersContext from "../HandlersContext/HandlersContext";
 import CoordsContext from "../CoordsContext/CoordsContext";
 import SelectedPieceAndSquaresContext from "../SelectedPieceAndSquaresContext/SelectedPieceAndSquaresContext";
@@ -20,7 +20,6 @@ const CAPTURE_ANIMATION_DURATION = 200;
 const PieceImg = styled.img`
   width: var(--size);
   height: var(--size);
-  opacity: var(--opacity);
   transition:
     opacity 0.3s ease,
     transform 0.3s ease;
@@ -29,6 +28,10 @@ const PieceImg = styled.img`
   transform: var(--transform);
   &:hover {
     transform: scale(1.12);
+  }
+
+  &[data-captured="true"] {
+    transform: unset;
   }
   /* filter: url(#colorRemap) url(#binaryRemap); */
 `;
@@ -47,58 +50,18 @@ const PieceButtonWrapper = styled.button`
   justify-content: center;
   opacity: var(--opacity);
   transition: opacity 0.3s ease;
-`;
 
-const AnimFadeout = keyframes`
-  from {
-    opacity: 1;
-  }
-  to {
+  &[data-captured="true"] {
+    pointer-events: none;
+    cursor: none;
+    transition: opacity 0.3s ease-out 0.1s;
     opacity: 0;
   }
 `;
 
-const CapturedPieceWrapper = styled.button`
-  all: unset;
-  cursor: none;
-  pointer-events: none;
-  position: absolute;
-  top: 0;
-  left: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--size);
-  height: var(--size);
-  animation: ${AnimFadeout} ${CAPTURE_ANIMATION_DURATION}ms ease-in-out both;
-  transform: translate(var(--x), var(--y));
-`;
-
-function _CapturedPiece({ id, x, y, src, pieceX, pieceY, size }) {
-  return (
-    <CapturedPieceWrapper
-      id={id}
-      data-id={id}
-      data-piece-x={pieceX}
-      data-piece-y={pieceY}
-      style={{
-        "--x": `${x}px`,
-        "--y": `${y}px`,
-        "--size": `${size}px`,
-      }}
-    >
-      <PieceImg src={src} />
-    </CapturedPieceWrapper>
-  );
-}
-
-const CapturedPiece = React.memo(_CapturedPiece);
-
 function _Piece({
   src,
   dataId,
-  pieceX,
-  pieceY,
   size,
   hidden,
   opacity,
@@ -106,24 +69,28 @@ function _Piece({
   translate,
   savePieceRef,
   maybeHandlePieceClick,
+  captured,
 }) {
   const style = React.useMemo(() => {
     return {
       "--size": `${size}px`,
       transform: translate,
       "--opacity": opacity,
-      "--pointer-events": hidden ? "none" : "auto",
-      "--cursor": hidden ? "none" : "pointer",
+      "--pointer-events": hidden || captured ? "none" : "auto",
+      "--cursor": hidden || captured ? "none" : "pointer",
     };
-  }, [size, translate, opacity, hidden]);
+  }, [size, translate, captured, opacity, hidden]);
 
   const imgStyle = React.useMemo(() => {
     return { "--transform": selected ? "scale(1.12)" : "scale(1)" };
   }, [selected]);
 
   const onClick = React.useCallback(() => {
+    if (captured) {
+      return;
+    }
     maybeHandlePieceClick(dataId);
-  }, [maybeHandlePieceClick, dataId]);
+  }, [captured, maybeHandlePieceClick, dataId]);
 
   const refFunc = React.useCallback(
     (el) => {
@@ -135,8 +102,8 @@ function _Piece({
   return (
     <PieceButtonWrapper
       data-id={dataId}
-      data-piece-x={pieceX}
-      data-piece-y={pieceY}
+      data-captured={captured}
+      disabled={captured}
       // it's important that we use an inline style here because it lets
       // us override that style from our animation handler and then automatically
       // remove that overridden style when we re-render the piece
@@ -144,8 +111,12 @@ function _Piece({
       onClick={onClick}
       ref={refFunc}
     >
-      <PieceImg className="chess-piece" src={src} style={imgStyle} />
-      {/* <CircleX style={imgStyle} /> */}
+      <PieceImg
+        className="chess-piece"
+        src={src}
+        style={imgStyle}
+        data-captured={captured}
+      />
     </PieceButtonWrapper>
   );
 }
@@ -178,12 +149,8 @@ function initialMoveAnimationState(moveMapByPieceId) {
 function PieceDisplay({ boardSizeParams, hidden, opacity }) {
   const { pieceHandler } = React.useContext(HandlersContext);
   const { coords } = React.useContext(CoordsContext);
-  const {
-    selectedPiece,
-    clearSelectedPiece,
-    setSelectedPiece,
-    clearSelectedPieceForId,
-  } = React.useContext(SelectedPieceAndSquaresContext);
+  const { selectedPiece, setSelectedPiece, clearSelectedPieceForId } =
+    React.useContext(SelectedPieceAndSquaresContext);
   const { startingX, startingY, endingX, endingY } = React.useMemo(() => {
     return getStartingAndEndingCoords({
       coords,
@@ -310,6 +277,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
             console.warn(
               `Not displaying move because we don't have a piece for it: ${JSON.stringify(move)})`
             );
+            movesToAdd.push(move);
           }
         });
 
@@ -326,8 +294,6 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
               piece: ourPiece,
             });
             doUpdate = true;
-            // CR nroyalty: do something to make sure piece doesn't flicker here
-            // maybe we can just fade pieces out instead?
           }
         });
 
@@ -376,6 +342,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
 
         if (capturesToAdd.length > 0) {
           capturesToAdd.forEach((capture) => {
+            clearSelectedPieceForId(capture.piece.id);
             capturedPiecesByIdRef.current.set(capture.piece.id, capture);
           });
           for (const id of capturedPiecesByIdRef.current.keys()) {
@@ -421,176 +388,6 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
     isNotVisible,
     pieceHandler,
   ]);
-
-  //   React.useEffect(() => {
-  //     visiblePiecesAndIdsRef.current = getVisiblePiecesById(
-  //       pieceHandler.current.getPiecesById()
-  //     );
-  //     setForceUpdate((prev) => prev + 1);
-
-  //     pieceHandler.current.subscribe({
-  //       id: "piece-display",
-  //       callback: (data) => {
-  //         let doUpdate = false;
-  //         const capturesToAdd = [];
-  //         const movesToAdd = [];
-
-  //         if (data.wasSnapshot) {
-  //           const nowVisiblePiecesAndIds = getVisiblePiecesById(data.pieces);
-  //           const newIds = nowVisiblePiecesAndIds;
-  //           const oldIds = visiblePiecesAndIdsRef.current;
-  //           const sizeEqual = newIds.size === oldIds.size;
-  //           if (!sizeEqual) {
-  //             doUpdate = true;
-  //           }
-  //           const now = performance.now();
-  //           visiblePiecesAndIdsRef.current = nowVisiblePiecesAndIds;
-
-  //           for (const oldId of oldIds.keys()) {
-  //             if (!newIds.has(oldId)) {
-  //               doUpdate = true;
-  //               const currentPiece = pieceHandler.current.getPieceById(oldId);
-  //               const oldPiece = oldIds.get(oldId);
-  //               if (!currentPiece && oldPiece) {
-  //                 const alreadyCaptured =
-  //                   capturedPiecesByIdRef.current.has(oldId);
-  //                 // reasonable chance that it's been captured and we haven't heard about it.
-  //                 if (!alreadyCaptured) {
-  //                   console.log("SPECULATIVELY ADD CAPTURE");
-  //                   capturesToAdd.push({
-  //                     receivedAt: now,
-  //                     piece: oldPiece,
-  //                   });
-  //                 }
-  //               }
-  //             }
-  //           }
-
-  //           for (const newId of newIds.keys()) {
-  //             if (!oldIds.has(newId)) {
-  //               doUpdate = true;
-  //               console.log("PIECE APPEARED?");
-  //               const newPiece = newIds.get(newId);
-  //               if (newPiece) {
-  //                 // add a fake move to prevent us from putting the piece
-  //                 // in the final spot and then animating it backawards
-  //                 movesToAdd.push({
-  //                   fromX: newPiece.x,
-  //                   fromY: newPiece.y,
-  //                   toX: newPiece.x,
-  //                   toY: newPiece.y,
-  //                   pieceId: newId,
-  //                   receivedAt: now,
-  //                 });
-  //               }
-  //             } else {
-  //               const oldPiece = oldIds.get(newId);
-  //               const newPiece = newIds.get(newId);
-  //               if (oldPiece.x !== newPiece.x || oldPiece.y !== newPiece.y) {
-  //                 console.log("SHOULD SPECULATIVELY ADD MOVE");
-  //                 const move = {
-  //                   fromX: oldPiece.x,
-  //                   fromY: oldPiece.y,
-  //                   toX: newPiece.x,
-  //                   toY: newPiece.y,
-  //                   pieceId: newId,
-  //                   receivedAt: now,
-  //                 };
-  //                 movesToAdd.push(move);
-  //               }
-  //             }
-  //           }
-  //         } else {
-  //           data.recentMoves.forEach((move) => {
-  //             const visibleNow = !moveIsInvisible(move);
-  //             const visibleBefore = visiblePiecesAndIdsRef.current.has(
-  //               move.pieceId
-  //             );
-  //             if (visibleBefore && !visibleNow) {
-  //               visiblePiecesAndIdsRef.current.delete(move.pieceId);
-  //             } else if (!visibleBefore && visibleNow) {
-  //               const piece = pieceHandler.current.getPieceById(move.pieceId);
-  //               if (piece) {
-  //                 visiblePiecesAndIdsRef.current.set(move.pieceId, piece);
-  //                 doUpdate = true;
-  //               }
-  //               movesToAdd.push(move);
-  //             } else if (visibleBefore && visibleNow) {
-  //               const piece = pieceHandler.current.getPieceById(move.pieceId);
-  //               if (piece) {
-  //                 visiblePiecesAndIdsRef.current.set(move.pieceId, piece);
-  //               }
-  //               movesToAdd.push(move);
-  //             }
-  //           });
-
-  //           data.recentCaptures.forEach((capture) => {
-  //             const piece = visiblePiecesAndIdsRef.current.get(
-  //               capture.capturedPieceId
-  //             );
-
-  //             if (piece) {
-  //               visiblePiecesAndIdsRef.current.delete(capture.capturedPieceId);
-  //               doUpdate = true;
-  //               capturesToAdd.push({
-  //                 receivedAt: capture.receivedAt,
-  //                 piece,
-  //               });
-  //             }
-  //           });
-  //         }
-
-  //         const now = performance.now();
-  //         movesToAdd.forEach((move) => {
-  //           clearSelectedPieceForId(move.pieceId);
-  //           let animationState;
-  //           const prevAnimationState = getAnimatedCoords({
-  //             pieceId: move.pieceId,
-  //             now,
-  //           });
-  //           if (prevAnimationState && !prevAnimationState.finished) {
-  //             const fakeMove = {
-  //               ...move,
-  //               fromX: prevAnimationState.x,
-  //               fromY: prevAnimationState.y,
-  //             };
-  //             animationState = makeMoveAnimationState(fakeMove);
-  //           } else {
-  //             animationState = makeMoveAnimationState(move);
-  //           }
-  //           recentMoveByPieceIdRef.current.set(move.pieceId, animationState);
-  //         });
-
-  //         if (capturesToAdd.length > 0) {
-  //           capturesToAdd.forEach((capture) => {
-  //             capturedPiecesByIdRef.current.set(capture.piece.id, capture);
-  //           });
-  //           for (const id of capturedPiecesByIdRef.current.keys()) {
-  //             const capture = capturedPiecesByIdRef.current.get(id);
-  //             if (now - capture.receivedAt > CAPTURE_ANIMATION_DURATION) {
-  //               capturedPiecesByIdRef.current.delete(id);
-  //             }
-  //           }
-  //         }
-
-  //         if (doUpdate) {
-  //           setForceUpdate((prev) => prev + 1);
-  //         }
-  //       },
-  //     });
-  //     return () => {
-  //       pieceHandler.current.unsubscribe({
-  //         id: "piece-display",
-  //       });
-  //     };
-  //   }, [
-  //     getVisiblePiecesById,
-  //     pieceHandler,
-  //     clearSelectedPiece,
-  //     clearSelectedPieceForId,
-  //     moveIsInvisible,
-  //     getAnimatedCoords,
-  //   ]);
 
   const savePieceRef = React.useCallback((pieceId, ref) => {
     if (ref) {
@@ -669,9 +466,8 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
     };
   }, [boardSizeParams, startingX, startingY, isNotVisible, getAnimatedCoords]);
 
-  const { capturedPieces, memoizedPieces } = React.useMemo(() => {
+  const memoizedPieces = React.useMemo(() => {
     let shutupForceUpdate = forceUpdate;
-    const capturedPieces = [];
     const memoizedPieces = [];
     const now = performance.now();
 
@@ -718,27 +514,36 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
         }),
         translate: `translate(${absoluteX}px, ${absoluteY}px)`,
         selected: piece.id === selectedPiece?.id,
+        captured: false,
       });
     }
 
     for (const capture of capturedPiecesByIdRef.current.values()) {
+      if (isInvisibleNowAndViaMove({ piece: capture.piece })) {
+        continue;
+      }
       const { absoluteX, absoluteY } = determineAbsoluteCoords({
         pieceId: capture.piece.id,
         x: capture.piece.x,
         y: capture.piece.y,
       });
-      capturedPieces.push({
+      memoizedPieces.push({
         piece: capture.piece,
-        x: absoluteX,
-        y: absoluteY,
-        src: imageForPieceType({
+        imageSrc: imageForPieceType({
           pieceType: capture.piece.type,
           isWhite: capture.piece.isWhite,
         }),
+        translate: `translate(${absoluteX}px, ${absoluteY}px)`,
+        selected: false,
+        captured: true,
       });
     }
 
-    return { capturedPieces, memoizedPieces };
+    memoizedPieces.sort((a, b) => {
+      return a.piece.id - b.piece.id;
+    });
+
+    return memoizedPieces;
   }, [
     isInvisibleNowAndViaMove,
     getAnimatedCoords,
@@ -749,41 +554,23 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
     forceUpdate,
   ]);
 
-  return (
-    <>
-      {capturedPieces.map(({ piece, x, y, src }) => {
-        return (
-          <CapturedPiece
-            key={piece.id}
-            x={x}
-            y={y}
-            src={src}
-            pieceX={piece.x}
-            pieceY={piece.y}
-            size={boardSizeParams.squarePx}
-          />
-        );
-      })}
-      {memoizedPieces.map(({ piece, imageSrc, x, y, translate }) => {
-        return (
-          <Piece
-            key={piece.id}
-            savePieceRef={savePieceRef}
-            src={imageSrc}
-            dataId={piece.id}
-            x={x}
-            y={y}
-            translate={translate}
-            size={boardSizeParams.squarePx}
-            hidden={hidden}
-            opacity={opacity}
-            maybeHandlePieceClick={maybeHandlePieceClick}
-            selected={piece.id === selectedPiece?.id}
-          />
-        );
-      })}
-    </>
-  );
+  return memoizedPieces.map(({ piece, imageSrc, translate, captured }) => {
+    return (
+      <Piece
+        key={piece.id}
+        savePieceRef={savePieceRef}
+        src={imageSrc}
+        dataId={piece.id}
+        translate={translate}
+        size={boardSizeParams.squarePx}
+        hidden={hidden}
+        opacity={opacity}
+        maybeHandlePieceClick={maybeHandlePieceClick}
+        selected={piece.id === selectedPiece?.id}
+        captured={captured}
+      />
+    );
+  });
 }
 
 export default PieceDisplay;
