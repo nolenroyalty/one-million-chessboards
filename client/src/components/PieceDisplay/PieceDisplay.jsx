@@ -15,7 +15,7 @@ import {
 const MAX_ANIMATION_DURATION = 750;
 const MIN_ANIMATION_DURATION = 350;
 const MAX_DMOVE = 15;
-const CAPTURE_ANIMATION_DURATION = 200;
+const CAPTURE_ANIMATION_DURATION = 450;
 
 const PieceImg = styled.img`
   width: var(--size);
@@ -54,7 +54,7 @@ const PieceButtonWrapper = styled.button`
   &[data-captured="true"] {
     pointer-events: none;
     cursor: none;
-    transition: opacity 0.3s ease-out 0.1s;
+    transition: opacity 0.3s cubic-bezier(0.33, 1, 0.68, 1) 0.1s;
     opacity: 0;
   }
 `;
@@ -267,6 +267,8 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
             const oldPiece = visiblePiecesAndIdsRef.current.get(move.pieceId);
             oldPiece.x = move.toX;
             oldPiece.y = move.toY;
+            // This is critical - without this, the piece may disappear instead of
+            // smoothly moving off screen!
             newVisiblePiecesAndIds.set(move.pieceId, oldPiece);
             movesToAdd.push(move);
           } else if (!wasVisible && endedVisible) {
