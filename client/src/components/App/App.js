@@ -2,7 +2,7 @@ import React from "react";
 import styled from "styled-components";
 import Board from "../Board/Board";
 import BoardControls from "../BoardControls/BoardControls";
-import PieceHandler from "../../pieceHandler.js";
+import PieceHandler from "../../pieceHandlerNew.js";
 import ChessPieceColorer from "../ChessPieceColorer/ChessPieceColorer";
 import BigHeader from "../BigHeader/BigHeader.jsx";
 import SmallHeader from "../SmallHeader/SmallHeader.jsx";
@@ -13,6 +13,7 @@ import { CoordsContextProvider } from "../CoordsContext/CoordsContext";
 import { ShowLargeBoardContextProvider } from "../ShowLargeBoardContext/ShowLargeBoardContext";
 import { SelectedPieceAndSquaresContextProvider } from "../SelectedPieceAndSquaresContext/SelectedPieceAndSquaresContext";
 import WebsocketProvider from "../WebsocketProvider/WebsocketProvider";
+
 const Main = styled.main`
   display: flex;
   flex-direction: column;

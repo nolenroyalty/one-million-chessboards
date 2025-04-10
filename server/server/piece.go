@@ -33,7 +33,8 @@ const (
 	JustDoubleMovedShift = 37 // 1 bit (only needed for pawns)
 	MoveCountShift       = 38 // 8 bits
 	CaptureCountShift    = 46 // 8 bits
-	PromotedShift        = 54 // 1 bit
+	// CR nroyalty: handle promotion
+	PromotedShift = 54 // 1 bit
 
 	idMask              = uint64(^uint32(0))
 	typeMask            = 0xF << PieceTypeShift

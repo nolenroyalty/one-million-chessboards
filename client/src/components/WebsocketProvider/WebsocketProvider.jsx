@@ -33,23 +33,24 @@ function useStartBot({ pieceHandler, submitMove, onlyId }) {
 
     const loop = () => {
       let attempts = 0;
-      let targetPiece, targetSquare;
+      let targetPiece, targetSquare, targetMoveType;
       if (onlyId) {
         const piece = pieceHandler.current.getPieceById(onlyId);
         if (piece) {
           targetPiece = piece;
-          const moveableSquares =
+          const moveableSquaresAndMoveType =
             pieceHandler.current.getMoveableSquares(targetPiece);
-          if (moveableSquares.size > 0) {
+          if (moveableSquaresAndMoveType.size > 0) {
+            const squares = Array.from(moveableSquaresAndMoveType.keys());
             targetSquare =
-              Array.from(moveableSquares)[
-                Math.floor(Math.random() * moveableSquares.size)
-              ];
+              Array.from(squares)[Math.floor(Math.random() * squares.length)];
+            targetMoveType = moveableSquaresAndMoveType.get(targetSquare);
             const [x, y] = keyToCoords(targetSquare);
             submitMove({
               piece: targetPiece,
               toX: x,
               toY: y,
+              moveType: targetMoveType,
             });
           }
         }
@@ -57,18 +58,18 @@ function useStartBot({ pieceHandler, submitMove, onlyId }) {
         for (let i = 0; i < 10; i++) {
           while (attempts < 50) {
             const pieces = Array.from(
-              pieceHandler.current.getPieces().values()
+              pieceHandler.current.getPiecesById().values()
             );
             const randomPiece =
               pieces[Math.floor(Math.random() * pieces.length)];
-            const moveableSquares =
+            const moveableSquaresAndMoveType =
               pieceHandler.current.getMoveableSquares(randomPiece);
-            if (moveableSquares.size > 0) {
+            if (moveableSquaresAndMoveType.size > 0) {
               targetPiece = randomPiece;
+              const squares = Array.from(moveableSquaresAndMoveType.keys());
               targetSquare =
-                Array.from(moveableSquares)[
-                  Math.floor(Math.random() * moveableSquares.size)
-                ];
+                Array.from(squares)[Math.floor(Math.random() * squares.length)];
+              targetMoveType = moveableSquaresAndMoveType.get(targetSquare);
               break;
             }
             attempts++;
@@ -88,6 +89,7 @@ function useStartBot({ pieceHandler, submitMove, onlyId }) {
               piece: targetPiece,
               toX: x,
               toY: y,
+              moveType: targetMoveType,
             });
           }
         }
@@ -170,7 +172,6 @@ function useWebsocket({
         // CR nroyalty: handle other updates...
         const data = JSON.parse(event.data);
         if (data.type === "stateSnapshot") {
-          console.log("GOT SNAPSHOT");
           pieceHandler.current.handleSnapshot({ snapshot: data });
         } else if (data.type === "moveUpdates") {
           pieceHandler.current.handleMoves({
@@ -182,7 +183,6 @@ function useWebsocket({
         } else if (data.type === "globalStats") {
           statsHandler.current.setGlobalStats({ stats: data });
         } else if (data.type === "initialState") {
-          console.log("initialState", data);
           pieceHandler.current.handleSnapshot({ snapshot: data.snapshot });
           setCoords({ x: data.position.x, y: data.position.y });
           minimapHandler.current.setState({

@@ -20,6 +20,7 @@ type Move struct {
 	ToX      uint16
 	ToY      uint16
 	MoveType MoveType
+	MoveID   uint32
 }
 
 // MoveRequest combines a move with the client that requested it
@@ -42,12 +43,9 @@ func (move *Move) ExceedsMaxMoveDistance() bool {
 	return math.Abs(float64(dx)) > MAX_MOVE_DISTANCE || math.Abs(float64(dy)) > MAX_MOVE_DISTANCE
 }
 
-// IsValidMove checks if a move is valid
-// For now, we just do basic bounds checking
-// func SatisfiesBasicMoveRules(board *Board, move Move) bool {
-// 	// For now, all moves are allowed
-// 	return true
-// }
+// CR nroyalty: can we remove piece type, iswhite, etc from these? it'd be nice.
+// I think we can remove piece type and such, but we need to keep around x and y in
+// captured piece because it's handy for figuring out invalidation
 
 // PieceMove represents a move update to send to clients
 type PieceMove struct {

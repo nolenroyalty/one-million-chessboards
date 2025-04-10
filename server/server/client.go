@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	PeriodicUpdateInterval = time.Second * 60
+	PeriodicUpdateInterval = time.Second * 1
 	activityThreshold      = time.Second * 60
 )
 
@@ -33,6 +33,8 @@ type SnapshotMessage struct {
 	Pieces         []PieceData `json:"pieces"`
 	StartingSeqNum uint64      `json:"startingSeqNum"`
 	EndingSeqNum   uint64      `json:"endingSeqNum"`
+	XCoord         uint16      `json:"xCoord"`
+	YCoord         uint16      `json:"yCoord"`
 }
 
 func (snapshot *StateSnapshot) ToSnapshotMessage() SnapshotMessage {
@@ -55,6 +57,8 @@ func (snapshot *StateSnapshot) ToSnapshotMessage() SnapshotMessage {
 		Pieces:         pieces,
 		StartingSeqNum: snapshot.StartingSeqNum,
 		EndingSeqNum:   snapshot.EndingSeqNum,
+		XCoord:         snapshot.XCoord,
+		YCoord:         snapshot.YCoord,
 	}
 
 	return message
@@ -251,6 +255,7 @@ func (c *Client) handleMessage(message []byte) {
 		toY, _ := msg["toY"].(float64)
 		moveType, _ := msg["moveType"].(float64)
 		moveTypeEnum := MoveType(int(moveType))
+		moveId, _ := msg["moveId"].(float64)
 
 		// Basic bounds checking
 		if !CoordInBounds(fromX) || !CoordInBounds(fromY) ||
@@ -267,6 +272,7 @@ func (c *Client) handleMessage(message []byte) {
 			ToX:      uint16(toX),
 			ToY:      uint16(toY),
 			MoveType: moveTypeEnum,
+			MoveID:   uint32(moveId),
 		}
 
 		// Submit the move request
@@ -455,6 +461,10 @@ func (c *Client) SendStateSnapshot(snapshot StateSnapshot) {
 	}
 }
 
+// PERFORMANCE nroyalty: To avoid the cost of sending information about each piece
+// with our move data, we could compute whether a move JUST entered a client's
+// view and send it as a separate "Annotated Move" with the additional info.
+// This probably doesn't save us that much (a few bytes) but it could add up
 // SendMoveUpdates sends move and capture updates to the client
 func (c *Client) SendMoveUpdates(moves []PieceMove, captures []PieceCapture) {
 	// Create a proper JSON message structure
@@ -485,6 +495,54 @@ func (c *Client) SendMoveUpdates(moves []PieceMove, captures []PieceCapture) {
 		// Sent successfully
 	default:
 		// Buffer full, client might be slow or disconnected
+		c.server.unregister <- c
+	}
+}
+
+func (c *Client) SendInvalidMove(moveId uint32) {
+	message := struct {
+		Type   string `json:"type"`
+		MoveId uint32 `json:"moveId"`
+	}{
+		Type:   "invalidMove",
+		MoveId: moveId,
+	}
+
+	data, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling invalid move: %v", err)
+		return
+	}
+
+	select {
+	case <-c.done:
+		return
+	case c.send <- data:
+	default:
+		c.server.unregister <- c
+	}
+}
+
+func (c *Client) SendValidMove(moveId uint32) {
+	message := struct {
+		Type   string `json:"type"`
+		MoveId uint32 `json:moveId"`
+	}{
+		Type:   "validMove",
+		MoveId: moveId,
+	}
+
+	data, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling invalid move: %v", err)
+		return
+	}
+
+	select {
+	case <-c.done:
+		return
+	case c.send <- data:
+	default:
 		c.server.unregister <- c
 	}
 }

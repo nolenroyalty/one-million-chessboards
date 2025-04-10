@@ -43,7 +43,7 @@ function ZoomedOutOverview({ opacity, boardSizeParams }) {
   const pieceCanvasRef = React.useRef(null);
   const boardCanvasRef = React.useRef(null);
   const animationCanvasRef = React.useRef(null);
-  const piecesRef = React.useRef(new Map(pieceHandler.current.getPieces()));
+  const piecesRef = React.useRef(new Map(pieceHandler.current.getPiecesById()));
   const [forcePieceRerender, setForcePieceRerender] = React.useState(0);
   const recentMovesRef = React.useRef(new Map());
   const { largeBoardKillSwitch } = React.useContext(ShowLargeBoardContext);
@@ -53,13 +53,14 @@ function ZoomedOutOverview({ opacity, boardSizeParams }) {
       id: "zoomed-out-overview",
       callback: (data) => {
         const piecesById = new Map();
-        data.pieces.forEach((piece) => {
-          piecesById.set(piece.id, piece);
-        });
+        for (const [pieceId, piece] of data.piecesById) {
+          piecesById.set(pieceId, piece);
+        }
         piecesRef.current = piecesById;
-        data.recentMoves.forEach((move) => {
+        for (const move of data.moves) {
           recentMovesRef.current.set(move.pieceId, move);
-        });
+        }
+        // nroyalty: PERFORMANCE....maybe don't do this...
         setForcePieceRerender((x) => x + 1);
       },
     });

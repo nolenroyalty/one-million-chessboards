@@ -40,6 +40,9 @@ function PieceMoveButtons({ boardSizeParams, hidden }) {
     height: boardSizeParams.squareHeight,
   });
 
+  // CR nroyalty: this has a bug (it doesn't account for en passant captures)
+  // But also we can move most of this logic to pieceHandlerNew when it starts
+  // handling optimistic updates
   const moveAndClear = React.useCallback(
     ({ piece, toX, toY, moveType }) => {
       let dMoves = 1;
@@ -49,24 +52,20 @@ function PieceMoveButtons({ boardSizeParams, hidden }) {
       let dBlackKings = 0;
       let incrLocalMoves = true;
       let incrLocalCaptures = false;
-      const toKey = pieceKey(toX, toY);
-      const pieces = pieceHandler.current.getPieces();
-      if (pieces.has(toKey)) {
+      const capturedPiece = pieceHandler.current.getPieceByLocation(toX, toY);
+      if (capturedPiece) {
         incrLocalCaptures = true;
-        const capturedPiece = pieces.get(toKey);
-        if (capturedPiece) {
-          const pieceType = TYPE_TO_NAME[capturedPiece.type];
-          const isKing = pieceType === "king";
-          if (capturedPiece.isWhite) {
-            dWhitePieces--;
-            if (isKing) {
-              dWhiteKings--;
-            }
-          } else {
-            dBlackPieces--;
-            if (isKing) {
-              dBlackKings--;
-            }
+        const pieceType = TYPE_TO_NAME[capturedPiece.type];
+        const isKing = pieceType === "king";
+        if (capturedPiece.isWhite) {
+          dWhitePieces--;
+          if (isKing) {
+            dWhiteKings--;
+          }
+        } else {
+          dBlackPieces--;
+          if (isKing) {
+            dBlackKings--;
           }
         }
       }

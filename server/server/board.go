@@ -671,6 +671,8 @@ func (b *Board) GetStateForPosition(pos Position) StateSnapshot {
 		Pieces:         pieces,
 		StartingSeqNum: startingSeqNum,
 		EndingSeqNum:   b.seqNum.Load(),
+		XCoord:         pos.X,
+		YCoord:         pos.Y,
 	}
 }
 
@@ -707,4 +709,6 @@ type StateSnapshot struct {
 	Pieces         []PieceState
 	StartingSeqNum uint64
 	EndingSeqNum   uint64
+	XCoord         uint16
+	YCoord         uint16
 }

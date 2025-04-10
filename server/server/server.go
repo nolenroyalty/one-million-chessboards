@@ -334,10 +334,10 @@ func (s *Server) processMoves() {
 		// Validate the move
 		moveResult := s.board.ValidateAndApplyMove(moveReq.Move)
 		if !moveResult.Valid {
-			log.Printf("Move request invalid")
-			moveReq.Client.SendError("Invalid move")
+			moveReq.Client.SendInvalidMove(moveReq.Move.MoveID)
 			continue
 		}
+
 		capturedPiece := moveResult.CapturedPiece
 		movedPieces := make([]PieceMove, moveResult.Length)
 		for i := 0; i < int(moveResult.Length); i++ {
