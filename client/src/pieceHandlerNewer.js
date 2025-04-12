@@ -367,7 +367,7 @@ class PieceHandler {
     const receivedAt = performance.now();
     const animations = this.optimisticStateHandler.addOptimisticMove({
       moveToken,
-      movedPiece: { ...movedPiece, toX, toY },
+      movedPiece: { piece: movedPiece, toX, toY },
       additionalMovedPiece,
       capturedPiece,
       receivedAt,

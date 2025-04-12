@@ -328,10 +328,13 @@ function WebsocketProvider({ children }) {
     if (ws && ws.readyState === WebSocket.OPEN) {
       try {
         ws.send(JSON.stringify(json));
+        return true;
       } catch (e) {
         console.error("Error sending JSON", e);
+        return false;
       }
     }
+    return false;
   }, []);
 
   useWebsocket({
@@ -380,7 +383,17 @@ function WebsocketProvider({ children }) {
       });
       const moveToken = pieceHandler.current.getIncrMoveToken();
       const move = createMoveRequest({ piece, toX, toY, moveType, moveToken });
-      safelySendJSON(move);
+      // CR nroyalty: figure out what to do once we move to partysocket...
+      if (safelySendJSON(move)) {
+        pieceHandler.current.addOptimisticMove({
+          moveToken,
+          movedPiece: piece,
+          toX,
+          toY,
+          additionalMovedPiece,
+          capturedPiece,
+        });
+      }
     },
     [pieceHandler, safelySendJSON, statsHandler]
   );

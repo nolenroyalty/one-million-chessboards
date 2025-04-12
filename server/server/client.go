@@ -488,6 +488,8 @@ func (c *Client) SendMoveUpdates(moves []PieceMove, captures []PieceCapture) {
 		return
 	}
 
+	return
+
 	// Send through the channel
 	select {
 	case <-c.done:
