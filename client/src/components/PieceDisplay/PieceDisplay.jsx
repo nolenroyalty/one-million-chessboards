@@ -395,6 +395,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
           }
         }
 
+        // CR nroyalty: exercise this code path
         appearancesToAdd.forEach((appearance) => {
           // CR nroyalty: add a field in animation state for "don't actually animate this"
           const fakeMove = {
