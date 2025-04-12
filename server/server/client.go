@@ -534,6 +534,7 @@ func (c *Client) SendValidMove(moveToken uint32) {
 		Type:      "validMove",
 		MoveToken: moveToken,
 	}
+	log.Printf("move token valid: %v", moveToken)
 
 	data, err := json.Marshal(message)
 	if err != nil {

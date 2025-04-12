@@ -159,7 +159,6 @@ function initialMoveAnimationState(moveMapByPieceId) {
 }
 
 function PieceDisplay({ boardSizeParams, hidden, opacity }) {
-  console.log("RE-RENDER");
   const { pieceHandler } = React.useContext(HandlersContext);
   const { coords } = React.useContext(CoordsContext);
   const { selectedPiece, setSelectedPiece, clearSelectedPieceForId } =
@@ -537,7 +536,25 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
       return { absoluteX, absoluteY };
     };
 
-    for (const piece of visiblePiecesAndIdsRef.current.values()) {
+    const visibleIds = visiblePiecesAndIdsRef.current.keys();
+    const capturedIds = capturedPiecesByIdRef.current.keys();
+    const allIds = new Set([...visibleIds, ...capturedIds]);
+
+    for (const pieceId of allIds) {
+      let piece, captured, selected;
+
+      // If it's in both that's not great, but we should assume it is
+      // captured!
+      if (capturedPiecesByIdRef.current.has(pieceId)) {
+        piece = capturedPiecesByIdRef.current.get(pieceId).piece;
+        captured = true;
+        selected = false;
+      } else if (visiblePiecesAndIdsRef.current.has(pieceId)) {
+        piece = visiblePiecesAndIdsRef.current.get(pieceId);
+        captured = false;
+        selected = piece.id === selectedPiece?.id;
+      }
+
       if (isInvisibleNowAndViaMove({ piece })) {
         continue;
       }
@@ -554,29 +571,8 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
           isWhite: piece.isWhite,
         }),
         translate: `translate(${absoluteX}px, ${absoluteY}px)`,
-        selected: piece.id === selectedPiece?.id,
-        captured: false,
-      });
-    }
-
-    for (const capture of capturedPiecesByIdRef.current.values()) {
-      if (isInvisibleNowAndViaMove({ piece: capture.piece })) {
-        continue;
-      }
-      const { absoluteX, absoluteY } = determineAbsoluteCoords({
-        pieceId: capture.piece.id,
-        x: capture.piece.x,
-        y: capture.piece.y,
-      });
-      memoizedPieces.push({
-        piece: capture.piece,
-        imageSrc: imageForPieceType({
-          pieceType: capture.piece.type,
-          isWhite: capture.piece.isWhite,
-        }),
-        translate: `translate(${absoluteX}px, ${absoluteY}px)`,
-        selected: false,
-        captured: true,
+        selected,
+        captured,
       });
     }
 

@@ -40,6 +40,42 @@ class OptimisticState {
     this.tokensTouchingSquare = new Map(); // Map<squareKey, Set<moveToken>>
   }
 
+  _debugDumpState(desc) {
+    console.log(`OptimisticState (${desc}):`);
+    let printed = false;
+    for (const [pieceId, actions] of this.actionsByPieceId.entries()) {
+      console.log(`Piece ${pieceId}:`);
+      printed = true;
+      for (const action of actions) {
+        console.log(JSON.stringify(action, null, 2));
+      }
+      console.log("---");
+    }
+    if (printed) {
+      console.log("---");
+    }
+    printed = false;
+    for (const [token, actions] of this.actionsByToken.entries()) {
+      console.log(`Token ${token}:`);
+      printed = true;
+      for (const action of actions) {
+        console.log(JSON.stringify(action, null, 2));
+      }
+    }
+    if (printed) {
+      console.log("---");
+    }
+    printed = false;
+    console.log("Tokens touching square:");
+    for (const [squareKey, tokens] of this.tokensTouchingSquare.entries()) {
+      console.log(`${squareKey}: ${Array.from(tokens).join(", ")}`);
+      printed = true;
+    }
+    if (printed) {
+      console.log("---");
+    }
+  }
+
   _addSquareTouch(squareKey, moveToken) {
     if (!this.tokensTouchingSquare.has(squareKey)) {
       this.tokensTouchingSquare.set(squareKey, new Set());
@@ -101,6 +137,7 @@ class OptimisticState {
     }
 
     if (capturedPiece) {
+      console.log(`captured piece: ${JSON.stringify(capturedPiece, null, 2)}`);
       const impactedSquares = new Set();
       impactedSquares.add(pieceKey(capturedPiece.x, capturedPiece.y));
       const action = {
@@ -372,7 +409,41 @@ class PieceHandler {
       capturedPiece,
       receivedAt,
     });
+    console.log(`animations: ${JSON.stringify(animations, null, 2)}`);
     this.broadcastAnimations({ animations, wasSnapshot: false });
+  }
+
+  confirmOptimisticMove({ moveToken }) {
+    console.log(`move token confirmed: ${moveToken}`);
+    this.optimisticStateHandler._debugDumpState("before");
+    const { groundTruthUpdates } =
+      this.optimisticStateHandler.processConfirmation(moveToken);
+    this.optimisticStateHandler._debugDumpState("after");
+
+    // CR nroyalty: there's actually a really scary (if unlikely) race here
+    // which is that there is some chance that this update is late
+    // We should include a server sequence number for the move as well, and be careful
+    // to only apply this if we haven't seen a LATER update for the piece (if it's a move)
+    groundTruthUpdates.forEach((update) => {
+      if (update.state === OACTION.MOVE) {
+        const ourPiece = this.piecesById.get(update.pieceId);
+        if (ourPiece) {
+          ourPiece.x = update.x;
+          ourPiece.y = update.y;
+          this.piecesById.set(update.pieceId, ourPiece);
+        } else {
+          // maybe we've moved to another part of the grid? don't worry about it
+          console.log(
+            `skipping ground truth update for unknown piece ${update.pieceId}`
+          );
+        }
+      } else if (update.state === OACTION.CAPTURE) {
+        // CR nroyalty: hmmmmmmm
+        // It's always safe to delete the piece (there's no way it's still around!)
+        // I guess MAYYYYBE we should re-emit a deletion for it?
+        this.piecesById.delete(update.pieceId);
+      }
+    });
   }
 
   setCurrentCoords({ x, y }) {

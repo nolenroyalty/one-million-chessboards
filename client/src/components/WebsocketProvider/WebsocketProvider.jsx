@@ -195,9 +195,9 @@ function useWebsocket({
           // CR nroyalty: handle playing white / black
           statsHandler.current.setGlobalStats({ stats: data.globalStats });
         } else if (data.type === "validMove") {
-          //   pieceHandler.current.confirmOptimisticMove({
-          //     moveToken: data.moveToken,
-          //   });
+          pieceHandler.current.confirmOptimisticMove({
+            moveToken: data.moveToken,
+          });
         } else if (data.type === "invalidMove") {
           //   pieceHandler.current.rejectOptimisticMove({
           //     moveToken: data.moveToken,
