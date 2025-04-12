@@ -448,6 +448,9 @@ class PieceHandler {
 
   rejectOptimisticMove({ moveToken }) {
     console.log(`move token rejected: ${moveToken}`);
+    // CR nroyalty: much like with confirmations, we should include a server sequence
+    // number in the response and be careful about reverting moves in the case that
+    // we have a later move for the same piece already.
     const { preRevertVisualStates } = this.optimisticStateHandler.processRevert(
       {
         tokens: new Set([moveToken]),
@@ -483,12 +486,11 @@ class PieceHandler {
           );
         }
       } else if (!ourPiece && visualState.state === OACTION.MOVE) {
-        // Oof. We need to simulate a capture for a piece that doesn't exist.
-        // For now, just do nothing - but we need to think about how to handle
-        // this by tracking enough state that we can do the right thing instead
-        // animations.push(
-        //   animateCapture({ piece: visualState, receivedAt: performance.now() })
-        // );
+        // ok SO this is tricky.
+        // it feels like we need to simulate a capture for a piece that doesn't exist.
+        // but if the piece doesn't exist, we should already have simulated the capture,
+        // unless we've moved to another area of the grid.
+        // it's probably fine to do nothing here.
       }
     }
   }
@@ -837,6 +839,14 @@ DONE
 * Implement addition and subtraction of optimistic moves. Don't do anything else. 
   No state processing or move / capture processing. 
   Make sure that this works
+
+IN PROGRESS
+TODO:
+* test with multiple clients
+* test manually with invalid moves, confirm rejections work
+* track more state so that we can handle captures of pieces that don't exist
+* provide sequence numbers for rejections and acceptances 
+* MAYBE TIE OPTIMISTIC MOVES TO CURRENT COORDS AND CLEAR THEM IF WE MOVE TO A NEW SQUARE
 
 * Figure out how to make everything work with move and capture processing
 
