@@ -125,28 +125,41 @@ const Piece = React.memo(_Piece);
 
 function makeMoveAnimationState(move) {
   const animationDuration = computeAnimationDuration({
-    moveDistance: Math.hypot(move.toX - move.fromX, move.toY - move.fromY),
+    moveDistance: Math.hypot(
+      move.piece.x - move.fromX,
+      move.piece.y - move.fromY
+    ),
     maxAnimationDuration: MAX_ANIMATION_DURATION,
     minAnimationDuration: MIN_ANIMATION_DURATION,
     maxMoveDistance: MAX_DMOVE,
   });
   const endTime = move.receivedAt + animationDuration;
-  return {
-    ...move,
+  const ret = {
+    // ...move,
+    fromX: move.fromX,
+    fromY: move.fromY,
+    toX: move.piece.x,
+    toY: move.piece.y,
+    pieceId: move.piece.id,
     endTime,
     animationDuration,
+    receivedAt: move.receivedAt,
   };
+  return ret;
 }
 
+// CR nroyalty: kill this
 function initialMoveAnimationState(moveMapByPieceId) {
   const ret = new Map();
   for (const move of moveMapByPieceId.values()) {
+    console.log("HERE");
     ret.set(move.pieceId, makeMoveAnimationState(move));
   }
   return ret;
 }
 
 function PieceDisplay({ boardSizeParams, hidden, opacity }) {
+  console.log("RE-RENDER");
   const { pieceHandler } = React.useContext(HandlersContext);
   const { coords } = React.useContext(CoordsContext);
   const { selectedPiece, setSelectedPiece, clearSelectedPieceForId } =
@@ -163,9 +176,10 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
   const capturedPiecesByIdRef = React.useRef(new Map());
   const [forceUpdate, setForceUpdate] = React.useState(0);
 
-  const recentMoveByPieceIdRef = React.useRef(
-    initialMoveAnimationState(pieceHandler.current.getMoveMapByPieceId())
-  );
+  //   const recentMoveByPieceIdRef = React.useRef(
+  //     initialMoveAnimationState(pieceHandler.current.getMoveMapByPieceId())
+  //   );
+  const recentMoveByPieceIdRef = React.useRef(new Map());
 
   const isNotVisible = React.useCallback(
     ({ x, y }) => {
@@ -234,6 +248,14 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
   }, []);
 
   React.useEffect(() => {
+    // it's annoying, but we need to update the visible set of pieces as we pan around the board
+    // (and we also need to update our subscription, since it relies on our visibility knowledge)
+    // CR nroyalty: I'm nervous that when we unsubscribe and resubscribe we risk losing piece updates?
+    // Figure out how that works (I guess it's not the end of the world - we'd just see a few jumps
+    // or disappearances)
+    //
+    // We could try pushing more state into a ref so that we don't need to unsub and resub here though,
+    // which would potentially make panning around less scary!!
     visiblePiecesAndIdsRef.current = getVisiblePiecesById(
       pieceHandler.current.getPiecesById()
     );
@@ -253,35 +275,51 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
         const newVisiblePiecesAndIds = getVisiblePiecesById(data.piecesById);
 
         data.moves.forEach((move) => {
-          const wasVisible = visiblePiecesAndIdsRef.current.has(move.pieceId);
-          const startedVisible = !isNotVisible({
-            x: move.fromX,
-            y: move.fromY,
-          });
+          const movedPiece = move.piece;
+          const wasVisible = visiblePiecesAndIdsRef.current.has(movedPiece.id);
+          const oldPiece = visiblePiecesAndIdsRef.current.get(movedPiece.id);
+          // Just in case, override move's fromX and fromY with the coords of the currently
+          // displayed piece
+          if (oldPiece) {
+            move = { ...move, fromX: oldPiece.x, fromY: oldPiece.y };
+          }
           const endedVisible = !isNotVisible({
-            x: move.toX,
-            y: move.toY,
+            x: movedPiece.x,
+            y: movedPiece.y,
           });
-          if (wasVisible && (startedVisible || endedVisible)) {
-            // Already rendered, move is visible, do animation
-            const oldPiece = visiblePiecesAndIdsRef.current.get(move.pieceId);
-            // CR nroyalty: why do we mutate oldPiece here? Can we get rid of this?
-            oldPiece.x = move.toX;
-            oldPiece.y = move.toY;
-            // This is critical - without this, the piece may disappear instead of
-            // smoothly moving off screen!
-            newVisiblePiecesAndIds.set(move.pieceId, oldPiece);
+          if (wasVisible && !endedVisible) {
+            // The piece moves off the screen here. We MUST add the piece to
+            // our visible pieces ref - otherwise the piece may just disappear!
+            newVisiblePiecesAndIds.set(movedPiece.id, movedPiece);
+            movesToAdd.push(move);
+          } else if (wasVisible && endedVisible) {
+            // nothing special to do here...we already have a piece, just animate it
             movesToAdd.push(move);
           } else if (!wasVisible && endedVisible) {
             movesToAdd.push(move);
+            // Make sure that we re-render because we have a new piece to display
             doUpdate = true;
-          } else if (!wasVisible && startedVisible) {
-            // Potential bug - this piece should have been visible, but it wasn't!
-            console.warn(
-              `Not displaying move because we don't have a piece for it: ${JSON.stringify(move)})`
-            );
-            movesToAdd.push(move);
           }
+          //   if (wasVisible && (startedVisible || endedVisible)) {
+          //     // Already rendered, move is visible, do animation
+          //     const oldPiece = visiblePiecesAndIdsRef.current.get(move.pieceId);
+          //     // CR nroyalty: why do we mutate oldPiece here? Can we get rid of this?
+          //     oldPiece.x = move.toX;
+          //     oldPiece.y = move.toY;
+          //     // This is critical - without this, the piece may disappear instead of
+          //     // smoothly moving off screen!
+          //     newVisiblePiecesAndIds.set(move.pieceId, oldPiece);
+          //     movesToAdd.push(move);
+          //   } else if (!wasVisible && endedVisible) {
+          //     movesToAdd.push(move);
+          //     doUpdate = true;
+          //   } else if (!wasVisible && startedVisible) {
+          //     // Potential bug - this piece should have been visible, but it wasn't!
+          //     console.warn(
+          //       `Not displaying move because we don't have a piece for it: ${JSON.stringify(move)})`
+          //     );
+          //     movesToAdd.push(move);
+          //   }
         });
 
         data.captures.forEach((capture) => {
@@ -302,7 +340,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
 
         data.appearances.forEach((appearance) => {
           const appearedPiece = appearance.piece;
-          const ourPiece = visiblePiecesAndIdsRef.current.get(appearance.id);
+          const ourPiece = visiblePiecesAndIdsRef.current.get(appearedPiece.id);
           if (ourPiece) {
             // Nothing to do? Piece appeared but we already know about it?
             console.warn(
@@ -324,11 +362,11 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
         const now = performance.now();
 
         movesToAdd.forEach((move) => {
-          clearSelectedPieceForId(move.pieceId);
+          clearSelectedPieceForId(move.piece.id);
           let animationState;
 
           const prevAnimationState = getAnimatedCoords({
-            pieceId: move.pieceId,
+            pieceId: move.piece.id,
             now,
           });
           if (prevAnimationState && !prevAnimationState.finished) {
@@ -339,12 +377,9 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
             };
             animationState = makeMoveAnimationState(fakeMove);
           } else {
-            // CR nroyalty: for safetys sake it'd be nice if this respected
-            // the last known coordinates for our piece instead of trusting the move
-            // (just in case we have rendered the piece in a different position)
             animationState = makeMoveAnimationState(move);
           }
-          recentMoveByPieceIdRef.current.set(move.pieceId, animationState);
+          recentMoveByPieceIdRef.current.set(move.piece.id, animationState);
         });
 
         if (capturesToAdd.length > 0) {
@@ -365,9 +400,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
           const fakeMove = {
             fromX: appearance.piece.x,
             fromY: appearance.piece.y,
-            toX: appearance.piece.x,
-            toY: appearance.piece.y,
-            pieceId: appearance.piece.id,
+            piece: appearance.piece,
             receivedAt: appearance.receivedAt,
           };
           const animationState = makeMoveAnimationState(fakeMove);

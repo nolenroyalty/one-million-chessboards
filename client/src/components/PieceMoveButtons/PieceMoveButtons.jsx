@@ -36,24 +36,6 @@ function PieceMoveButtons({ boardSizeParams, hidden }) {
     height: boardSizeParams.squareHeight,
   });
 
-  // CR nroyalty: this has a bug (it doesn't account for en passant captures)
-  // But also we can move most of this logic to pieceHandlerNew when it starts
-  // handling optimistic updates
-  const moveAndClear = React.useCallback(
-    ({ piece, toX, toY, moveType, capturedPiece, additionalMovedPiece }) => {
-      submitMove({
-        piece,
-        toX,
-        toY,
-        moveType,
-        capturedPiece,
-        additionalMovedPiece,
-      });
-      clearSelectedPiece();
-    },
-    [submitMove, clearSelectedPiece]
-  );
-
   return Array.from(moveableSquares.keys()).map((key) => {
     const [x, y] = keyToCoords(key);
     const { moveType, capturedPiece, additionalMovedPiece } =
@@ -82,7 +64,7 @@ function PieceMoveButtons({ boardSizeParams, hidden }) {
         }}
         onClick={(e) => {
           e.stopPropagation();
-          moveAndClear({
+          submitMove({
             piece: selectedPiece,
             toX: x,
             toY: y,
@@ -90,6 +72,7 @@ function PieceMoveButtons({ boardSizeParams, hidden }) {
             capturedPiece,
             additionalMovedPiece,
           });
+          clearSelectedPiece();
         }}
       />
     );

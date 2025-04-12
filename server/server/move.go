@@ -52,6 +52,10 @@ func (move *Move) ExceedsMaxMoveDistance() bool {
 // for the starting move in a batch (when serializing); clients can increment the seqnum as needed
 // This assumes that we order our moves correctly on the server but I think that is a safe assumption
 // and it lets us save a bunch of bytes on serialization.
+
+// CR nroyalty: our life is going to be much much much easier if we use the same PieceData
+// struct for snapshots and moves. Both can follow the same logic (PieceData can use two
+// int8s that represent offsets from a center coordinate)
 type PieceMove struct {
 	PieceID      uint32    `json:"pieceId"`
 	FromX        uint16    `json:"fromX"`

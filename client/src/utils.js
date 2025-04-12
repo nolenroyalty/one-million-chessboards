@@ -460,12 +460,9 @@ function addMoveableSquaresForKing({ piece, pieces, squares }) {
     const rookToX = moveLeft ? x - 1 : x + 1;
     const rookToY = toY;
     const additionalMovedPiece = {
-      fromX: maybeRookX,
-      fromY: toY,
       toX: rookToX,
       toY: rookToY,
       piece: maybeRook,
-      id: maybeRook.id,
     };
     addSquare({
       squares,

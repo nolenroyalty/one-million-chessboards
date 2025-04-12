@@ -5,18 +5,32 @@ const OACTION = {
   CAPTURE: "capture",
 };
 
+// CR nroyalty: do we need to distinguish between moves and appearances?
 const ANIMATION = {
   MOVE: "move",
   CAPTURE: "capture",
   APPEARANCE: "appearance",
 };
 
-function animateMove({ pieceId, x, y }) {
-  return { type: ANIMATION.MOVE, pieceId, x, y };
+// It's a little confusing, but we actually really really want
+// fromX / fromY here, because the piece may not be rendered in pieceDisplay
+// and so pieceDisplay won't know what data to use to animate it!!
+function animateMove({ piece, receivedAt, fromX, fromY }) {
+  return {
+    type: ANIMATION.MOVE,
+    fromX,
+    fromY,
+    piece: { ...piece },
+    receivedAt,
+  };
 }
 
-function animateCapture({ pieceId }) {
-  return { type: ANIMATION.CAPTURE, pieceId };
+function animateCapture({ piece, receivedAt }) {
+  return { type: ANIMATION.CAPTURE, piece: { ...piece }, receivedAt };
+}
+
+function animateAppearance({ piece, receivedAt }) {
+  return { type: ANIMATION.APPEARANCE, piece: { ...piece }, receivedAt };
 }
 
 class OptimisticState {
@@ -52,31 +66,38 @@ class OptimisticState {
 
   addOptimisticMove({
     moveToken,
-    pieceId,
-    fromX,
-    fromY,
-    toX,
-    toY,
+    movedPiece,
     additionalMovedPiece,
     capturedPiece,
+    receivedAt,
   }) {
-    const moves = [{ pieceId, fromX, fromY, toX, toY, moveToken }];
+    const moves = [movedPiece];
     if (additionalMovedPiece) {
-      moves.push({ ...additionalMovedPiece, moveToken });
+      moves.push(additionalMovedPiece);
     }
 
     const actions = [];
+    const animations = [];
 
     for (const move of moves) {
       const impactedSquares = new Set();
-      impactedSquares.add(pieceKey(move.fromX, move.fromY));
+      impactedSquares.add(pieceKey(move.piece.x, move.piece.y));
       impactedSquares.add(pieceKey(move.toX, move.toY));
       const action = {
-        ...move,
+        pieceId: move.piece.id,
         type: OACTION.MOVE,
+        x: move.toX,
+        y: move.toY,
         impactedSquares,
+        moveToken,
       };
       actions.push(action);
+      // CR nroyalty: increment capture count, increment move count,
+      // handle promotion (simulated!)
+      const fromX = move.piece.x;
+      const fromY = move.piece.y;
+      const piece = { ...move.piece, x: move.toX, y: move.toY };
+      animations.push(animateMove({ piece, fromX, fromY, receivedAt }));
     }
 
     if (capturedPiece) {
@@ -88,11 +109,11 @@ class OptimisticState {
         y: capturedPiece.y,
         pieceId: capturedPiece.id,
         impactedSquares,
+        moveToken,
       };
       actions.push(action);
+      animations.push(animateCapture({ piece: capturedPiece, receivedAt }));
     }
-
-    const animations = [];
 
     for (const a of actions) {
       if (!this.actionsByPieceId.has(a.pieceId)) {
@@ -101,12 +122,9 @@ class OptimisticState {
       this.actionsByPieceId.get(a.pieceId).push(a);
       this._addForToken(moveToken, a);
       a.impactedSquares.forEach((sq) => this._addSquareTouch(sq, moveToken));
-      if (a.type === OACTION.MOVE) {
-        animations.push({ type: ANIMATION.MOVE, x: a.toX, y: toY });
-      } else if (a.type === OACTION.CAPTURE) {
-        animations.push({ type: ANIMATION.CAPTURE });
-      }
     }
+
+    return animations;
   }
 
   _removeActions(actionsToRemove) {
@@ -150,7 +168,7 @@ class OptimisticState {
     const lastAction = actions[actions.length - 1];
 
     if (lastAction.type === OACTION.MOVE) {
-      return { state: OACTION.MOVE, x: lastAction.toX, y: lastAction.toY };
+      return { state: OACTION.MOVE, x: lastAction.x, y: lastAction.y };
     } else if (lastAction.type === OACTION.CAPTURE) {
       return { state: OACTION.CAPTURE };
     } else {
@@ -174,8 +192,8 @@ class OptimisticState {
       if (action.type === OACTION.MOVE) {
         finalStates.set(action.pieceId, {
           state: OACTION.MOVE,
-          x: action.toX,
-          y: action.toY,
+          x: action.x,
+          y: action.y,
         });
       } else if (action.type === OACTION.CAPTURE) {
         finalStates.set(action.pieceId, { state: OACTION.CAPTURE });
@@ -276,19 +294,25 @@ class OptimisticState {
 class PieceHandler {
   constructor({ statsHandler }) {
     this.statsHandler = statsHandler;
-    this.piecesById = new Map(); // Ground Truth Piece State
+    this.piecesById = new Map();
     this.optimisticStateHandler = new OptimisticState();
-    this.groundTruthSeqNum = -1;
+    this.snapshotSeqnum = { from: -2, to: -1 };
 
     this.moveToken = 1;
     this.subscribers = [];
     this.currentCoords = { x: null, y: null };
+    // CR nroyalty: omg. We need to actually set last snapshot coords
+    // based on the data we get from new snapshots!!!!
+    this.lastSnapshotCoords = { x: null, y: null };
+
+    this.activeMoves = [];
+    this.activeCaptures = [];
 
     this.cachedCombinedView = null;
     this.isCombinedViewCacheValid = false;
   }
 
-  _invalidateCombinedViewCache() {
+  _invalidateCaches() {
     this.isCombinedViewCacheValid = false;
     this.cachedCombinedView = null;
   }
@@ -298,48 +322,384 @@ class PieceHandler {
     return this.moveToken;
   }
 
+  broadcastAnimations({ animations, wasSnapshot }) {
+    const finalPieceStates = new Map();
+    for (const animation of animations) {
+      const last = finalPieceStates.get(animation.piece.id);
+      if (last && last.type === ANIMATION.CAPTURE) {
+        // No need to keep animating a piece if it's been captured
+        // Shouldn't ever happen but you know
+      } else {
+        finalPieceStates.set(animation.piece.id, animation);
+      }
+    }
+    const moves = [];
+    const captures = [];
+    const appearances = [];
+    for (const animation of finalPieceStates.values()) {
+      if (animation.type === ANIMATION.CAPTURE) {
+        captures.push(animation);
+      } else if (animation.type === ANIMATION.MOVE) {
+        moves.push(animation);
+      } else {
+        appearances.push(animation);
+      }
+    }
+    this.subscribers.forEach(({ callback }) => {
+      callback({
+        moves,
+        captures,
+        appearances,
+        piecesById: this.piecesById,
+        wasSnapshot,
+      });
+    });
+  }
+
   addOptimisticMove({
     moveToken,
-    piece,
-    fromX,
-    fromY,
+    movedPiece,
     toX,
     toY,
     additionalMovedPiece,
     capturedPiece,
   }) {
     const receivedAt = performance.now();
-    // const simulatedMoves = [
-    //   { pieceId: piece, fromX, fromY, toX, toY, receivedAt },
-    // ];
-    // const simulatedCaptures = [];
-
-    // if (additionalMovedPiece) {
-    //   simulatedMoves.push({
-    //     pieceId: additionalMovedPiece.id,
-    //     fromX: additionalMovedPiece.fromX,
-    //     fromY: additionalMovedPiece.fromY,
-    //     toX: additionalMovedPiece.toX,
-    //     toY: additionalMovedPiece.toY,
-    //     receivedAt,
-    //   });
-    // }
-    // if (capturedPiece) {
-    //   simulatedCaptures.push({ piece: capturedPiece, receivedAt });
-    // }
-
-    this.optimisticStateHandler.addOptimisticMove({
+    const animations = this.optimisticStateHandler.addOptimisticMove({
       moveToken,
-      piece,
-      fromX,
-      fromY,
-      toX,
-      toY,
+      movedPiece: { ...movedPiece, toX, toY },
       additionalMovedPiece,
       capturedPiece,
+      receivedAt,
+    });
+    this.broadcastAnimations({ animations, wasSnapshot: false });
+  }
+
+  setCurrentCoords({ x, y }) {
+    this.currentCoords = { x, y };
+  }
+
+  subscribe({ id, callback }) {
+    this.subscribers.push({ id, callback });
+    console.log(`SUBSCRIBER COUNT: ${this.subscribers.length}`);
+  }
+
+  unsubscribe({ id }) {
+    this.subscribers = this.subscribers.filter(
+      ({ id: subscriberId }) => subscriberId !== id
+    );
+    console.log(`SUBSCRIBER COUNT: ${this.subscribers.length}`);
+  }
+
+  // CR nroyalty: I think we can get rid of this; it doesn't
+  // really make sense in a world where we fabricate lots of moves...
+  getMoveMapByPieceId() {
+    const ret = new Map();
+    this.activeMoves.forEach((move) => {
+      ret.set(move.pieceId, move);
+    });
+    return ret;
+  }
+
+  handleSnapshot({ snapshot }) {
+    console.log("GOT SNAPSHOT");
+    // We intentionally do NOT drop stale snapshots. It's possible that we get
+    // snapshots with an old seqnum if the server bounces and loses a little bit of state.
+    // Otherwise I think we can assume messages are ordered (TCP, etc) so this should be fine?
+    if (this.currentCoords.x === null || this.currentCoords.y === null) {
+      console.warn(`BUG? Processing snapshot but current coords aren't set`);
+    } else {
+      const xCoordDelta = Math.abs(this.currentCoords.x - snapshot.xCoord);
+      const yCoordDelta = Math.abs(this.currentCoords.y - snapshot.yCoord);
+
+      if (xCoordDelta > 50 || yCoordDelta > 50) {
+        console.log(
+          `Dropping snapshot because its coords don't match our current coords
+          ours: ${this.currentCoords.x}, ${this.currentCoords.y}
+          snap: ${snapshot.xCoord}, ${snapshot.yCoord}
+          `
+        );
+        return;
+      }
+    }
+
+    let shouldComputeSimulatedChanges = false;
+    const SIMULATED_CHANGES_THRESHOLD = 20;
+    const piecesById = new Map();
+    const activeMoves = [];
+    const activeCaptures = [];
+    const animations = [];
+
+    if (
+      this.lastSnapshotCoords.x === null ||
+      this.lastSnapshotCoords.y === null
+    ) {
+      shouldComputeSimulatedChanges = true;
+    } else {
+      const snapshotXDelta = Math.abs(
+        this.lastSnapshotCoords.x - snapshot.xCoord
+      );
+      const snapshotYDelta = Math.abs(
+        this.lastSnapshotCoords.y - snapshot.yCoord
+      );
+
+      shouldComputeSimulatedChanges =
+        snapshotXDelta < SIMULATED_CHANGES_THRESHOLD &&
+        snapshotYDelta < SIMULATED_CHANGES_THRESHOLD;
+    }
+
+    // CR nroyalty: potentially invalidate optimistic updates?
+    // Maybe not...snapshots could be stale...
+    snapshot.pieces.forEach((piece) => {
+      piecesById.set(piece.id, piece);
+    });
+
+    this.activeMoves.forEach((move) => {
+      if (move.seqNum > snapshot.startingSeqnum) {
+        const movePieceId = move.piece.id;
+        const ourPiece = piecesById.get(movePieceId);
+        activeMoves.push(move);
+        if (ourPiece) {
+          if (ourPiece.x !== move.x || ourPiece.y !== move.y) {
+            ourPiece.x = move.x;
+            ourPiece.y = move.y;
+            piecesById.set(movePieceId, ourPiece);
+          }
+        } else {
+          const oldPiece = this.piecesById.get(movePieceId);
+          if (!oldPiece) {
+            // Move isn't in our snapshot, and also we haven't
+            // processed it in the past? This seems insane
+            console.warn(
+              `BUG? ${JSON.stringify(move)} is not in old or new snapshot`
+            );
+          } else {
+            // Move isn't in snapshot, but we processed it in the past
+            // And added it to our old state
+            oldPiece.x = move.x;
+            oldPiece.y = move.y;
+            piecesById.set(movePieceId, oldPiece);
+          }
+        }
+      }
+    });
+
+    this.activeCaptures.forEach((capture) => {
+      if (capture.seqNum > snapshot.startingSeqnum) {
+        activeCaptures.push(capture);
+        if (piecesById.has(capture.pieceId)) {
+          piecesById.delete(capture.pieceId);
+        }
+      }
+    });
+
+    const receivedAt = performance.now();
+
+    // we need to do this *after* we process the active moves and captures,
+    // otherwise we'll end up potentially simulating a move or capture twice!
+    snapshot.pieces.forEach((piece) => {
+      // CR nroyalty: we need to check whether this piece creates a conflict
+      if (this.piecesById.has(piece.id)) {
+        const oldPiece = this.piecesById.get(piece.id);
+        if (oldPiece.x !== piece.x || oldPiece.y !== piece.y) {
+          // potential conflict: friendly piece intersects with the simulated final
+          // position of on optimistic move
+          // MAYBE some conflicts where a piece isn't where we expect it to be too
+          // but we can probably rely on optimistic move cancellation to fix this
+          animations.push(
+            animateMove({
+              fromX: oldPiece.x,
+              fromY: oldPiece.y,
+              piece: piece,
+              receivedAt,
+            })
+          );
+        }
+      } else {
+        // No need to compute appearances if the snapshot is far away from our
+        // last one
+        if (shouldComputeSimulatedChanges) {
+          // potential conflict: friendly piece intersects with the simulated final
+          // position of on optimistic move
+          // Maybe other conflicts? I'm not sure.
+          animations.push(animateAppearance({ piece, receivedAt }));
+        }
+      }
+    });
+
+    // No need to compute captures if this snapshot is far away from our last
+    // one (we'll be missing lots of pieces regardless)
+    // CR nroyalty: we could make this a little smarter by asking "should we expect
+    // the missing piece to exist in the new snapshot window"
+    if (shouldComputeSimulatedChanges) {
+      for (const [oldPieceId, oldPiece] of this.piecesById) {
+        if (!piecesById.has(oldPieceId)) {
+          // This check probably shouldn't matter but it should be relatively cheap
+          const existsInRecentCaptures = this.activeCaptures.some((elt) => {
+            return elt.pieceId === oldPieceId;
+          });
+          if (!existsInRecentCaptures) {
+            animations.push(animateCapture({ piece: oldPiece, receivedAt }));
+          }
+        }
+      }
+    }
+
+    // CR nroyalty: make sure that optimistic stuff is overlaid here
+    // CR nroyalty: invalidate our optimistic piece by location cache
+    this.activeMoves = activeMoves;
+    this.activeCaptures = activeCaptures;
+    this.piecesById = piecesById;
+    this.snapshotSeqnum = {
+      from: snapshot.startingSeqnum,
+      to: snapshot.endingSeqnum,
+    };
+    this.broadcastAnimations({ animations, wasSnapshot: true });
+  }
+
+  handleMoves({ moves, captures }) {
+    let dTotalMoves = 0;
+    let dWhitePieces = 0;
+    let dBlackPieces = 0;
+    let dWhiteKings = 0;
+    let dBlackKings = 0;
+    const receivedAt = performance.now();
+
+    const animations = [];
+
+    moves.forEach((move) => {
+      if (move.seqNum <= this.snapshotSeqnum.from) {
+        // nothing to do!
+      } else {
+        const ourPiece = this.piecesById.get(move.pieceId);
+        // CR nroyalty: THIS IS SO MUCH BETTER WHEN WE JUST SUPPLY
+        // PIECEDATA DIRECTLY, DO THAT SOON PLEASE
+        const dy = Math.abs(move.toY - move.fromY);
+        const justDoubleMoved =
+          dy === 2 && TYPE_TO_NAME[move.pieceType] === "pawn";
+        const movedPiece = {
+          id: move.pieceId,
+          x: move.toX,
+          y: move.toY,
+          type: move.pieceType,
+          isWhite: move.isWhite,
+          moveCount: move.moveCount,
+          captureCount: move.captureCount,
+          justDoubleMoved,
+        };
+        this.activeMoves.push({ seqNum: move.seqNum, piece: movedPiece });
+        if (ourPiece === undefined) {
+          animations.push(animateAppearance({ piece: movedPiece, receivedAt }));
+          this.piecesById.set(movedPiece.id, movedPiece);
+        } else {
+          if (ourPiece.x === movedPiece.x && ourPiece.y === movedPiece.y) {
+            // move lines up with our model of the world. neato.
+            this.piecesById.set(movedPiece.id, movedPiece);
+          } else {
+            // CR nroyalty: OPTIMISTIC INVALIDATION HERE!!!!
+            // CR nroyalty: handle potential invalidations!
+            // Move does not line up with our model of the world. We still simulate
+            // a move as though it does, to make animations smoother
+            this.piecesById.set(movedPiece.id, movedPiece);
+            dTotalMoves++;
+            animations.push(
+              animateMove({
+                fromX: ourPiece.x,
+                fromY: ourPiece.y,
+                piece: movedPiece,
+                receivedAt,
+              })
+            );
+          }
+        }
+      }
+    });
+
+    captures.forEach((capture) => {
+      if (capture.seqNum <= this.snapshotSeqnum.from) {
+        // do nothing
+      } else {
+        const ourPiece = this.piecesById.get(capture.capturedPieceId);
+        this.activeCaptures.push({
+          pieceId: capture.capturedPieceId,
+          seqNum: capture.seqNum,
+        });
+        if (ourPiece === undefined) {
+          // Do nothing?
+          // Maybe we can still deal with invalidation if we get a capture
+          // and it references a piece with x and y coordinates that disagree
+          // with our optimistic update
+        } else {
+          this.piecesById.delete(ourPiece.id);
+          // INVALIDATION: handle the case that we have a simulated move active
+          // for a piece that was captured
+
+          const pieceType = TYPE_TO_NAME[ourPiece.type];
+          const wasWhite = ourPiece.isWhite;
+          const wasKing = pieceType === "king";
+          animations.push(animateCapture({ piece: ourPiece, receivedAt }));
+          if (wasWhite) {
+            dWhitePieces--;
+            if (wasKing) {
+              dWhiteKings--;
+            }
+          } else {
+            dBlackPieces--;
+            if (wasKing) {
+              dBlackKings--;
+            }
+          }
+        }
+      }
+    });
+
+    this.statsHandler.applyPieceHandlerDelta({
+      dTotalMoves,
+      dWhitePieces,
+      dBlackPieces,
+      dWhiteKings,
+      dBlackKings,
+    });
+
+    this.broadcastAnimations({
+      wasSnapshot: false,
+      animations,
     });
   }
+
+  // CR nroyalty: do this using our optimistic piece overlay
+  getPieceById(id) {
+    return this.piecesById.get(id);
+  }
+
+  // CR nroyalty: do this using our optimistic piece overlay
+  getPiecesById() {
+    return this.piecesById;
+  }
+
+  // It's a little cringe that we compute piecesByLocation dynamically on every click
+  // However, we only need it when computing moveable squares after a piece is selected,
+  // which should only happen when a user clicks on a new piece (not that frequent)
+  // And we get a lot of value not needing to keep an up to date map of pieces by location
+  // as we process updates - both speed wise but especially in terms of complexity.
+  //
+  // Profiling suggest this takes milliseconds even on pretty slow processors, which isn't
+  // a huge deal.
+  getMoveableSquares(piece) {
+    const piecesByLocation = new Map();
+    const now = performance.now();
+    for (const piece of this.piecesById.values()) {
+      const key = pieceKey(piece.x, piece.y);
+      piecesByLocation.set(key, piece);
+    }
+    const after = performance.now();
+    const diff = after - now;
+    console.log(`generation took: ${diff}ms`);
+    return getMoveableSquares(piece, piecesByLocation);
+  }
 }
+
+export default PieceHandler;
 
 /* GOD DAMN I AM TOO TIRED TO KEEP CODING
 
@@ -361,4 +721,17 @@ Thoughts:
 
 * Once that works, figure out how to make everything work with state snapshot processing.
 I think you can run this against just the delta that we compute?
+
+* Remember, the most controversial rule is "if you currently have a 
+simulated piece position that occupies a square that is now occupied by a piece
+of the opposing color, you should pretend that you captured that piece." Handling this
+is going to be tricky; To do it correctly I think
+we need to create an additional fake optimistic move associated with the relevant
+move token? Alternatively, maybe we can just handle it in our function that creates
+a simulated view of the world?? Doing that seems preferrable if we can swing it
+
+Finally, don't forget that we need to remove all optimistic moves 
+when we disconnect from the server. And relatedly we need to display whether we're connected
+
+Don't forget that you need to fix the zoomed out view :(
  */

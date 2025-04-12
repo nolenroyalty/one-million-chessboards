@@ -2,7 +2,7 @@ import React from "react";
 import styled from "styled-components";
 import Board from "../Board/Board";
 import BoardControls from "../BoardControls/BoardControls";
-import PieceHandler from "../../pieceHandlerNew.js";
+import PieceHandler from "../../pieceHandlerNewer.js";
 import ChessPieceColorer from "../ChessPieceColorer/ChessPieceColorer";
 import BigHeader from "../BigHeader/BigHeader.jsx";
 import SmallHeader from "../SmallHeader/SmallHeader.jsx";

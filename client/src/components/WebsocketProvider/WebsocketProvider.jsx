@@ -7,6 +7,7 @@ import {
   TYPE_TO_NAME,
 } from "../../utils";
 import CoordsContext from "../CoordsContext/CoordsContext";
+// CR nroyalty: replace with partysocket
 
 // CR nroyalty: delete this before rolling to prod...
 function useStartBot({ pieceHandler, submitMove, onlyId }) {
