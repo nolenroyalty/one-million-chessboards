@@ -58,8 +58,6 @@ func (move *Move) ExceedsMaxMoveDistance() bool {
 // int8s that represent offsets from a center coordinate)
 type PieceMove struct {
 	PieceID      uint32    `json:"pieceId"`
-	FromX        uint16    `json:"fromX"`
-	FromY        uint16    `json:"fromY"`
 	ToX          uint16    `json:"toX"`
 	ToY          uint16    `json:"toY"`
 	PieceType    PieceType `json:"pieceType"`

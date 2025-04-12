@@ -199,9 +199,9 @@ function useWebsocket({
             moveToken: data.moveToken,
           });
         } else if (data.type === "invalidMove") {
-          //   pieceHandler.current.rejectOptimisticMove({
-          //     moveToken: data.moveToken,
-          //   });
+          pieceHandler.current.rejectOptimisticMove({
+            moveToken: data.moveToken,
+          });
         }
       };
 

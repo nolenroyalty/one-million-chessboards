@@ -415,10 +415,10 @@ class PieceHandler {
 
   confirmOptimisticMove({ moveToken }) {
     console.log(`move token confirmed: ${moveToken}`);
-    this.optimisticStateHandler._debugDumpState("before");
+    // this.optimisticStateHandler._debugDumpState("before");
     const { groundTruthUpdates } =
       this.optimisticStateHandler.processConfirmation(moveToken);
-    this.optimisticStateHandler._debugDumpState("after");
+    // this.optimisticStateHandler._debugDumpState("after");
 
     // CR nroyalty: there's actually a really scary (if unlikely) race here
     // which is that there is some chance that this update is late
@@ -444,6 +444,53 @@ class PieceHandler {
         this.piecesById.delete(update.pieceId);
       }
     });
+  }
+
+  rejectOptimisticMove({ moveToken }) {
+    console.log(`move token rejected: ${moveToken}`);
+    const { preRevertVisualStates } = this.optimisticStateHandler.processRevert(
+      {
+        tokens: new Set([moveToken]),
+        pieces: new Set(),
+      }
+    );
+    const animations = [];
+    for (const [pieceId, visualState] of preRevertVisualStates.entries()) {
+      const ourPiece = this.piecesById.get(pieceId);
+      if (!ourPiece && visualState.state === OACTION.CAPTURE) {
+        // nothing to do!
+      } else if (ourPiece && visualState.state === OACTION.CAPTURE) {
+        // There's a piece in the server state that we captured optimistically,
+        // revert it by re-appearing it
+        animations.push(
+          animateAppearance({ piece: ourPiece, receivedAt: performance.now() })
+        );
+      } else if (ourPiece && visualState.state === OACTION.MOVE) {
+        // There's a piece in the server state that we moved optimistically,
+        // maybe revert it if it's not in the right spot (it probably isn't)
+        const ourX = ourPiece.x;
+        const ourY = ourPiece.y;
+        const visualX = visualState.x;
+        const visualY = visualState.y;
+        if (ourX !== visualX || ourY !== visualY) {
+          animations.push(
+            animateMove({
+              fromX: visualX,
+              fromY: visualY,
+              piece: ourPiece,
+              receivedAt: performance.now(),
+            })
+          );
+        }
+      } else if (!ourPiece && visualState.state === OACTION.MOVE) {
+        // Oof. We need to simulate a capture for a piece that doesn't exist.
+        // For now, just do nothing - but we need to think about how to handle
+        // this by tracking enough state that we can do the right thing instead
+        // animations.push(
+        //   animateCapture({ piece: visualState, receivedAt: performance.now() })
+        // );
+      }
+    }
   }
 
   setCurrentCoords({ x, y }) {
@@ -779,10 +826,13 @@ Thoughts:
   Add helper functions consistent with the output we expect over there
   eventually it'd be nice if we didn't pass so much data to piece display and it could
   figure things out from its own data, but idk whatever
+DONE
+
 * port over functions from pieceHandlerNew, DO NOT add optimistic update support yet, just
   get the new animations API working
   Ideally figure out how to remove the fromX/fromY stuff at this point, it'll be annoying
   to get that removed later!
+DONE
 
 * Implement addition and subtraction of optimistic moves. Don't do anything else. 
   No state processing or move / capture processing. 

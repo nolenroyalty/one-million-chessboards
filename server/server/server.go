@@ -342,10 +342,13 @@ func (s *Server) processMoves() {
 		capturedPiece := moveResult.CapturedPiece
 		movedPieces := make([]PieceMove, moveResult.Length)
 		for i := 0; i < int(moveResult.Length); i++ {
+			s.minimapAggregator.UpdateForMove(moveResult.MovedPieces[i].FromX,
+				moveResult.MovedPieces[i].FromY,
+				moveResult.MovedPieces[i].ToX,
+				moveResult.MovedPieces[i].ToY,
+				moveResult.MovedPieces[i].Piece)
 			movedPieces[i] = PieceMove{
 				PieceID:      moveResult.MovedPieces[i].Piece.ID,
-				FromX:        moveResult.MovedPieces[i].FromX,
-				FromY:        moveResult.MovedPieces[i].FromY,
 				ToX:          moveResult.MovedPieces[i].ToX,
 				ToY:          moveResult.MovedPieces[i].ToY,
 				PieceType:    moveResult.MovedPieces[i].Piece.Type,
@@ -358,6 +361,9 @@ func (s *Server) processMoves() {
 
 		var captureMove *PieceCapture = nil
 		if !capturedPiece.Piece.IsEmpty() {
+			s.minimapAggregator.UpdateForCapture(capturedPiece.X,
+				capturedPiece.Y, capturedPiece.Piece)
+
 			captureMove = &PieceCapture{
 				CapturedPieceID: capturedPiece.Piece.ID,
 				X:               capturedPiece.X,
@@ -366,7 +372,6 @@ func (s *Server) processMoves() {
 			}
 		}
 
-		s.minimapAggregator.UpdateForMove(movedPieces, capturedPiece)
 		s.persistentBoard.ApplyMove(moveReq.Move, moveResult.SeqNum)
 
 		affectedZones := s.zoneMap.GetAffectedZones(moveReq.Move)
