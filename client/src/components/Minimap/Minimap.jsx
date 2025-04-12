@@ -28,6 +28,7 @@ const BLACK_ADVANTAGE_COLORS_RGB = BLACK_ADVANTAGE_COLORS_HEX.map((hex) =>
 
 const MINIMAP_WIDTH = 200;
 const MINIMAP_HEIGHT = 200;
+
 const Wrapper = styled.div`
   height: 100%;
   max-height: 100%;
@@ -48,7 +49,7 @@ const CoordsWrapper = styled.div`
   position: absolute;
   top: 0;
   left: 50%;
-  transform: translate(-50%, calc(-50% - 2px));
+  transform: translate(-50%, calc(-50% - 21px));
   font-size: 0.75rem;
   padding: 0.125rem;
   min-width: 9ch;
@@ -188,6 +189,7 @@ function MinimapCanvas({ coords, setCoords }) {
 
   return (
     <CanvasWrapper>
+      <CoordsDisplay coords={coords} />
       <DrawingCanvas
         ref={minimapDataCanvasRef}
         width={MINIMAP_WIDTH}
@@ -208,7 +210,7 @@ function Minimap() {
   const { minimapHandler } = React.useContext(HandlersContext);
   return (
     <Wrapper>
-      <CoordsDisplay coords={coords} />
+      {/* <CoordsDisplay coords={coords} /> */}
       <MinimapCanvas
         coords={coords}
         setCoords={setCoords}

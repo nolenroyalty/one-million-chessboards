@@ -265,6 +265,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
           if (wasVisible && (startedVisible || endedVisible)) {
             // Already rendered, move is visible, do animation
             const oldPiece = visiblePiecesAndIdsRef.current.get(move.pieceId);
+            // CR nroyalty: why do we mutate oldPiece here? Can we get rid of this?
             oldPiece.x = move.toX;
             oldPiece.y = move.toY;
             // This is critical - without this, the piece may disappear instead of
@@ -325,6 +326,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
         movesToAdd.forEach((move) => {
           clearSelectedPieceForId(move.pieceId);
           let animationState;
+
           const prevAnimationState = getAnimatedCoords({
             pieceId: move.pieceId,
             now,
@@ -337,6 +339,9 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
             };
             animationState = makeMoveAnimationState(fakeMove);
           } else {
+            // CR nroyalty: for safetys sake it'd be nice if this respected
+            // the last known coordinates for our piece instead of trusting the move
+            // (just in case we have rendered the piece in a different position)
             animationState = makeMoveAnimationState(move);
           }
           recentMoveByPieceIdRef.current.set(move.pieceId, animationState);

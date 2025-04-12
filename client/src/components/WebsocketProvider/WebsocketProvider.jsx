@@ -297,6 +297,7 @@ function useWebsocket({
   ]);
 }
 
+// CR nroyalty: do a tiny debounce here (10 or 20 ms?)
 function useUpdateCoords({ connected, safelySendJSON }) {
   const { coords } = React.useContext(CoordsContext);
   React.useEffect(() => {

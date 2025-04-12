@@ -41,11 +41,10 @@ const Wrapper = styled.div`
   padding: var(--padding);
   padding-top: 0.5rem;
   height: calc(var(--inner-height) + 2 * var(--padding));
-  border-radius: 0.25rem;
-  border: 1px solid var(--color-sky-700);
+  /* border-radius: 0.25rem; */
+  /* border: 1px solid var(--color-sky-700); */
   transform: translate(0, var(--translate-y));
   transition: transform 0.2s ease-in-out;
-  margin-bottom: 0.25rem;
 
   display: grid;
   grid-template-areas: "minimap you-are-playing you-are-playing buttons" "minimap piece stats buttons" "minimap piece stats by";
@@ -61,13 +60,13 @@ const Wrapper = styled.div`
     grid-template-areas: "minimap buttons buttons" "minimap stats stats" "by stats stats";
     grid-template-rows: auto auto auto;
     grid-template-columns: 125px auto 1fr;
-    border: none;
-    border-top: 1px solid var(--color-sky-700);
-    border-radius: unset;
-    width: calc(100% + 2 * var(--main-side-padding));
-    margin-left: calc(-1 * var(--main-side-padding));
-    margin-right: calc(-1 * var(--main-side-padding));
   }
+  border: none;
+  border-top: 1px solid var(--color-sky-700);
+  border-radius: unset;
+  width: calc(100% + 2 * var(--main-side-padding));
+  margin-left: calc(-1 * var(--main-side-padding));
+  margin-right: calc(-1 * var(--main-side-padding));
 
   justify-content: space-between;
 

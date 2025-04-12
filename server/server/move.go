@@ -48,6 +48,10 @@ func (move *Move) ExceedsMaxMoveDistance() bool {
 // captured piece because it's handy for figuring out invalidation
 
 // PieceMove represents a move update to send to clients
+// CR nroyalty: let's avoid including a seqNum for each move, and instead let's just provide a seqnum
+// for the starting move in a batch (when serializing); clients can increment the seqnum as needed
+// This assumes that we order our moves correctly on the server but I think that is a safe assumption
+// and it lets us save a bunch of bytes on serialization.
 type PieceMove struct {
 	PieceID      uint32    `json:"pieceId"`
 	FromX        uint16    `json:"fromX"`
@@ -62,6 +66,9 @@ type PieceMove struct {
 }
 
 // PieceCapture represents a capture update to send to clients
+// CR nroyalty: WAIT! We don't ever need to include seqnum in a piece capture!
+// We can always process piece captures because a piece can never be un-captured so they can't
+// be stale! So we never need to include this!!!
 type PieceCapture struct {
 	CapturedPieceID uint32 `json:"capturedPieceId"`
 	X               uint16 `json:"x"`

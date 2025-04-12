@@ -13,13 +13,16 @@ class ODECISION {
 }
 
 // CR nroyalty: this will need to handle promotions too. Ugh.
+// CR nroyalty: maybe our move confirmations can also come with a seqnum so that we
+// can add an activeMove (and activeCapture) for them until the next snapshot
 class PieceOptimisticState {
   constructor({ originalPiece }) {
-    this.id = originalPiece.id;
-    this.knownX = originalPiece.x;
-    this.knownY = originalPiece.y;
+    const pieceCopy = { ...originalPiece };
+    this.id = pieceCopy.id;
+    this.knownX = pieceCopy.x;
+    this.knownY = pieceCopy.y;
     this.knownCaptured = false;
-    this.originalPiece = originalPiece;
+    this.originalPiece = pieceCopy;
     this.actions = [];
   }
 
@@ -36,8 +39,14 @@ class PieceOptimisticState {
     this.actions.push(action);
   }
 
-  addOptimisticCapture({ moveToken }) {
-    this.actions.push({ type: OSTATE.CAPTURED, moveToken, confirmed: false });
+  addOptimisticCapture({ moveToken, x, y }) {
+    this.actions.push({
+      type: OSTATE.CAPTURED,
+      moveToken,
+      confirmed: false,
+      x,
+      y,
+    });
   }
 
   impliedState() {
@@ -53,6 +62,22 @@ class PieceOptimisticState {
     } else if (lastAction.type === OSTATE.MOVED) {
       return { state: OSTATE.MOVED, x: lastAction.toX, y: lastAction.toY };
     }
+  }
+
+  impactedSquares() {
+    const ret = new Set();
+    this.actions.forEach((action) => {
+      if (action.type === OSTATE.CAPTURED) {
+        const key = pieceKey(action.x, action.y);
+        ret.add(key);
+      } else if (action.type === OSTATE.MOVED) {
+        const from = pieceKey(action.fromX, action.fromY);
+        const to = pieceKey(action.toX, action.toY);
+        ret.add(from);
+        ret.add(to);
+      }
+    });
+    return ret;
   }
 
   processServerMove({ fromX, fromY, toX, toY }) {
@@ -72,6 +97,7 @@ class PieceOptimisticState {
       return {
         decision: ODECISION.REVERT,
         impactedMoveTokens,
+        impactedSquares: this.impactedSquares(),
         state: OSTATE.APPEARED,
         x: toX,
         y: toY,
@@ -105,6 +131,7 @@ class PieceOptimisticState {
           return {
             decision: ODECISION.REVERT,
             impactedMoveTokens: [],
+            impactedSquares: this.impactedSquares(),
             state: OSTATE.APPEARED,
             x: toX,
             y: toY,
@@ -117,6 +144,7 @@ class PieceOptimisticState {
           return {
             decision: ODECISION.REVERT,
             impactedMoveTokens,
+            impactedSquares: this.impactedSquares(),
             state: OSTATE.APPEARED,
             x: toX,
             y: toY,
@@ -128,6 +156,7 @@ class PieceOptimisticState {
           return {
             decision: ODECISION.REVERT,
             impactedMoveTokens,
+            impactedSquares: this.impactedSquares(),
             state: OSTATE.MOVED,
             fromX: impliedState.x,
             fromY: impliedState.y,
@@ -159,6 +188,7 @@ class PieceOptimisticState {
       return {
         decision: ODECISION.REVERT,
         impactedMoveTokens,
+        impactedSquares: this.impactedSquares(),
         state: OSTATE.CAPTURED,
       };
     }
@@ -219,6 +249,8 @@ class PieceOptimisticState {
 
     if (impactedActionIndex === -1) {
       return { decision: ODECISION.NO_ACTION };
+    } else if (impactedActionIndex !== 0) {
+      console.warn(`out of order server move confirmation? ${moveToken}`);
     }
 
     this.actions[impactedActionIndex].confirmed = true;
@@ -263,32 +295,48 @@ class PieceOptimisticState {
     }
   }
 
+  _reject({ impactedSquares }) {
+    const impactedMoveTokens = this.actions.map((a) => a.moveToken);
+    const impliedState = this.impliedState();
+    if (impliedState === null || impliedState === OSTATE.CAPTURED) {
+      return {
+        decision: ODECISION.REVERT,
+        impactedMoveTokens,
+        state: OSTATE.APPEARED,
+        impactedSquares,
+        x: this.knownX,
+        y: this.knownY,
+      };
+    } else if (impliedState === OSTATE.MOVED) {
+      return {
+        decision: ODECISION.REVERT,
+        impactedMoveTokens,
+        state: OSTATE.MOVED,
+        impactedSquares,
+        fromX: impliedState.x,
+        fromY: impliedState.y,
+        toX: this.knownX,
+        toY: this.knownY,
+      };
+    }
+  }
+
   processServerRejection({ moveToken }) {
     const relevantAction = this.actions.find((a) => a.moveToken === moveToken);
     if (relevantAction === undefined) {
       return { decision: ODECISION.NO_ACTION };
     } else {
-      const impactedMoveTokens = this.actions.map((a) => a.moveToken);
-      const impliedState = this.impliedState();
-      if (impliedState === null || impliedState === OSTATE.CAPTURED) {
-        return {
-          decision: ODECISION.REVERT,
-          impactedMoveTokens,
-          state: OSTATE.APPEARED,
-          x: this.knownX,
-          y: this.knownY,
-        };
-      } else if (impliedState === OSTATE.MOVED) {
-        return {
-          decision: ODECISION.REVERT,
-          impactedMoveTokens,
-          state: OSTATE.MOVED,
-          fromX: impliedState.x,
-          fromY: impliedState.y,
-          toX: this.knownX,
-          toY: this.knownY,
-        };
-      }
+      const impactedSquares = this.impactedSquares();
+      return this._reject({ impactedSquares });
+    }
+  }
+
+  processSquareRejection({ impactedSquare }) {
+    const impactedSquares = this.impactedSquares();
+    if (impactedSquares.has(impactedSquare)) {
+      return this._reject({ impactedSquares });
+    } else {
+      return { decision: ODECISION.NO_ACTION };
     }
   }
 }
@@ -315,7 +363,7 @@ class OptimisticState {
       piece.x = resp.toX;
       piece.y = resp.toY;
       ret.moves.push({
-        id,
+        pieceId: id,
         piece,
         fromX: resp.fromX,
         fromY: resp.fromY,
@@ -332,7 +380,61 @@ class OptimisticState {
     }
   }
 
-  recursivelyCancel({ ret, moveTokens }) {
+  // This has a bunch of operations that look expensive (N^2) but we assume that
+  // N is relatively small; even if you're making 2 moves a second and each move is
+  // a capture (so 2 impacted pieces) AND it takes 5 seconds to receive an ack,
+  // N is still only 2 * 2 * 5 = 20.
+  recursivelyCancel({ ret, moveTokens, impactedSquares }) {
+    const receivedAt = performance.now();
+    const processedMoveTokens = new Set();
+    const processedImpactedSquares = new Set();
+
+    const processResponse = ({ id, state, resp, idsToPop }) => {
+      if (
+        !resp ||
+        resp.decision === ODECISION.NO_ACTION ||
+        resp.decision === ODECISION.STOP_TRACKING
+      ) {
+        return;
+      } else if (resp.decision === ODECISION.REVERT) {
+        resp.impactedMoveTokens.forEach((token) => {
+          if (!processedMoveTokens.has(token)) {
+            moveTokens.push(token);
+            processedMoveTokens.add(token);
+          }
+        });
+        resp.impactedSquares.forEach((square) => {
+          if (!processedImpactedSquares.has(square)) {
+            impactedSquares.add(square);
+            processedImpactedSquares.add(square);
+          }
+        });
+        idsToPop.push(id);
+        this.processRevert({ ret, id, state, resp, receivedAt });
+      }
+    };
+
+    while (moveTokens.length > 0 || impactedSquares.size > 0) {
+      const idsToPop = [];
+      if (moveTokens.length > 0) {
+        const moveToken = moveTokens.pop();
+        for (const [id, state] of this.stateByPieceId) {
+          const resp = state.processServerRejection({ moveToken });
+          processResponse({ id, state, resp, idsToPop });
+        }
+      } else if (impactedSquares.size > 0) {
+        const square = impactedSquares.values().next();
+        for (const [id, state] of this.stateByPieceId) {
+          const resp = state.processSquareRejection({ impactedSquare: square });
+          processResponse({ id, state, resp, idsToPop });
+        }
+      }
+    }
+
+    return ret;
+  }
+
+  _recursivelyCancelOld({ ret, moveTokens }) {
     const receivedAt = performance.now();
 
     while (moveTokens.length > 0) {
@@ -357,6 +459,7 @@ class OptimisticState {
         this.stateByPieceId.delete(id);
       });
     }
+
     return ret;
   }
 
@@ -379,12 +482,18 @@ class OptimisticState {
         receviedAt: performance.now(),
       });
       this.stateByPieceId.delete(id);
-      this.recursivelyCancel({ ret, moveTokens: resp.impactedMoveTokens });
+      this.recursivelyCancel({
+        ret,
+        moveTokens: resp.impactedMoveTokens,
+        impactedSquares: resp.impactedSquares,
+      });
       return ret;
     }
   }
 
   processServerMove({ id, fromX, fromY, toX, toY }) {
+    // CR nroyalty: BUG! If {toX, toY} is a square that we're currently tracking
+    // but a DIFFERENT piece has moved to it, we need to figure that out and do reversions
     const s = this.stateByPieceId.get(id);
     const ret = { moves: [], appearances: [], captures: [] };
     if (s === undefined) {
@@ -421,7 +530,11 @@ class OptimisticState {
 
   processServerRejection({ moveToken }) {
     const ret = { moves: [], appearances: [], captures: [] };
-    return this.recursivelyCancel({ ret, moveTokens: [moveToken] });
+    return this.recursivelyCancel({
+      ret,
+      moveTokens: [moveToken],
+      impactedSquares: new Set(),
+    });
   }
 
   addOptimisticMove({
@@ -462,12 +575,46 @@ class OptimisticState {
         s = new PieceOptimisticState({ originalPiece: capturedPiece });
         this.stateByPieceId.set(capturedPiece.id, s);
       }
-      s.addOptimisticCapture({ moveToken });
+      s.addOptimisticCapture({
+        moveToken,
+        x: capturedPiece.x,
+        y: capturedPiece.y,
+      });
     }
   }
 
+  skipSnapshotSimulation({ pieceId }) {
+    const state = this.stateByPieceId.get(pieceId);
+    if (!state) {
+      return false;
+    }
+    const implied = state.impliedState();
+    return implied !== null;
+  }
+
   applyOptimisticState({ piecesById }) {
-    // TODO
+    for (const [id, state] of this.stateByPieceId) {
+      const implied = state.impliedState();
+      if (implied === null) {
+        continue;
+      } else if (implied.state === OSTATE.CAPTURED) {
+        piecesById.delete(id);
+      } else if (implied.state === OSTATE.MOVED) {
+        const relevantPiece = piecesById.get(id);
+        // CR nroyalty: make sure to copy over piece attributes here
+        // For example, increment number of moves, set promotion, etc
+        if (relevantPiece) {
+          relevantPiece.x = implied.x;
+          relevantPiece.y = implied.y;
+          piecesById.set(id, relevantPiece);
+        } else {
+          const piece = { ...state.originalPiece };
+          piece.x = implied.x;
+          piece.y = implied.y;
+          piecesById.set(id, piece);
+        }
+      }
+    }
   }
 }
 
@@ -476,9 +623,6 @@ class PieceHandler {
     this.statsHandler = statsHandler;
     this.piecesById = new Map();
     this.optimisticStateHandler = new OptimisticState();
-
-    this.optimisticStateByPieceId = new Map();
-    this.optimisticStateByMoveToken = new Map();
 
     this.moveToken = 1;
     this.subscribers = [];
@@ -506,188 +650,68 @@ class PieceHandler {
     additionalMovedPiece,
     capturedPiece,
   }) {
-    const moves = [{ piece, id: piece.id, fromX, fromY, toX, toY, moveToken }];
-    const captures = [];
-    if (additionalMovedPiece) {
-      additionalMovedPiece.moveToken = moveToken;
-      moves.push(additionalMovedPiece);
-    }
-    if (capturedPiece) {
-      capturedPiece.moveToken = moveToken;
-      captures.push(capturedPiece);
-    }
-    const optimisticState = {
-      moves,
-      captures,
-      moveToken,
-      children: [],
-    };
-    const now = performance.now();
-    const simulatedMoves = [];
+    const receivedAt = performance.now();
+    const simulatedMoves = [
+      { pieceId: piece, fromX, fromY, toX, toY, receivedAt },
+    ];
     const simulatedCaptures = [];
 
-    // nroyalty: maybe a bug here if we race and we process a move update for the piece
-    // right before trying to move it? idk...
-    moves.forEach((move) => {
-      const movedPiece = move.piece;
-      movedPiece.x = move.toX;
-      movedPiece.y = move.toY;
-      movedPiece.moveCount++;
-      if (capturedPiece) {
-        movedPiece.captureCount++;
-      }
-      const localOptimisticState = {
-        optimisticState,
-        moveToken,
-        isMove: true,
-        isCapture: false,
-        piece: movedPiece,
-      };
-      if (this.optimisticStateByPieceId.has(move.id)) {
-        const priorLocalState = this.optimisticStateByPieceId.get(move.id);
-        const priorMoveToken = priorLocalState.moveToken;
-        const priorOptimisticState =
-          this.optimisticStateByMoveToken.get(priorMoveToken);
-        if (priorOptimisticState) {
-          priorOptimisticState.children.push(optimisticState);
-        }
-      }
-      this.optimisticStateByPieceId.set(move.id, localOptimisticState);
-      this.piecesById.set(move.id, movedPiece);
+    if (additionalMovedPiece) {
       simulatedMoves.push({
-        fromX: move.fromX,
-        fromY: move.fromY,
-        toX: move.toX,
-        toY: move.toY,
-        pieceId: move.id,
-        receivedAt: now,
+        pieceId: additionalMovedPiece.id,
+        fromX: additionalMovedPiece.fromX,
+        fromY: additionalMovedPiece.fromY,
+        toX: additionalMovedPiece.toX,
+        toY: additionalMovedPiece.toY,
+        receivedAt,
       });
-    });
+    }
+    if (capturedPiece) {
+      simulatedCaptures.push({ piece: capturedPiece, receivedAt });
+    }
 
-    captures.forEach((capture) => {
-      const capturedPiece = this.piecesById.get(capture.id);
-      if (capturedPiece) {
-        const localOptimisticState = {
-          optimisticState,
-          moveToken,
-          isMove: false,
-          isCapture: true,
-          piece: capture,
-        };
-        this.optimisticStateByPieceId.set(capture.id, localOptimisticState);
-        this.piecesById.delete(capturedPiece.id);
-        simulatedCaptures.push({
-          piece: capturedPiece,
-          receivedAt: now,
-        });
-      } else {
-        console.warn(
-          `BUG? Optimistically captured a piece that doesn't exist: ${JSON.stringify(
-            capture
-          )}`
-        );
-      }
+    this.optimisticStateHandler.addOptimisticMove({
+      moveToken,
+      piece,
+      fromX,
+      fromY,
+      toX,
+      toY,
+      additionalMovedPiece,
+      capturedPiece,
     });
-
-    this.optimisticStateByMoveToken.set(moveToken, optimisticState);
 
     this.broadcast({
-      moves: simulatedMoves,
-      captures: simulatedCaptures,
-      appearances: [],
       wasSnapshot: false,
+      moves: simulatedMoves,
+      appearances: [],
+      captures: simulatedCaptures,
     });
   }
 
   confirmOptimisticMove({ moveToken }) {
-    const optimisticState = this.optimisticStateByMoveToken.get(moveToken);
-    if (!optimisticState) {
-      return;
-    }
-    this.optimisticStateByMoveToken.delete(moveToken);
-    optimisticState.moves.forEach((move) => {
-      const localOptimisticState = this.optimisticStateByPieceId.get(move.id);
-      if (
-        localOptimisticState.isMove &&
-        localOptimisticState.moveToken === moveToken
-      ) {
-        this.optimisticStateByPieceId.delete(move.id);
-      }
-    });
-
-    optimisticState.captures.forEach((capture) => {
-      const localOptimisticState = this.optimisticStateByPieceId.get(
-        capture.id
-      );
-      if (
-        localOptimisticState.isCapture &&
-        localOptimisticState.moveToken === moveToken
-      ) {
-        this.optimisticStateByPieceId.delete(capture.id);
-      }
-    });
-  }
-
-  changesForRejectedOptimisticMoveByToken({ moveToken }) {
-    const optimisticState = this.optimisticStateByMoveToken.get(moveToken);
-    if (!optimisticState) {
-      return;
-    }
-    const simulatedMovesByPieceId = new Map();
-    const simulatedAppearancesByPieceId = new Map();
-
-    const now = performance.now();
-    this.optimisticStateByMoveToken.delete(moveToken);
-
-    optimisticState.moves.forEach((move) => {
-      const localOptimisticState = this.optimisticStateByPieceId.get(move.id);
-      if (!localOptimisticState) {
-        // Weird, but we don't have optimistic state. Nothing to do!
-      } else if (localOptimisticState.moveToken !== moveToken) {
-        // Maybe we applied another optimistic move for this piece?
-      }
-      // this.optimisticStateByPieceId.delete(move.id);
-      const currentPiece = this.piecesById.get(move.id);
-      if (!currentPiece) {
-        // We optimistically moved a piece but it has been captured.
-        // Don't worry about it?
-      } else {
-        const x = currentPiece.x;
-        const y = currentPiece.y;
-        const expectedX = move.toX;
-        const expectedY = move.toY;
-        const simulatedMove = {
-          fromX: move.toX,
-          fromY: move.toY,
-          toX: move.fromX,
-          toY: move.fromY,
-          pieceId: move.id,
-          receivedAt: now,
-        };
-        simulatedMovesByPieceId.set(move.id, simulatedMove);
-      }
-    });
-
-    optimisticState.captures.forEach((capturedPiece) => {
-      this.optimisticStateByPieceId.delete(capturedPiece.id);
-      const simulatedAppearance = {
-        piece: capturedPiece,
-        receivedAt: now,
-      };
-      simulatedAppearancesByPieceId.set(capturedPiece.id, simulatedAppearance);
-    });
-
-    return {
-      moves: simulatedMovesByPieceId,
-      appearances: simulatedAppearancesByPieceId,
-    };
+    this.optimisticStateHandler.processServerConfirmation({ moveToken });
   }
 
   rejectOptimisticMove({ moveToken }) {
-    const changes = this.changesForRejectedOptimisticMoveByToken({ moveToken });
-    const moves = Array.from(changes.moves.values());
-    const appearances = Array.from(changes.appearances.values());
-    this.broadcast({ moves, captures: [], appearances, wasSnapshot: false });
+    const changes = this.optimisticStateHandler.processServerReject({
+      moveToken,
+    });
+    changes.appearances.forEach((appearance) => {
+      this.piecesById.set(appearance.id, appearance.piece);
+    });
+    changes.moves.forEach((move) => {
+      this.piecesById.set(move.pieceId, move.piece);
+    });
+    changes.captures.forEach((capture) => {
+      this.piecesById.delete(capture.id);
+    });
+    this.broadcast({
+      wasSnapshot: false,
+      moves: changes.moves,
+      appearances: changes.appearances,
+      captures: changes.captures,
+    });
   }
 
   setCurrentCoords({ x, y }) {
@@ -812,6 +836,14 @@ class PieceHandler {
     // we need to do this *after* we process the active moves and captures,
     // otherwise we'll end up potentially simulating a move or capture twice!
     snapshot.pieces.forEach((piece) => {
+      if (
+        this.optimisticStateHandler.skipSnapshotSimulation({
+          pieceId: piece.id,
+        })
+      ) {
+        // nothing to do!
+        console.log(`Not simulating anything for piece ${piece.id}`);
+      }
       if (this.piecesById.has(piece.id)) {
         const oldPiece = this.piecesById.get(piece.id);
         if (oldPiece.x !== piece.x || oldPiece.y !== piece.y) {
@@ -838,7 +870,13 @@ class PieceHandler {
 
     if (shouldComputeSimulatedChanges) {
       for (const [oldPieceId, oldPiece] of this.piecesById) {
-        if (!piecesById.has(oldPieceId)) {
+        if (
+          this.optimisticStateHandler.skipSnapshotSimulation({
+            pieceId: oldPieceId,
+          })
+        ) {
+          console.log(`Not checking captures for piece ${oldPieceId}`);
+        } else if (!piecesById.has(oldPieceId)) {
           const existsInRecentCaptures = this.activeCaptures.some((elt) => {
             return elt.piece.id === oldPieceId;
           });
@@ -852,6 +890,8 @@ class PieceHandler {
       }
     }
 
+    this.optimisticStateHandler.applyOptimisticState({ piecesById });
+
     this.piecesById = piecesById;
     this.snapshotSeqnum = {
       from: snapshot.startingSeqnum,
@@ -863,6 +903,33 @@ class PieceHandler {
       moves: simulatedMoves,
       appearances: simulatedAppearances,
       captures: simulatedCaptures,
+    });
+  }
+
+  handleMovesNew({ moves: unfilteredMoves, captures: unfilteredCaptures }) {
+    let dTotalMoves = 0;
+    let dWhitePieces = 0;
+    let dBlackPieces = 0;
+    let dWhiteKings = 0;
+    let dBlackKings = 0;
+    const now = performance.now();
+
+    const stateByPieceId = new Map();
+    const moves = unfilteredMoves.filter(
+      (move) => move.seqNum > this.snapshotSeqnum.from
+    );
+    const captures = unfilteredCaptures.filter(
+      (capture) => capture.seqNum > this.snapshotSeqnum.from
+    );
+
+    moves.forEach((move) => {
+      const ret = this.optimisticStateHandler.processServerMove({
+        id: move.pieceId,
+        fromX: move.fromX,
+        fromY: move.fromY,
+        toX: move.toX,
+        toY: move.toY,
+      });
     });
   }
 
@@ -1002,12 +1069,24 @@ class PieceHandler {
     return this.piecesById;
   }
 
+  // It's a little cringe that we compute piecesByLocation dynamically on every click
+  // However, we only need it when computing moveable squares after a piece is selected,
+  // which should only happen when a user clicks on a new piece (not that frequent)
+  // And we get a lot of value not needing to keep an up to date map of pieces by location
+  // as we process updates - both speed wise but especially in terms of complexity.
+  //
+  // Profiling suggest this takes milliseconds even on pretty slow processors, which isn't
+  // a huge deal.
   getMoveableSquares(piece) {
     const piecesByLocation = new Map();
+    const now = performance.now();
     for (const piece of this.piecesById.values()) {
       const key = pieceKey(piece.x, piece.y);
       piecesByLocation.set(key, piece);
     }
+    const after = performance.now();
+    const diff = after - now;
+    console.log(`generation took: ${diff}ms`);
     return getMoveableSquares(piece, piecesByLocation);
   }
 }

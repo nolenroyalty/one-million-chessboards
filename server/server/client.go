@@ -71,16 +71,18 @@ type Client struct {
 	send                 chan []byte
 	position             atomic.Value
 	lastSnapshotPosition atomic.Value
-	lastSnapshotTime     time.Time
-	currentZones         map[ZoneCoord]struct{}
-	moveBuffer           []PieceMove
-	captureBuffer        []PieceCapture
-	bufferMu             sync.Mutex
-	done                 chan struct{}
-	closeMu              sync.Mutex
-	isClosed             bool
-	lastActionTime       atomic.Int64
-	playingWhite         bool
+	// CR nroyalty: data race around currentZones!
+	currentZones  map[ZoneCoord]struct{}
+	moveBuffer    []PieceMove
+	captureBuffer []PieceCapture
+	bufferMu      sync.Mutex
+	done          chan struct{}
+	closeMu       sync.Mutex
+	// CR nroyalty: atomic.bool
+	isClosed       bool
+	lastActionTime atomic.Int64
+	// CR nroyalty: atomic.bool
+	playingWhite bool
 }
 
 // SubscriptionRequest represents a client request to subscribe to a position
@@ -92,20 +94,19 @@ type SubscriptionRequest struct {
 // NewClient creates a new client instance
 func NewClient(conn *websocket.Conn, server *Server) *Client {
 	c := &Client{
-		conn:             conn,
-		server:           server,
-		send:             make(chan []byte, 256),
-		position:         atomic.Value{},
-		currentZones:     make(map[ZoneCoord]struct{}),
-		moveBuffer:       make([]PieceMove, 0, 400),
-		captureBuffer:    make([]PieceCapture, 0, 100),
-		done:             make(chan struct{}),
-		isClosed:         false,
-		bufferMu:         sync.Mutex{},
-		closeMu:          sync.Mutex{},
-		lastSnapshotTime: time.Now().Add(-30 * time.Second), // Allow immediate snapshot
-		lastActionTime:   atomic.Int64{},
-		playingWhite:     false,
+		conn:           conn,
+		server:         server,
+		send:           make(chan []byte, 256),
+		position:       atomic.Value{},
+		currentZones:   make(map[ZoneCoord]struct{}),
+		moveBuffer:     make([]PieceMove, 0, 400),
+		captureBuffer:  make([]PieceCapture, 0, 100),
+		done:           make(chan struct{}),
+		isClosed:       false,
+		bufferMu:       sync.Mutex{},
+		closeMu:        sync.Mutex{},
+		lastActionTime: atomic.Int64{},
+		playingWhite:   false,
 	}
 	c.lastActionTime.Store(time.Now().Unix())
 	c.position.Store(Position{X: 0, Y: 0})
