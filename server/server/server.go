@@ -337,7 +337,7 @@ func (s *Server) processMoves() {
 			moveReq.Client.SendInvalidMove(moveReq.Move.MoveToken)
 			continue
 		}
-		moveReq.Client.SendValidMove(moveReq.Move.MoveToken)
+		moveReq.Client.SendValidMove(moveReq.Move.MoveToken, moveResult.SeqNum)
 
 		capturedPiece := moveResult.CapturedPiece
 		movedPieces := make([]PieceMove, moveResult.Length)
@@ -366,17 +366,20 @@ func (s *Server) processMoves() {
 
 			captureMove = &PieceCapture{
 				CapturedPieceID: capturedPiece.Piece.ID,
-				X:               capturedPiece.X,
-				Y:               capturedPiece.Y,
 				SeqNum:          moveResult.SeqNum,
 			}
 		}
 
 		s.persistentBoard.ApplyMove(moveReq.Move, moveResult.SeqNum)
 
+		// CR nroyalty: this could block; move it to the background goroutine instead
+		// More generally, think about the buffers we have here
 		affectedZones := s.zoneMap.GetAffectedZones(moveReq.Move)
 		interestedClients := s.zoneMap.GetClientsForZones(affectedZones)
 
+		// CR nroyalty: is there a way we can avoid the overhead of re-serializing a move
+		// for each client here? It's annoying that we might end up doing the same serialization
+		// for 100 different clients if they're looking at the same zones.
 		go func(clients map[*Client]struct{}, moves []PieceMove, capture *PieceCapture) {
 			for client := range clients {
 				client.AddMovesToBuffer(moves, capture)

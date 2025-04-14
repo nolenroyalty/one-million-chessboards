@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	PeriodicUpdateInterval = time.Second * 60
+	PeriodicUpdateInterval = time.Second * 300
 	activityThreshold      = time.Second * 60
 )
 
@@ -64,7 +64,6 @@ func (snapshot *StateSnapshot) ToSnapshotMessage() SnapshotMessage {
 	return message
 }
 
-// Client represents a connected websocket client
 type Client struct {
 	conn                 *websocket.Conn
 	server               *Server
@@ -384,7 +383,6 @@ func (c *Client) SendPeriodicUpdates() {
 	}
 }
 
-// ProcessMoveUpdates sends pending move updates to the client
 func (c *Client) ProcessMoveUpdates() {
 	ticker := time.NewTicker(150 * time.Millisecond)
 	defer ticker.Stop()
@@ -394,7 +392,6 @@ func (c *Client) ProcessMoveUpdates() {
 		case <-ticker.C:
 			c.bufferMu.Lock()
 			if len(c.moveBuffer) > 0 || len(c.captureBuffer) > 0 {
-				// Copy buffers and clear
 				moves := make([]PieceMove, len(c.moveBuffer))
 				captures := make([]PieceCapture, len(c.captureBuffer))
 
@@ -406,7 +403,6 @@ func (c *Client) ProcessMoveUpdates() {
 
 				c.bufferMu.Unlock()
 
-				// Send the updates
 				c.SendMoveUpdates(moves, captures)
 			} else {
 				c.bufferMu.Unlock()
@@ -437,7 +433,6 @@ func (c *Client) AddMovesToBuffer(moves []PieceMove, capture *PieceCapture) {
 		copy(captures, c.captureBuffer)
 		c.captureBuffer = c.captureBuffer[:0]
 
-		// Launch goroutine to avoid blocking
 		go c.SendMoveUpdates(moves, captures)
 	}
 }
@@ -455,9 +450,7 @@ func (c *Client) SendStateSnapshot(snapshot StateSnapshot) {
 	case <-c.done:
 		return
 	case c.send <- data:
-		// Sent successfully
 	default:
-		// Buffer full, client might be slow or disconnected
 		c.server.unregister <- c
 	}
 }
@@ -481,23 +474,22 @@ func (c *Client) SendMoveUpdates(moves []PieceMove, captures []PieceCapture) {
 		Captures: captures,
 	}
 
-	// Marshal to JSON
 	data, err := json.Marshal(message)
 	if err != nil {
 		log.Printf("Error marshaling move updates: %v", err)
 		return
 	}
 
-	// Send through the channel
-	select {
-	case <-c.done:
-		return
-	case c.send <- data:
-		// Sent successfully
-	default:
-		// Buffer full, client might be slow or disconnected
-		c.server.unregister <- c
-	}
+	go func() {
+		time.Sleep(3 * time.Second)
+		select {
+		case <-c.done:
+			return
+		case c.send <- data:
+		default:
+			c.server.unregister <- c
+		}
+	}()
 }
 
 func (c *Client) SendInvalidMove(moveToken uint32) {
@@ -515,22 +507,27 @@ func (c *Client) SendInvalidMove(moveToken uint32) {
 		return
 	}
 
-	select {
-	case <-c.done:
-		return
-	case c.send <- data:
-	default:
-		c.server.unregister <- c
-	}
+	go func() {
+		time.Sleep(5 * time.Second)
+		select {
+		case <-c.done:
+			return
+		case c.send <- data:
+		default:
+			c.server.unregister <- c
+		}
+	}()
 }
 
-func (c *Client) SendValidMove(moveToken uint32) {
+func (c *Client) SendValidMove(moveToken uint32, asOfSeqnum uint64) {
 	message := struct {
-		Type      string `json:"type"`
-		MoveToken uint32 `json:"moveToken"`
+		Type       string `json:"type"`
+		MoveToken  uint32 `json:"moveToken"`
+		AsOfSeqnum uint64 `json:"asOfSeqnum"`
 	}{
-		Type:      "validMove",
-		MoveToken: moveToken,
+		Type:       "validMove",
+		MoveToken:  moveToken,
+		AsOfSeqnum: asOfSeqnum,
 	}
 	log.Printf("move token valid: %v", moveToken)
 

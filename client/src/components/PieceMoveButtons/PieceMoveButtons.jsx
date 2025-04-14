@@ -21,8 +21,6 @@ const MoveButton = styled.button`
   left: 0;
   transform: translate(var(--x), var(--y));
   background-color: transparent;
-  opacity: var(--opacity);
-  transition: opacity 0.3s ease-in-out;
 `;
 
 function PieceMoveButtons({ boardSizeParams, hidden }) {
@@ -58,7 +56,6 @@ function PieceMoveButtons({ boardSizeParams, hidden }) {
           "--x": `${absoluteX}px`,
           "--y": `${absoluteY}px`,
           "--size": `${boardSizeParams.squarePx}px`,
-          "--opacity": hidden ? 0 : 1,
           "--pointer-events": hidden ? "none" : "auto",
           "--cursor": hidden ? "none" : "pointer",
         }}

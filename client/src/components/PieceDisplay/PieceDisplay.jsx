@@ -237,6 +237,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
       if (now > endTime) {
         return { x: toX, y: toY, finished: true };
       }
+      //   console.log(`now: ${now}, recentMove: ${JSON.stringify(recentMove)}`);
       const elapsed = now - receivedAt;
       const progress = easeInOutSquare(elapsed / animationDuration);
       const x = fromX + (toX - fromX) * progress;
@@ -277,10 +278,14 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
           const movedPiece = move.piece;
           const wasVisible = visiblePiecesAndIdsRef.current.has(movedPiece.id);
           const oldPiece = visiblePiecesAndIdsRef.current.get(movedPiece.id);
-          // Just in case, override move's fromX and fromY with the coords of the currently
-          // displayed piece
           if (oldPiece) {
-            move = { ...move, fromX: oldPiece.x, fromY: oldPiece.y };
+            // CR nroyalty: in the past, we mutated the old piece in the case that
+            // we were moving it off screen. I'm not actually sure why we did this?
+            // it creates bugs when we revert a move
+            // Just in case, override move's fromX and fromY with the coords of the currently
+            // move = { ...move, fromX: oldPiece.x, fromY: oldPiece.y };
+            // oldPiece.x = move.piece.x;
+            // oldPiece.y = move.piece.y;
           }
           const endedVisible = !isNotVisible({
             x: movedPiece.x,
@@ -340,12 +345,11 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
         data.appearances.forEach((appearance) => {
           const appearedPiece = appearance.piece;
           const ourPiece = visiblePiecesAndIdsRef.current.get(appearedPiece.id);
-          if (ourPiece) {
-            // Nothing to do? Piece appeared but we already know about it?
-            console.warn(
-              `A piece claimed to have appeared but we already know about it? ${JSON.stringify(appearance)}`
-            );
-          } else {
+          const weThinkItIsCaptured = capturedPiecesByIdRef.current.has(
+            appearedPiece.id
+          );
+          if ((ourPiece && weThinkItIsCaptured) || !ourPiece) {
+            capturedPiecesByIdRef.current.delete(appearedPiece.id);
             const appearedVisible = !isNotVisible({
               x: appearedPiece.x,
               y: appearedPiece.y,
@@ -354,6 +358,11 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
               doUpdate = true;
               appearancesToAdd.push(appearance);
             }
+          } else if (ourPiece) {
+            // Nothing to do? Piece appeared but we already know about it?
+            console.warn(
+              `A piece claimed to have appeared but we already know about it? ${JSON.stringify(appearance)}`
+            );
           }
         });
 
@@ -411,6 +420,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
         });
 
         if (doUpdate) {
+          console.log("do update");
           setForceUpdate((prev) => prev + 1);
         }
       },

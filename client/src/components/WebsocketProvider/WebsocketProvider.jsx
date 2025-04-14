@@ -197,6 +197,7 @@ function useWebsocket({
         } else if (data.type === "validMove") {
           pieceHandler.current.confirmOptimisticMove({
             moveToken: data.moveToken,
+            asOfSeqnum: data.asOfSeqnum,
           });
         } else if (data.type === "invalidMove") {
           pieceHandler.current.rejectOptimisticMove({

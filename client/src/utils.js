@@ -480,7 +480,7 @@ function boundsCheckMoveableSquares({ squares }) {
   );
 }
 
-function LieAboutMoveableSquaresAndJustGive2By2Region(piece, squares) {
+function LieAboutMoveableSquaresAndJustGive2By2Region(piece, squares, pieces) {
   const x = piece.x;
   const y = piece.y;
   for (const dx of [-3, -2, -1, 0, 1, 2, 3]) {
@@ -488,7 +488,30 @@ function LieAboutMoveableSquaresAndJustGive2By2Region(piece, squares) {
       if (dx === 0 && dy === 0) {
         continue;
       }
-      addSquare({ squares, x: x + dx, y: y + dy, moveType: MOVE_TYPES.NORMAL });
+      const { isCapturable, capturedPiece } = capturable({
+        pieces,
+        weAreWhite: piece.isWhite,
+        fromX: x,
+        fromY: y,
+        toX: x + dx,
+        toY: y + dy,
+      });
+      if (isCapturable) {
+        addSquare({
+          squares,
+          x: x + dx,
+          y: y + dy,
+          moveType: MOVE_TYPES.NORMAL,
+          capturedPiece,
+        });
+      } else {
+        addSquare({
+          squares,
+          x: x + dx,
+          y: y + dy,
+          moveType: MOVE_TYPES.NORMAL,
+        });
+      }
     }
   }
   return squares;
@@ -501,7 +524,7 @@ export function getMoveableSquares(piece, pieces) {
   const name = TYPE_TO_NAME[pieceType];
 
   if (DEBUG_LIE_ABOUT_MOVEABLE_SQUARES) {
-    LieAboutMoveableSquaresAndJustGive2By2Region(piece, squares);
+    LieAboutMoveableSquaresAndJustGive2By2Region(piece, squares, pieces);
   } else {
     switch (name) {
       case "pawn":
