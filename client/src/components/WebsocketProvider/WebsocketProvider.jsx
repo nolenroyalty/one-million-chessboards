@@ -60,11 +60,15 @@ function useStartBot({ pieceHandler, submitMove, onlyId }) {
         let data;
         for (let i = 0; i < 10; i++) {
           while (attempts < 50) {
-            const pieces = Array.from(
-              pieceHandler.current.getPiecesById().values()
+            const allPieceIds = Array.from(
+              pieceHandler.current.getAllPieceIds()
             );
-            const randomPiece =
-              pieces[Math.floor(Math.random() * pieces.length)];
+            const randomId =
+              allPieceIds[Math.floor(Math.random() * allPieceIds.length)];
+            const randomPiece = pieceHandler.current.getPieceById(randomId);
+            if (!randomPiece) {
+              continue;
+            }
             const moveableSquaresAndMoveType =
               pieceHandler.current.getMoveableSquares(randomPiece);
             if (moveableSquaresAndMoveType.size > 0) {
@@ -72,8 +76,6 @@ function useStartBot({ pieceHandler, submitMove, onlyId }) {
               const squares = Array.from(moveableSquaresAndMoveType.keys());
               targetSquare =
                 Array.from(squares)[Math.floor(Math.random() * squares.length)];
-              //   const data = moveableSquaresAndMoveType.get(targetSquare);
-              //   targetMoveType = data.moveType;
               data = moveableSquaresAndMoveType.get(targetSquare);
               break;
             }

@@ -1,5 +1,8 @@
 package server
 
+// CR nroyalty: it would be nice if we ran all of our to-client actions through a
+// queue that let us guarantee better ordering of the messages that they receive...
+
 import (
 	"encoding/json"
 	"fmt"
@@ -16,8 +19,8 @@ import (
 const (
 	PeriodicUpdateInterval = time.Second * 30
 	activityThreshold      = time.Second * 20
-	simulatedLatency       = 3 * time.Second
-	simulatedJitterMs      = 400
+	simulatedLatency       = 2 * time.Second
+	simulatedJitterMs      = 0
 )
 
 func getSimulatedLatency() time.Duration {

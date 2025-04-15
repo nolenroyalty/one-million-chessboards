@@ -1,5 +1,9 @@
 package server
 
+// CR nroyalty: swap this out - no channels, single goroutine with a pointer swap,
+// maybe a mutex, and just raw reads to the cached data
+// when you do this, consider where else you need to do it.
+
 import (
 	"encoding/json"
 	"log"

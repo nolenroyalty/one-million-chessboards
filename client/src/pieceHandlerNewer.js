@@ -1,5 +1,10 @@
 import { pieceKey, getMoveableSquares, TYPE_TO_NAME } from "./utils";
 
+// CR nroyalty: it's a little annoying, but storing a seqnum per piece
+// would give us a lot of confidence when reverting / confirming moves
+// and deciding which move to keep around. It's not obvious that we
+// need to do this, but it might be a good idea.
+
 const OACTION = {
   MOVE: "move",
   CAPTURE: "capture",
@@ -18,6 +23,7 @@ const REGULARLY_LOG_DEBUG_STATE = false;
 // visible to the user. If a piece is moving *to be* visible but wasn't visible
 // before, PieceDisplay won't know its prior position and providing fromX and fromY
 // lets it make a good decision about what to direction to animate it from
+
 function animateMove({ piece, receivedAt, fromX, fromY }) {
   return {
     type: ANIMATION.MOVE,
@@ -1096,31 +1102,32 @@ class PieceHandler {
 
   // CR nroyalty: this needs to account for the case that we're simulating a capture!
   getPieceById(id) {
-    // const { predictedStateByPieceId, predictedLocToPieceId } =
-    //   this.optimisticStateHandler.allPredictedStatesAndPositions();
-
     const predictedState = this.optimisticStateHandler.getPredictedState(id);
     const piece = this.piecesById.get(id);
     if (!piece) {
       return undefined;
-    } else if (piece && predictedState?.state === OACTION.CAPTURE) {
-      // CR nroyalty: this is wrong! We should indicate that the piece is simulated
-      // as being captured.
-      console.warn(`POTENTIAL BUG`);
-      return piece;
-    } else if (predictedState?.state === OACTION.CAPTURE) {
-      return undefined;
-    } else if (predictedState?.state === OACTION.MOVE && piece) {
-      return {
-        ...piece,
-        x: predictedState.x,
-        y: predictedState.y,
-      };
+    } else if (piece && predictedState) {
+      if (predictedState.state === OACTION.CAPTURE) {
+        // CR nroyalty: this is wrong! We should indicate that the piece is simulated
+        // as being captured.
+        // console.warn(`POTENTIAL BUG`);
+        // return piece;
+        return undefined;
+      } else if (predictedState.state === OACTION.MOVE) {
+        // CR nroyalty: it would be nice to store additional piece metadata
+        // so that we can offer an accurate move and capture count to piece display
+        return {
+          ...piece,
+          moveCount: piece.moveCount + 1,
+          x: predictedState.x,
+          y: predictedState.y,
+        };
+      }
     }
     return piece;
   }
 
-  // CR nroyalty: do this using our optimistic piece overlay
+  // CR nroyalty: remove this??
   getPiecesById() {
     return this.piecesById;
   }
@@ -1137,7 +1144,6 @@ class PieceHandler {
     const piecesByLocation = new Map();
     const { predictedStateByPieceId, predictedLocToPieceId } =
       this.optimisticStateHandler.allPredictedStatesAndPositions();
-    // const now = performance.now();
 
     for (const piece of this.piecesById.values()) {
       const key = pieceKey(piece.x, piece.y);
@@ -1172,9 +1178,6 @@ class PieceHandler {
         }
       }
     }
-    // const after = performance.now();
-    // const diff = after - now;
-    // console.log(`generation took: ${diff}ms`);
     return getMoveableSquares(piece, piecesByLocation);
   }
 }
