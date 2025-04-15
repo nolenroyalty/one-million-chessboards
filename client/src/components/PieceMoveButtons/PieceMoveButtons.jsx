@@ -36,8 +36,13 @@ function PieceMoveButtons({ boardSizeParams, hidden }) {
 
   return Array.from(moveableSquares.keys()).map((key) => {
     const [x, y] = keyToCoords(key);
-    const { moveType, capturedPiece, additionalMovedPiece, captureRequired } =
-      moveableSquares.get(key);
+    const {
+      moveType,
+      capturedPiece,
+      additionalMovedPiece,
+      captureRequired,
+      couldBeACapture,
+    } = moveableSquares.get(key);
     const { x: screenX, y: screenY } = getScreenRelativeCoords({
       x,
       y,
@@ -69,6 +74,7 @@ function PieceMoveButtons({ boardSizeParams, hidden }) {
             capturedPiece,
             additionalMovedPiece,
             captureRequired,
+            couldBeACapture,
           });
           clearSelectedPiece();
         }}

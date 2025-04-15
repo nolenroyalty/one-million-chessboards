@@ -361,6 +361,7 @@ function WebsocketProvider({ children }) {
       capturedPiece,
       additionalMovedPiece,
       captureRequired,
+      couldBeACapture,
     }) => {
       let incrLocalMoves = true;
       let incrLocalCaptures = false;
@@ -388,6 +389,7 @@ function WebsocketProvider({ children }) {
           additionalMovedPiece,
           capturedPiece,
           captureRequired,
+          couldBeACapture,
         });
       }
     },

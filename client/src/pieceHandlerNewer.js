@@ -124,6 +124,8 @@ class OptimisticState {
     capturedPiece,
     receivedAt,
     groundTruthSeqNum,
+    couldBeACapture,
+    captureRequired,
   }) {
     const moves = [movedPiece];
     if (additionalMovedPiece) {
@@ -145,6 +147,7 @@ class OptimisticState {
         impactedSquares,
         moveToken,
         actionId: this.getIncrActionId(),
+        couldBeACapture,
       };
       actions.push(action);
       // CR nroyalty: increment capture count, increment move count,
@@ -166,6 +169,7 @@ class OptimisticState {
         impactedSquares,
         moveToken,
         actionId: this.getIncrActionId(),
+        captureRequired,
       };
       actions.push(action);
       animations.push(animateCapture({ piece: capturedPiece, receivedAt }));
@@ -262,9 +266,17 @@ class OptimisticState {
     const lastAction = actions[actions.length - 1];
 
     if (lastAction.type === OACTION.MOVE) {
-      return { state: OACTION.MOVE, x: lastAction.x, y: lastAction.y };
+      return {
+        state: OACTION.MOVE,
+        x: lastAction.x,
+        y: lastAction.y,
+        couldBeACapture: lastAction.couldBeACapture,
+      };
     } else if (lastAction.type === OACTION.CAPTURE) {
-      return { state: OACTION.CAPTURE };
+      return {
+        state: OACTION.CAPTURE,
+        captureRequired: lastAction.captureRequired,
+      };
     } else {
       console.warn(
         `Unknown last action type for piece ${pieceId}: ${lastAction.type}`
@@ -388,19 +400,13 @@ class OptimisticState {
   }
 
   revertSinglePieceId(pieceId) {
-    console.log("");
-    console.log(`reverting piece ${pieceId}`);
-    this._debugDumpState();
+    console.log(`Single piece revert / ${pieceId}`);
     const actions = this.actionsByPieceId.get(pieceId) || [];
     if (actions.length === 0) {
       return null;
     }
     const preRevertVisualState = this.getPredictedState(pieceId);
     this._removeActions(actions);
-    console.log("");
-    console.log(`after reverting piece ${pieceId}`);
-    this._debugDumpState();
-    console.log("");
     return preRevertVisualState;
   }
 
@@ -506,6 +512,7 @@ class PieceHandler {
     additionalMovedPiece,
     capturedPiece,
     captureRequired,
+    couldBeACapture,
   }) {
     // CR nroyalty: handle pawn captures here.
     const receivedAt = performance.now();
@@ -535,6 +542,8 @@ class PieceHandler {
       additionalMovedPiece,
       capturedPiece: captureToUse,
       receivedAt,
+      couldBeACapture,
+      captureRequired,
     });
     this.broadcastAnimations({ animations, wasSnapshot: false });
   }
@@ -748,11 +757,19 @@ class PieceHandler {
             // this cannot be true and almost certainly means that we're wrong
             revertPieceId(predictedPieceId);
           } else if (anim.piece.isWhite !== predictedPiece.isWhite) {
+            const ourPredictedState = predictedStateByPieceId.get(
+              predictedPiece.id
+            );
             // We *hope* that what happened is that `anim.piece` moved to the location
             // that we moved a piece to *before* we moved there, which means that
-            // we captured the piece
-            // CR nroyalty: handle this case!!
-            revertPieceId(predictedPieceId);
+            // we captured the piece. This is only valid if we did a move that
+            // let us capture a piece!
+            if (ourPredictedState?.couldBeACapture) {
+              // CR nroyalty: simulate a capture here?
+              // animationsByPieceId.delete(pieceId);
+            } else {
+              revertPieceId(predictedPieceId);
+            }
           }
         } else {
           const predictedState = predictedStateByPieceId.get(pieceId);
@@ -763,9 +780,16 @@ class PieceHandler {
             // no way this capture is correct; the piece wasn't in the place we thought
             // probably doesn't invalidate our move though
             // CR nroyalty: this fails for pawn moves that require a capture
-            this.optimisticStateHandler.revertSinglePieceId(pieceId);
-            predictedStateByPieceId.delete(pieceId);
-            predictedStateToRevert.set(pieceId, predictedState);
+            if (predictedState.captureRequired) {
+              // we did a move (moved a pawn diagonally) that required a capture.
+              // given that the capture would have failed, we need to back out
+              // the entire move.
+              revertPieceId(pieceId);
+            } else {
+              this.optimisticStateHandler.revertSinglePieceId(pieceId);
+              predictedStateByPieceId.delete(pieceId);
+              predictedStateToRevert.set(pieceId, predictedState);
+            }
           }
         }
       }
@@ -778,8 +802,6 @@ class PieceHandler {
         animationsByPieceId.delete(pieceId);
       } else if (!ourPiece && predictedState.state === OACTION.MOVE) {
         // we *should* already have a capture animation here
-        const currentState = animationsByPieceId.get(pieceId);
-        console.log(`CURRENT STATE: ${JSON.stringify(currentState)}`);
       } else if (ourPiece && predictedState.state === OACTION.CAPTURE) {
         const appearance = animateAppearance({ piece: ourPiece, receivedAt });
         animationsByPieceId.set(pieceId, appearance);
@@ -843,8 +865,6 @@ class PieceHandler {
         snapshotYDelta < SIMULATED_CHANGES_THRESHOLD;
     }
 
-    // CR nroyalty: potentially invalidate optimistic updates?
-    // Maybe not...snapshots could be stale...
     snapshot.pieces.forEach((piece) => {
       piecesById.set(piece.id, piece);
     });
@@ -1076,10 +1096,10 @@ class PieceHandler {
 
   // CR nroyalty: this needs to account for the case that we're simulating a capture!
   getPieceById(id) {
-    const { predictedStateByPieceId, predictedLocToPieceId } =
-      this.optimisticStateHandler.allPredictedStatesAndPositions();
+    // const { predictedStateByPieceId, predictedLocToPieceId } =
+    //   this.optimisticStateHandler.allPredictedStatesAndPositions();
 
-    const predictedState = predictedStateByPieceId.get(id);
+    const predictedState = this.optimisticStateHandler.getPredictedState(id);
     const piece = this.piecesById.get(id);
     if (!piece) {
       return undefined;

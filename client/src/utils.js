@@ -204,11 +204,18 @@ function addSquare({
   capturedPiece = null,
   additionalMovedPiece = null,
   captureRequired = false,
+  neverCapturable = false,
 }) {
   squares.push([
     x,
     y,
-    { moveType, capturedPiece, additionalMovedPiece, captureRequired },
+    {
+      moveType,
+      capturedPiece,
+      additionalMovedPiece,
+      captureRequired,
+      neverCapturable,
+    },
   ]);
 }
 
@@ -218,9 +225,21 @@ function addMoveableSquaresForPawn({ piece, pieces, squares }) {
   const y = piece.y;
   const dy = isWhite ? -1 : 1;
   if (empty({ pieces, x, y: y + dy })) {
-    addSquare({ squares, x, y: y + dy, moveType: MOVE_TYPES.NORMAL });
+    addSquare({
+      squares,
+      x,
+      y: y + dy,
+      moveType: MOVE_TYPES.NORMAL,
+      neverCapturable: true,
+    });
     if (empty({ pieces, x, y: y + 2 * dy }) && piece.moveCount === 0) {
-      addSquare({ squares, x, y: y + 2 * dy, moveType: MOVE_TYPES.NORMAL });
+      addSquare({
+        squares,
+        x,
+        y: y + 2 * dy,
+        moveType: MOVE_TYPES.NORMAL,
+        neverCapturable: true,
+      });
     }
   }
   for (const dx of [-1, 1]) {
@@ -475,6 +494,7 @@ function addMoveableSquaresForKing({ piece, pieces, squares }) {
       y: toY,
       moveType: MOVE_TYPES.CASTLE,
       additionalMovedPiece,
+      neverCapturable: true,
     });
   }
 }
@@ -558,6 +578,21 @@ export function getMoveableSquares(piece, pieces) {
   const checked = boundsCheckMoveableSquares({ squares });
   const ret = new Map();
   for (const [x, y, data] of checked) {
+    // If we realize that there's actually a piece of the opposite color in
+    // this square, could we potentially have accidentally captured it
+    // with our optimistic move?
+    let couldBeACapture;
+    if (data.neverCapturable) {
+      couldBeACapture = false;
+    } else {
+      couldBeACapture = !spansTwoBoards({
+        fromX: piece.x,
+        fromY: piece.y,
+        toX: x,
+        toY: y,
+      });
+    }
+    data.couldBeACapture = couldBeACapture;
     ret.set(pieceKey(x, y), data);
   }
   return ret;
