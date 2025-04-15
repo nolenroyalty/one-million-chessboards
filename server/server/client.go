@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	PeriodicUpdateInterval = time.Second * 300
+	PeriodicUpdateInterval = time.Second * 5
 	activityThreshold      = time.Second * 60
 )
 
@@ -481,7 +481,7 @@ func (c *Client) SendMoveUpdates(moves []PieceMove, captures []PieceCapture) {
 	}
 
 	go func() {
-		time.Sleep(3 * time.Second)
+		time.Sleep(100 * time.Millisecond)
 		select {
 		case <-c.done:
 			return
@@ -508,7 +508,7 @@ func (c *Client) SendInvalidMove(moveToken uint32) {
 	}
 
 	go func() {
-		time.Sleep(5 * time.Second)
+		time.Sleep(100 * time.Millisecond)
 		select {
 		case <-c.done:
 			return
@@ -537,13 +537,16 @@ func (c *Client) SendValidMove(moveToken uint32, asOfSeqnum uint64) {
 		return
 	}
 
-	select {
-	case <-c.done:
-		return
-	case c.send <- data:
-	default:
-		c.server.unregister <- c
-	}
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		select {
+		case <-c.done:
+			return
+		case c.send <- data:
+		default:
+			c.server.unregister <- c
+		}
+	}()
 }
 
 // SendError sends an error message to the client

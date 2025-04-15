@@ -5,7 +5,6 @@ const OACTION = {
   CAPTURE: "capture",
 };
 
-// CR nroyalty: do we need to distinguish between moves and appearances?
 const ANIMATION = {
   MOVE: "move",
   CAPTURE: "capture",
@@ -13,8 +12,10 @@ const ANIMATION = {
 };
 
 // It's a little confusing, but we actually really really want
-// fromX / fromY here, because the piece may not be rendered in pieceDisplay
-// and so pieceDisplay won't know what data to use to animate it!!
+// fromX / fromY here. PieceDisplay only renders pieces that are currently
+// visible to the user. If a piece is moving *to be* visible but wasn't visible
+// before, PieceDisplay won't know its prior position and providing fromX and fromY
+// lets it make a good decision about what to direction to animate it from
 function animateMove({ piece, receivedAt, fromX, fromY }) {
   return {
     type: ANIMATION.MOVE,
@@ -436,12 +437,16 @@ class PieceHandler {
         appearances.push(animation);
       }
     }
+
+    const pieceIds = new Set(this.piecesById.keys());
+
     this.subscribers.forEach(({ callback }) => {
       callback({
         moves,
         captures,
         appearances,
         piecesById: this.piecesById,
+        pieceIds,
         wasSnapshot,
       });
     });
@@ -467,9 +472,6 @@ class PieceHandler {
   }
 
   confirmOptimisticMove({ moveToken, asOfSeqnum }) {
-    console.log(
-      `move token confirmed: ${moveToken} (asOfSeqnum: ${asOfSeqnum})`
-    );
     // this.optimisticStateHandler._debugDumpState("before");
     const { groundTruthUpdates } =
       this.optimisticStateHandler.processConfirmation(moveToken);
@@ -616,18 +618,113 @@ class PieceHandler {
     console.log(`SUBSCRIBER COUNT: ${this.subscribers.length}`);
   }
 
-  // CR nroyalty: I think we can get rid of this; it doesn't
-  // really make sense in a world where we fabricate lots of moves...
-  getMoveMapByPieceId() {
-    const ret = new Map();
-    this.activeMoves.forEach((move) => {
-      ret.set(move.pieceId, move);
-    });
-    return ret;
+  processGroundTruthAnimations({ animationsByPieceId, receivedAt }) {
+    const unprocessedAnimations__DONOTRETURN = Array.from(
+      animationsByPieceId.values()
+    );
+    const { predictedStateByPieceId, predictedLocToPieceId } =
+      this.optimisticStateHandler.allPredictedStatesAndPositions();
+    const predictedStateToRevert = new Map();
+
+    const revertPieceId = (pieceId) => {
+      const { preRevertVisualStates } =
+        this.optimisticStateHandler.processRevert({
+          tokens: new Set(),
+          pieceIds: new Set([pieceId]),
+        });
+
+      for (const [revertId, pState] of preRevertVisualStates) {
+        predictedStateByPieceId.delete(revertId);
+        predictedStateToRevert.set(revertId, pState);
+      }
+    };
+
+    for (const anim of unprocessedAnimations__DONOTRETURN) {
+      const pieceId = anim.piece.id;
+      if (anim.type === ANIMATION.CAPTURE) {
+        const predictedState = predictedStateByPieceId.get(pieceId);
+        if (predictedState?.state === OACTION.CAPTURE) {
+          // Predicted capture. Already animated a capture. No work to do
+          continue;
+        } else if (predictedState?.state === OACTION.MOVE) {
+          // predicted move, piece was captured, our move must be wrong
+          revertPieceId(pieceId);
+        }
+      } else if (
+        anim.type === ANIMATION.APPEARANCE ||
+        anim.type === ANIMATION.MOVE
+      ) {
+        // We could make this substantially smarter. But for the time being we say
+        // "if we get a new location for this piece, we still just hope that our
+        // current location is valid - maybe we moved from the new location to our
+        // current one." To make this really check out, we need to consider whether
+        // we could have moved from the new current location to our tracked one.
+        // But let's not worry about that for now. We'll get a reversion soon anyway
+        //
+        // Given the above, our concern with appearances or moved is actually whether
+        // they invalidate *another* piece (e.g. if we're moving a white piece on top
+        // of the predicted location of another white piece)
+        const loc = pieceKey(anim.piece.x, anim.piece.y);
+        const predictedPieceId = predictedLocToPieceId.get(loc);
+        if (predictedPieceId !== undefined) {
+          // uhoh, we have a piece there!
+          const predictedPiece = this.piecesById.get(predictedPieceId);
+          if (predictedPieceId === anim.piece.id) {
+            // everything lines up. Nothing to do.
+            animationsByPieceId.delete(predictedPieceId);
+          } else if (!predictedPiece) {
+            // wut
+            console.warn(`unresolveable reversion for ${predictedPieceId}`);
+          } else if (anim.piece.isWhite === predictedPiece.isWhite) {
+            // another piece of the same color overlaps with the piece we're predicting
+            // this cannot be true and almost certainly means that we're wrong
+            revertPieceId(predictedPieceId);
+          } else if (anim.piece.isWhite !== predictedPiece.isWhite) {
+            // We *hope* that what happened is that `anim.piece` moved to the location
+            // that we moved a piece to *before* we moved there, which means that
+            // we captured the piece
+            // CR nroyalty: handle this case!!
+            revertPieceId(predictedPieceId);
+          }
+        } else {
+          // CR nroyalty: this is wrong. I think we should only delete if
+          // we have an optimistic move for this piece?
+          // override the actual move with our predicted move
+          const predictedState = predictedStateByPieceId.get(pieceId);
+          if (predictedState) {
+            animationsByPieceId.delete(pieceId);
+          }
+        }
+      }
+    }
+
+    for (const [pieceId, predictedState] of predictedStateToRevert) {
+      const ourPiece = this.piecesById.get(pieceId);
+      if (!ourPiece && predictedState.state === OACTION.CAPTURE) {
+        // convenient. Nothing to do.
+        animationsByPieceId.delete(pieceId);
+      } else if (!ourPiece && predictedState.state === OACTION.MOVE) {
+        // we *should* already have a capture animation here
+        const currentState = animationsByPieceId.get(pieceId);
+        console.log(`CURRENT STATE: ${JSON.stringify(currentState)}`);
+      } else if (ourPiece && predictedState.state === OACTION.CAPTURE) {
+        const appearance = animateAppearance({ piece: ourPiece, receivedAt });
+        animationsByPieceId.set(pieceId, appearance);
+      } else if (ourPiece && predictedState.state === OACTION.MOVE) {
+        const move = animateMove({
+          piece: ourPiece,
+          receivedAt,
+          fromX: predictedState.x,
+          fromY: predictedState.y,
+        });
+        animationsByPieceId.set(pieceId, move);
+      }
+    }
+
+    return { processAnimationsByPieceId: animationsByPieceId };
   }
 
   handleSnapshot({ snapshot }) {
-    console.log("GOT SNAPSHOT");
     // We intentionally do NOT drop stale snapshots. It's possible that we get
     // snapshots with an old seqnum if the server bounces and loses a little bit of state.
     // Otherwise I think we can assume messages are ordered (TCP, etc) so this should be fine?
@@ -653,7 +750,7 @@ class PieceHandler {
     const piecesById = new Map();
     const activeMoves = [];
     const activeCaptures = [];
-    const animations = [];
+    const animationsByPieceId = new Map();
 
     if (
       this.lastSnapshotCoords.x === null ||
@@ -680,7 +777,7 @@ class PieceHandler {
     });
 
     this.activeMoves.forEach((move) => {
-      if (move.seqNum > snapshot.startingSeqnum) {
+      if (move.seqNum > snapshot.startingSeqNum) {
         const movePieceId = move.piece.id;
         const ourPiece = piecesById.get(movePieceId);
         activeMoves.push(move);
@@ -710,7 +807,7 @@ class PieceHandler {
     });
 
     this.activeCaptures.forEach((capture) => {
-      if (capture.seqNum > snapshot.startingSeqnum) {
+      if (capture.seqNum > snapshot.startingSeqNum) {
         activeCaptures.push(capture);
         if (piecesById.has(capture.pieceId)) {
           piecesById.delete(capture.pieceId);
@@ -719,35 +816,26 @@ class PieceHandler {
     });
 
     const receivedAt = performance.now();
-
     // we need to do this *after* we process the active moves and captures,
     // otherwise we'll end up potentially simulating a move or capture twice!
     snapshot.pieces.forEach((piece) => {
-      // CR nroyalty: we need to check whether this piece creates a conflict
       if (this.piecesById.has(piece.id)) {
         const oldPiece = this.piecesById.get(piece.id);
         if (oldPiece.x !== piece.x || oldPiece.y !== piece.y) {
-          // potential conflict: friendly piece intersects with the simulated final
-          // position of on optimistic move
-          // MAYBE some conflicts where a piece isn't where we expect it to be too
-          // but we can probably rely on optimistic move cancellation to fix this
-          animations.push(
-            animateMove({
-              fromX: oldPiece.x,
-              fromY: oldPiece.y,
-              piece: piece,
-              receivedAt,
-            })
-          );
+          const animation = animateMove({
+            fromX: oldPiece.x,
+            fromY: oldPiece.y,
+            piece: piece,
+            receivedAt,
+          });
+          animationsByPieceId.set(piece.id, animation);
         }
       } else {
         // No need to compute appearances if the snapshot is far away from our
         // last one
         if (shouldComputeSimulatedChanges) {
-          // potential conflict: friendly piece intersects with the simulated final
-          // position of on optimistic move
-          // Maybe other conflicts? I'm not sure.
-          animations.push(animateAppearance({ piece, receivedAt }));
+          const animation = animateAppearance({ piece, receivedAt });
+          animationsByPieceId.set(piece.id, animation);
         }
       }
     });
@@ -764,22 +852,30 @@ class PieceHandler {
             return elt.pieceId === oldPieceId;
           });
           if (!existsInRecentCaptures) {
-            animations.push(animateCapture({ piece: oldPiece, receivedAt }));
+            const animation = animateCapture({ piece: oldPiece, receivedAt });
+            animationsByPieceId.set(oldPieceId, animation);
           }
         }
       }
     }
 
-    // CR nroyalty: make sure that optimistic stuff is overlaid here
-    // CR nroyalty: invalidate our optimistic piece by location cache
     this.activeMoves = activeMoves;
     this.activeCaptures = activeCaptures;
     this.piecesById = piecesById;
     this.snapshotSeqnum = {
-      from: snapshot.startingSeqnum,
-      to: snapshot.endingSeqnum,
+      from: snapshot.startingSeqNum,
+      to: snapshot.endingSeqNum,
     };
-    this.broadcastAnimations({ animations, wasSnapshot: true });
+
+    const { processAnimationsByPieceId } = this.processGroundTruthAnimations({
+      animationsByPieceId,
+      receivedAt,
+    });
+
+    this.broadcastAnimations({
+      animations: processAnimationsByPieceId.values(),
+      wasSnapshot: true,
+    });
   }
 
   handleMoves({ moves, captures }) {
@@ -882,101 +978,6 @@ class PieceHandler {
       }
     });
 
-    const unprocessedAnimations__DONOTRETURN = Array.from(
-      animationsByPieceId.values()
-    );
-    const { predictedStateByPieceId, predictedLocToPieceId } =
-      this.optimisticStateHandler.allPredictedStatesAndPositions();
-    const predictedStateToRevert = new Map();
-
-    const revertPieceId = (pieceId) => {
-      const { preRevertVisualStates } =
-        this.optimisticStateHandler.processRevert({
-          tokens: new Set(),
-          pieceIds: new Set([pieceId]),
-        });
-
-      for (const [revertId, pState] of preRevertVisualStates) {
-        predictedStateByPieceId.delete(revertId);
-        predictedStateToRevert.set(revertId, pState);
-      }
-    };
-
-    for (const anim of unprocessedAnimations__DONOTRETURN) {
-      const pieceId = anim.piece.id;
-      if (anim.type === ANIMATION.CAPTURE) {
-        const predictedState = predictedStateByPieceId.get(pieceId);
-        if (predictedState?.state === OACTION.CAPTURE) {
-          // Predicted capture. Already animated a capture. No work to do
-          continue;
-        } else if (predictedState?.state === OACTION.MOVE) {
-          // predicted move, piece was captured, our move must be wrong
-          revertPieceId(pieceId);
-        }
-      } else if (
-        anim.type === ANIMATION.APPEARANCE ||
-        anim.type === ANIMATION.MOVE
-      ) {
-        // We could make this substantially smarter. But for the time being we say
-        // "if we get a new location for this piece, we still just hope that our
-        // current location is valid - maybe we moved from the new location to our
-        // current one." To make this really check out, we need to consider whether
-        // we could have moved from the new current location to our tracked one.
-        // But let's not worry about that for now. We'll get a reversion soon anyway
-        //
-        // Given the above, our concern with appearances or moved is actually whether
-        // they invalidate *another* piece (e.g. if we're moving a white piece on top
-        // of the predicted location of another white piece)
-        const loc = pieceKey(anim.piece.x, anim.piece.y);
-        const predictedPieceId = predictedLocToPieceId.get(loc);
-        if (predictedPieceId !== undefined) {
-          // uhoh, we have a piece there!
-          const predictedPiece = this.piecesById.get(predictedPieceId);
-          if (predictedPieceId === anim.piece.id) {
-            // everything lines up. Nothing to do.
-            animationsByPieceId.delete(predictedPieceId);
-          } else if (!predictedPiece) {
-            // wut
-            console.warn(`unresolveable reversion for ${predictedPieceId}`);
-          } else if (anim.piece.isWhite === predictedPiece.isWhite) {
-            // another piece of the same color overlaps with the piece we're predicting
-            // this cannot be true and almost certainly means that we're wrong
-            revertPieceId(predictedPieceId);
-          } else if (anim.piece.isWhite !== predictedPiece.isWhite) {
-            // We *hope* that what happened is that `anim.piece` moved to the location
-            // that we moved a piece to *before* we moved there, which means that
-            // we captured the piece
-            // CR nroyalty: handle this case!!
-            revertPieceId(predictedPieceId);
-          }
-        } else {
-          // override the actual move with our predicted move
-          animationsByPieceId.delete(pieceId);
-        }
-      }
-    }
-
-    for (const [pieceId, predictedState] of predictedStateToRevert) {
-      const ourPiece = this.piecesById.get(pieceId);
-      if (!ourPiece && predictedState.state === OACTION.CAPTURE) {
-        // convenient. Nothing to do.
-        animationsByPieceId.delete(pieceId);
-      } else if (!ourPiece && predictedState.state === OACTION.MOVE) {
-        // we *should* already have a capture animation here
-      } else if (ourPiece && predictedState.state === OACTION.CAPTURE) {
-        const appearance = animateAppearance({ piece: ourPiece, receivedAt });
-        animationsByPieceId.set(pieceId, appearance);
-      } else if (ourPiece && predictedState.state === OACTION.MOVE) {
-        const move = animateMove({
-          piece: ourPiece,
-          receivedAt,
-          fromX: predictedState.x,
-          fromY: predictedState.y,
-        });
-        animationsByPieceId.set(pieceId, move);
-      }
-    }
-
     this.statsHandler.applyPieceHandlerDelta({
       dTotalMoves,
       dWhitePieces,
@@ -985,15 +986,45 @@ class PieceHandler {
       dBlackKings,
     });
 
+    const { processAnimationsByPieceId } = this.processGroundTruthAnimations({
+      animationsByPieceId,
+      receivedAt,
+    });
+
     this.broadcastAnimations({
       wasSnapshot: false,
-      animations: animationsByPieceId.values(),
+      animations: processAnimationsByPieceId.values(),
     });
   }
 
-  // CR nroyalty: do this using our optimistic piece overlay
+  getAllPieceIds() {
+    return new Set(this.piecesById.keys());
+  }
+
+  // CR nroyalty: this needs to account for the case that we're simulating a capture!
   getPieceById(id) {
-    return this.piecesById.get(id);
+    const { predictedStateByPieceId, predictedLocToPieceId } =
+      this.optimisticStateHandler.allPredictedStatesAndPositions();
+
+    const predictedState = predictedStateByPieceId.get(id);
+    const piece = this.piecesById.get(id);
+    if (!piece) {
+      return undefined;
+    } else if (piece && predictedState?.state === OACTION.CAPTURE) {
+      // CR nroyalty: this is wrong! We should indicate that the piece is simulated
+      // as being captured.
+      console.warn(`POTENTIAL BUG`);
+      return piece;
+    } else if (predictedState?.state === OACTION.CAPTURE) {
+      return undefined;
+    } else if (predictedState?.state === OACTION.MOVE && piece) {
+      return {
+        ...piece,
+        x: predictedState.x,
+        y: predictedState.y,
+      };
+    }
+    return piece;
   }
 
   // CR nroyalty: do this using our optimistic piece overlay
@@ -1011,14 +1042,45 @@ class PieceHandler {
   // a huge deal.
   getMoveableSquares(piece) {
     const piecesByLocation = new Map();
-    const now = performance.now();
+    const { predictedStateByPieceId, predictedLocToPieceId } =
+      this.optimisticStateHandler.allPredictedStatesAndPositions();
+    // const now = performance.now();
+
     for (const piece of this.piecesById.values()) {
       const key = pieceKey(piece.x, piece.y);
-      piecesByLocation.set(key, piece);
+      if (predictedLocToPieceId.has(key)) {
+        // predicted piece exists here - we may be simulating a capture or
+        // other weird state for this piece
+        continue;
+      } else if (predictedStateByPieceId.has(piece.id)) {
+        // we're optimistically tracking something for this piece -
+        // skip it for now
+        continue;
+      } else {
+        piecesByLocation.set(key, piece);
+      }
     }
-    const after = performance.now();
-    const diff = after - now;
-    console.log(`generation took: ${diff}ms`);
+    for (const [pieceId, predictedState] of predictedStateByPieceId) {
+      if (predictedState.state === OACTION.CAPTURE) {
+        // no need to consider captures for this!
+        continue;
+      } else if (predictedState.state === OACTION.MOVE) {
+        const key = pieceKey(predictedState.x, predictedState.y);
+        const piece = this.piecesById.get(pieceId);
+        if (piece) {
+          const dup = { ...piece, x: predictedState.x, y: predictedState.y };
+          piecesByLocation.set(key, dup);
+        } else {
+          // maybe this means we've moved to another part of the board.
+          console.warn(
+            `Have predicted move for a piece that isn't in our state: ${pieceId}`
+          );
+        }
+      }
+    }
+    // const after = performance.now();
+    // const diff = after - now;
+    // console.log(`generation took: ${diff}ms`);
     return getMoveableSquares(piece, piecesByLocation);
   }
 }
@@ -1053,7 +1115,13 @@ TODO:
 * DONE provide sequence numbers for rejections and acceptances 
 * MAYBE TIE OPTIMISTIC MOVES TO CURRENT COORDS AND CLEAR THEM IF WE MOVE TO A NEW SQUARE
 
-* Figure out how to make everything work with move and capture processing
+* DONE-ISH Figure out how to make everything work with move and capture processing
+IN PROGRESS:
+* add logic to resolve optimistic location / actual location mismatch for getPieceById
+  functionality
+* overlay optimistic locations on piecesByLocation map (related)
+* don't roll back on color mismatch IF the relevant piece was capturable
+
 
 * Once that works, figure out how to make everything work with state snapshot processing.
 I think you can run this against just the delta that we compute?

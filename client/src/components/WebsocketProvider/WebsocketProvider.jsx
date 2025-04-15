@@ -4,7 +4,6 @@ import {
   createMoveRequest,
   keyToCoords,
   computeInitialArguments,
-  TYPE_TO_NAME,
 } from "../../utils";
 import CoordsContext from "../CoordsContext/CoordsContext";
 // CR nroyalty: replace with partysocket
@@ -350,35 +349,17 @@ function WebsocketProvider({ children }) {
 
   const submitMove = React.useCallback(
     ({ piece, toX, toY, moveType, capturedPiece, additionalMovedPiece }) => {
-      let dMoves = 1;
-      let dWhitePieces = 0;
-      let dBlackPieces = 0;
-      let dWhiteKings = 0;
-      let dBlackKings = 0;
       let incrLocalMoves = true;
       let incrLocalCaptures = false;
       if (capturedPiece) {
         incrLocalCaptures = true;
-        const pieceType = TYPE_TO_NAME[capturedPiece.type];
-        const isKing = pieceType === "king";
-        if (capturedPiece.isWhite) {
-          dWhitePieces--;
-          if (isKing) {
-            dWhiteKings--;
-          }
-        } else {
-          dBlackPieces--;
-          if (isKing) {
-            dBlackKings--;
-          }
-        }
       }
       statsHandler.current.applyLocalDelta({
-        dMoves,
-        dWhitePieces,
-        dBlackPieces,
-        dWhiteKings,
-        dBlackKings,
+        dMoves: 0,
+        dWhitePieces: 0,
+        dBlackPieces: 0,
+        dWhiteKings: 0,
+        dBlackKings: 0,
         incrLocalMoves,
         incrLocalCaptures,
       });

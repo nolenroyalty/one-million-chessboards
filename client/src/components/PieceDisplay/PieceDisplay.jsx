@@ -175,9 +175,6 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
   const capturedPiecesByIdRef = React.useRef(new Map());
   const [forceUpdate, setForceUpdate] = React.useState(0);
 
-  //   const recentMoveByPieceIdRef = React.useRef(
-  //     initialMoveAnimationState(pieceHandler.current.getMoveMapByPieceId())
-  //   );
   const recentMoveByPieceIdRef = React.useRef(new Map());
 
   const isNotVisible = React.useCallback(
@@ -208,7 +205,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
     [isNotVisible, moveIsInvisible]
   );
 
-  const getVisiblePiecesById = React.useCallback(
+  const _OLD_getVisiblePiecesById = React.useCallback(
     (piecesMap) => {
       const map = new Map();
       for (const piece of piecesMap.values()) {
@@ -225,8 +222,29 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
     [isInvisibleNowAndViaMove]
   );
 
+  const getVisiblePiecesById = React.useCallback(
+    ({ pieceIds, getPieceById }) => {
+      const map = new Map();
+      for (const pieceId of pieceIds) {
+        const piece = getPieceById(pieceId);
+        if (piece) {
+          if (isInvisibleNowAndViaMove({ piece })) {
+            continue;
+          } else {
+            map.set(pieceId, piece);
+          }
+        }
+      }
+      return map;
+    },
+    [isInvisibleNowAndViaMove]
+  );
+
   const visiblePiecesAndIdsRef = React.useRef(
-    getVisiblePiecesById(pieceHandler.current.getPiecesById())
+    getVisiblePiecesById({
+      pieceIds: pieceHandler.current.getAllPieceIds(),
+      getPieceById: (id) => pieceHandler.current.getPieceById(id),
+    })
   );
 
   const getAnimatedCoords = React.useCallback(({ pieceId, now }) => {
@@ -256,9 +274,11 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
     //
     // We could try pushing more state into a ref so that we don't need to unsub and resub here though,
     // which would potentially make panning around less scary!!
-    visiblePiecesAndIdsRef.current = getVisiblePiecesById(
-      pieceHandler.current.getPiecesById()
-    );
+    visiblePiecesAndIdsRef.current = getVisiblePiecesById({
+      pieceIds: pieceHandler.current.getAllPieceIds(),
+      getPieceById: (id) => pieceHandler.current.getPieceById(id),
+    });
+
     setForceUpdate((prev) => prev + 1);
 
     pieceHandler.current.subscribe({
@@ -272,7 +292,10 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
         const capturesToAdd = [];
         const movesToAdd = [];
         const appearancesToAdd = [];
-        const newVisiblePiecesAndIds = getVisiblePiecesById(data.piecesById);
+        const newVisiblePiecesAndIds = getVisiblePiecesById({
+          pieceIds: data.pieceIds,
+          getPieceById: (id) => pieceHandler.current.getPieceById(id),
+        });
 
         data.moves.forEach((move) => {
           const movedPiece = move.piece;

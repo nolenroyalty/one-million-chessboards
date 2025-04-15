@@ -30,7 +30,6 @@ function PanzoomBox() {
     });
 
     const handlePanzoomStart = (e) => {
-      console.log("panzoomstart");
       clearSelectedPiece();
       lastPanzoom.current = {
         ...lastPanzoom.current,
@@ -45,10 +44,8 @@ function PanzoomBox() {
     };
     elt.addEventListener("panzoomstart", handlePanzoomStart);
 
-    const handlePanzoomEnd = (e) => {
-      console.log("panzoomend");
-    };
-    elt.addEventListener("panzoomend", handlePanzoomEnd);
+    // const handlePanzoomEnd = (e) => {};
+    // elt.addEventListener("panzoomend", handlePanzoomEnd);
 
     const handlePanzoomPan = (e) => {
       const panzoomDX = e.detail.x - lastPanzoom.current.lastX;
@@ -146,7 +143,7 @@ function PanzoomBox() {
       panzoom.destroy();
       window.removeEventListener("keydown", handleKeyDown);
       elt.removeEventListener("panzoomstart", handlePanzoomStart);
-      elt.removeEventListener("panzoomend", handlePanzoomEnd);
+      //   elt.removeEventListener("panzoomend", handlePanzoomEnd);
       elt.removeEventListener("panzoompan", handlePanzoomPan);
     };
   }, [setCoords, showLargeBoard, clearSelectedPiece]);
