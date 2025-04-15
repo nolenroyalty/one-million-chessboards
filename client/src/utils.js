@@ -203,12 +203,15 @@ function addSquare({
   moveType,
   capturedPiece = null,
   additionalMovedPiece = null,
+  captureRequired = false,
 }) {
-  squares.push([x, y, { moveType, capturedPiece, additionalMovedPiece }]);
+  squares.push([
+    x,
+    y,
+    { moveType, capturedPiece, additionalMovedPiece, captureRequired },
+  ]);
 }
 
-// only partially handles en passant
-// needs to specify that we're doing a capture for it (?)
 function addMoveableSquaresForPawn({ piece, pieces, squares }) {
   const isWhite = piece.isWhite;
   const x = piece.x;
@@ -237,6 +240,7 @@ function addMoveableSquaresForPawn({ piece, pieces, squares }) {
         y: y + dy,
         moveType: MOVE_TYPES.NORMAL,
         capturedPiece,
+        captureRequired: true,
       });
     } else {
       const { isEnPassantable, capturedPiece } = enPassantable({
@@ -255,6 +259,7 @@ function addMoveableSquaresForPawn({ piece, pieces, squares }) {
           y: y + dy,
           moveType: MOVE_TYPES.EN_PASSANT,
           capturedPiece,
+          captureRequired: true,
         });
       }
     }

@@ -135,7 +135,6 @@ function makeMoveAnimationState(move) {
   });
   const endTime = move.receivedAt + animationDuration;
   const ret = {
-    // ...move,
     fromX: move.fromX,
     fromY: move.fromY,
     toX: move.piece.x,
@@ -145,16 +144,6 @@ function makeMoveAnimationState(move) {
     animationDuration,
     receivedAt: move.receivedAt,
   };
-  return ret;
-}
-
-// CR nroyalty: kill this
-function initialMoveAnimationState(moveMapByPieceId) {
-  const ret = new Map();
-  for (const move of moveMapByPieceId.values()) {
-    console.log("HERE");
-    ret.set(move.pieceId, makeMoveAnimationState(move));
-  }
   return ret;
 }
 
@@ -203,23 +192,6 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
       return isNotVisible({ x: piece.x, y: piece.y });
     },
     [isNotVisible, moveIsInvisible]
-  );
-
-  const _OLD_getVisiblePiecesById = React.useCallback(
-    (piecesMap) => {
-      const map = new Map();
-      for (const piece of piecesMap.values()) {
-        if (map.has(piece.id)) {
-          continue;
-        }
-        if (isInvisibleNowAndViaMove({ piece })) {
-          continue;
-        }
-        map.set(piece.id, piece);
-      }
-      return map;
-    },
-    [isInvisibleNowAndViaMove]
   );
 
   const getVisiblePiecesById = React.useCallback(
@@ -394,6 +366,12 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
 
         movesToAdd.forEach((move) => {
           clearSelectedPieceForId(move.piece.id);
+
+          if (capturedPiecesByIdRef.current.has(move.piece.id)) {
+            console.log(`un-deleting piece ${move.piece.id}`);
+            capturedPiecesByIdRef.current.delete(move.piece.id);
+          }
+
           let animationState;
 
           const prevAnimationState = getAnimatedCoords({
@@ -435,6 +413,11 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
             piece: appearance.piece,
             receivedAt: appearance.receivedAt,
           };
+
+          if (capturedPiecesByIdRef.current.has(appearance.piece.id)) {
+            console.log(`un-deleting piece ${appearance.piece.id}`);
+            capturedPiecesByIdRef.current.delete(appearance.piece.id);
+          }
           const animationState = makeMoveAnimationState(fakeMove);
           recentMoveByPieceIdRef.current.set(
             appearance.piece.id,

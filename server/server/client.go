@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -13,9 +14,25 @@ import (
 )
 
 const (
-	PeriodicUpdateInterval = time.Second * 5
-	activityThreshold      = time.Second * 60
+	PeriodicUpdateInterval = time.Second * 30
+	activityThreshold      = time.Second * 20
+	simulatedLatency       = 3 * time.Second
+	simulatedJitterMs      = 400
 )
+
+func getSimulatedLatency() time.Duration {
+	jitterInt := rand.Intn(simulatedJitterMs)
+	jitterSign := rand.Intn(2)
+	if jitterSign == 0 {
+		jitterInt = -jitterInt
+	}
+	jitter := time.Duration(jitterInt) * time.Millisecond
+	return simulatedLatency + jitter
+}
+
+func sleepSimulatedLatency() {
+	time.Sleep(getSimulatedLatency())
+}
 
 type PieceData struct {
 	ID              uint32    `json:"id"`
@@ -481,7 +498,7 @@ func (c *Client) SendMoveUpdates(moves []PieceMove, captures []PieceCapture) {
 	}
 
 	go func() {
-		time.Sleep(100 * time.Millisecond)
+		sleepSimulatedLatency()
 		select {
 		case <-c.done:
 			return
@@ -508,7 +525,7 @@ func (c *Client) SendInvalidMove(moveToken uint32) {
 	}
 
 	go func() {
-		time.Sleep(100 * time.Millisecond)
+		sleepSimulatedLatency()
 		select {
 		case <-c.done:
 			return
@@ -538,7 +555,7 @@ func (c *Client) SendValidMove(moveToken uint32, asOfSeqnum uint64) {
 	}
 
 	go func() {
-		time.Sleep(100 * time.Millisecond)
+		sleepSimulatedLatency()
 		select {
 		case <-c.done:
 			return

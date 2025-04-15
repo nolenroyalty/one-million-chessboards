@@ -57,6 +57,7 @@ function useStartBot({ pieceHandler, submitMove, onlyId }) {
           }
         }
       } else {
+        let data;
         for (let i = 0; i < 10; i++) {
           while (attempts < 50) {
             const pieces = Array.from(
@@ -71,13 +72,14 @@ function useStartBot({ pieceHandler, submitMove, onlyId }) {
               const squares = Array.from(moveableSquaresAndMoveType.keys());
               targetSquare =
                 Array.from(squares)[Math.floor(Math.random() * squares.length)];
-              const data = moveableSquaresAndMoveType.get(targetSquare);
-              targetMoveType = data.moveType;
+              //   const data = moveableSquaresAndMoveType.get(targetSquare);
+              //   targetMoveType = data.moveType;
+              data = moveableSquaresAndMoveType.get(targetSquare);
               break;
             }
             attempts++;
           }
-          if (targetPiece && targetSquare) {
+          if (targetPiece && targetSquare && data) {
             if (!attemptsById[targetPiece.id]) {
               attemptsById[targetPiece.id] = 0;
             }
@@ -92,7 +94,10 @@ function useStartBot({ pieceHandler, submitMove, onlyId }) {
               piece: targetPiece,
               toX: x,
               toY: y,
-              moveType: targetMoveType,
+              moveType: data.targetMoveType,
+              capturedPiece: data.capturedPiece,
+              additionalMovedPiece: data.additionalMovedPiece,
+              captureRequired: data.captureRequired,
             });
           }
         }
@@ -348,7 +353,15 @@ function WebsocketProvider({ children }) {
   useUpdateCoords({ connected, safelySendJSON });
 
   const submitMove = React.useCallback(
-    ({ piece, toX, toY, moveType, capturedPiece, additionalMovedPiece }) => {
+    ({
+      piece,
+      toX,
+      toY,
+      moveType,
+      capturedPiece,
+      additionalMovedPiece,
+      captureRequired,
+    }) => {
       let incrLocalMoves = true;
       let incrLocalCaptures = false;
       if (capturedPiece) {
@@ -374,6 +387,7 @@ function WebsocketProvider({ children }) {
           toY,
           additionalMovedPiece,
           capturedPiece,
+          captureRequired,
         });
       }
     },

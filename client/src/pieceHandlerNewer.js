@@ -11,6 +11,8 @@ const ANIMATION = {
   APPEARANCE: "appearance",
 };
 
+const REGULARLY_LOG_DEBUG_STATE = false;
+
 // It's a little confusing, but we actually really really want
 // fromX / fromY here. PieceDisplay only renders pieces that are currently
 // visible to the user. If a piece is moving *to be* visible but wasn't visible
@@ -40,41 +42,54 @@ class OptimisticState {
     this.actionsByToken = new Map(); // Map<moveToken, OptimisticAction[]>
     this.lastGroundTruthSeqnumByPieceId = new Map(); // Map<pieceId, seqNum>
     this.tokensTouchingSquare = new Map(); // Map<squareKey, Set<moveToken>>
+    this.actionId = 1;
+
+    if (REGULARLY_LOG_DEBUG_STATE) {
+      this.interval = setInterval(() => {
+        this._debugDumpState("interval");
+      }, 1000);
+    }
+  }
+
+  getIncrActionId() {
+    const id = this.actionId;
+    this.actionId++;
+    return id;
   }
 
   _debugDumpState(desc) {
-    console.log(`OptimisticState (${desc}):`);
+    console.debug(`OptimisticState (${desc}):`);
     let printed = false;
     for (const [pieceId, actions] of this.actionsByPieceId.entries()) {
-      console.log(`Piece ${pieceId}:`);
+      console.debug(`Piece ${pieceId}:`);
       printed = true;
       for (const action of actions) {
-        console.log(JSON.stringify(action, null, 2));
+        console.debug(JSON.stringify(action, null, 2));
       }
-      console.log("---");
+      console.debug("---");
     }
     if (printed) {
-      console.log("---");
+      console.debug("---");
     }
     printed = false;
     for (const [token, actions] of this.actionsByToken.entries()) {
-      console.log(`Token ${token}:`);
+      console.debug(`Token ${token}:`);
       printed = true;
       for (const action of actions) {
-        console.log(JSON.stringify(action, null, 2));
+        console.debug(JSON.stringify(action, null, 2));
       }
     }
     if (printed) {
-      console.log("---");
+      console.debug("---");
     }
     printed = false;
-    console.log("Tokens touching square:");
+    console.debug("Tokens touching square:");
     for (const [squareKey, tokens] of this.tokensTouchingSquare.entries()) {
-      console.log(`${squareKey}: ${Array.from(tokens).join(", ")}`);
+      console.debug(`${squareKey}: ${Array.from(tokens).join(", ")}`);
       printed = true;
     }
     if (printed) {
-      console.log("---");
+      console.debug("---");
     }
   }
 
@@ -129,6 +144,7 @@ class OptimisticState {
         y: move.toY,
         impactedSquares,
         moveToken,
+        actionId: this.getIncrActionId(),
       };
       actions.push(action);
       // CR nroyalty: increment capture count, increment move count,
@@ -149,6 +165,7 @@ class OptimisticState {
         pieceId: capturedPiece.id,
         impactedSquares,
         moveToken,
+        actionId: this.getIncrActionId(),
       };
       actions.push(action);
       animations.push(animateCapture({ piece: capturedPiece, receivedAt }));
@@ -204,8 +221,20 @@ class OptimisticState {
       );
     }
 
+    const actionIdsToRemove = new Set(actionsToRemove.map((a) => a.actionId));
+
     tokensAffected.forEach((token) => {
-      this.actionsByToken.delete(token);
+      const actions = this.actionsByToken.get(token);
+      if (actions) {
+        const remainingActions = actions.filter(
+          (a) => !actionIdsToRemove.has(a.actionId)
+        );
+        if (remainingActions.length === 0) {
+          this.actionsByToken.delete(token);
+        } else {
+          this.actionsByToken.set(token, remainingActions);
+        }
+      }
     });
 
     piecesAffected.forEach((pId) => {
@@ -358,6 +387,23 @@ class OptimisticState {
     return { preRevertVisualStates };
   }
 
+  revertSinglePieceId(pieceId) {
+    console.log("");
+    console.log(`reverting piece ${pieceId}`);
+    this._debugDumpState();
+    const actions = this.actionsByPieceId.get(pieceId) || [];
+    if (actions.length === 0) {
+      return null;
+    }
+    const preRevertVisualState = this.getPredictedState(pieceId);
+    this._removeActions(actions);
+    console.log("");
+    console.log(`after reverting piece ${pieceId}`);
+    this._debugDumpState();
+    console.log("");
+    return preRevertVisualState;
+  }
+
   allPredictedStatesAndPositions() {
     const predictedStateByPieceId = new Map();
     const predictedLocToPieceId = new Map();
@@ -459,13 +505,35 @@ class PieceHandler {
     toY,
     additionalMovedPiece,
     capturedPiece,
+    captureRequired,
   }) {
+    // CR nroyalty: handle pawn captures here.
     const receivedAt = performance.now();
+    let captureToUse = capturedPiece;
+    if (capturedPiece) {
+      console.log(`CAPTURED PIECE: ${capturedPiece.id}`);
+      const mostRecentCapturedPiece = this.getPieceById(capturedPiece.id);
+      if (
+        !mostRecentCapturedPiece ||
+        mostRecentCapturedPiece.x !== capturedPiece.x ||
+        mostRecentCapturedPiece.y !== capturedPiece.y
+      ) {
+        console.log(`MOST RECENT CHANGED: ${mostRecentCapturedPiece.id}`);
+        if (captureRequired) {
+          // We were making a pawn move that required a capture but the piece
+          // moved; we can almost certainly bail. I guess it's possible that
+          // another piece of the opposite color has moved into the way, but
+          // that is too much to handle...
+          return;
+        }
+        captureToUse = null;
+      }
+    }
     const animations = this.optimisticStateHandler.addOptimisticMove({
       moveToken,
       movedPiece: { piece: movedPiece, toX, toY },
       additionalMovedPiece,
-      capturedPiece,
+      capturedPiece: captureToUse,
       receivedAt,
     });
     this.broadcastAnimations({ animations, wasSnapshot: false });
@@ -687,12 +755,17 @@ class PieceHandler {
             revertPieceId(predictedPieceId);
           }
         } else {
-          // CR nroyalty: this is wrong. I think we should only delete if
-          // we have an optimistic move for this piece?
-          // override the actual move with our predicted move
           const predictedState = predictedStateByPieceId.get(pieceId);
-          if (predictedState) {
+          if (predictedState?.state === OACTION.MOVE) {
+            // override the actual move with our predicted move (hopefully it's right)
             animationsByPieceId.delete(pieceId);
+          } else if (predictedState?.state === OACTION.CAPTURE) {
+            // no way this capture is correct; the piece wasn't in the place we thought
+            // probably doesn't invalidate our move though
+            // CR nroyalty: this fails for pawn moves that require a capture
+            this.optimisticStateHandler.revertSinglePieceId(pieceId);
+            predictedStateByPieceId.delete(pieceId);
+            predictedStateToRevert.set(pieceId, predictedState);
           }
         }
       }
@@ -1060,6 +1133,7 @@ class PieceHandler {
         piecesByLocation.set(key, piece);
       }
     }
+
     for (const [pieceId, predictedState] of predictedStateByPieceId) {
       if (predictedState.state === OACTION.CAPTURE) {
         // no need to consider captures for this!

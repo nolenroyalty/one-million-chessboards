@@ -58,6 +58,24 @@ export function SelectedPieceAndSquaresContextProvider({ children }) {
     clearSelectedPiece();
   }, [showLargeBoard, clearSelectedPiece]);
 
+  React.useEffect(() => {
+    let intervalId = null;
+    const refreshMoveableSquares = () => {
+      setSelectedPieceAndSquares((prev) => ({
+        ...prev,
+        moveableSquares: pieceHandler.current.getMoveableSquares(
+          prev.selectedPiece
+        ),
+      }));
+    };
+    if (selectedPieceAndSquares.selectedPiece) {
+      intervalId = setInterval(refreshMoveableSquares, 800);
+    } else {
+      clearInterval(intervalId);
+    }
+    return () => clearInterval(intervalId);
+  }, [pieceHandler, selectedPieceAndSquares.selectedPiece]);
+
   const value = React.useMemo(
     () => ({
       selectedPiece: selectedPieceAndSquares.selectedPiece,
