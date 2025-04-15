@@ -337,7 +337,11 @@ func (s *Server) processMoves() {
 			moveReq.Client.SendInvalidMove(moveReq.Move.MoveToken)
 			continue
 		}
-		moveReq.Client.SendValidMove(moveReq.Move.MoveToken, moveResult.SeqNum)
+		if moveResult.CapturedPiece.Piece.IsEmpty() {
+			moveReq.Client.SendValidMove(moveReq.Move.MoveToken, moveResult.SeqNum, 0)
+		} else {
+			moveReq.Client.SendValidMove(moveReq.Move.MoveToken, moveResult.SeqNum, moveResult.CapturedPiece.Piece.ID)
+		}
 
 		capturedPiece := moveResult.CapturedPiece
 		movedPieces := make([]PieceMove, moveResult.Length)

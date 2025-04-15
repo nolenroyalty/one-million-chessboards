@@ -20,7 +20,7 @@ const (
 	PeriodicUpdateInterval = time.Second * 30
 	activityThreshold      = time.Second * 20
 	simulatedLatency       = 2 * time.Second
-	simulatedJitterMs      = 0
+	simulatedJitterMs      = 1
 )
 
 func getSimulatedLatency() time.Duration {
@@ -539,15 +539,17 @@ func (c *Client) SendInvalidMove(moveToken uint32) {
 	}()
 }
 
-func (c *Client) SendValidMove(moveToken uint32, asOfSeqnum uint64) {
+func (c *Client) SendValidMove(moveToken uint32, asOfSeqnum uint64, capturedPieceId uint32) {
 	message := struct {
-		Type       string `json:"type"`
-		MoveToken  uint32 `json:"moveToken"`
-		AsOfSeqnum uint64 `json:"asOfSeqnum"`
+		Type            string `json:"type"`
+		MoveToken       uint32 `json:"moveToken"`
+		AsOfSeqnum      uint64 `json:"asOfSeqnum"`
+		CapturedPieceID uint32 `json:"capturedPieceId"`
 	}{
-		Type:       "validMove",
-		MoveToken:  moveToken,
-		AsOfSeqnum: asOfSeqnum,
+		Type:            "validMove",
+		MoveToken:       moveToken,
+		AsOfSeqnum:      asOfSeqnum,
+		CapturedPieceID: capturedPieceId,
 	}
 	log.Printf("move token valid: %v", moveToken)
 

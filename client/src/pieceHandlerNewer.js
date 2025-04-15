@@ -42,6 +42,9 @@ function animateAppearance({ piece, receivedAt }) {
   return { type: ANIMATION.APPEARANCE, piece: { ...piece }, receivedAt };
 }
 
+// add the ability to add an optimistic capture after the fact; we confirm this
+// if the piece id is in the server ack, we back it out otherwise
+
 class OptimisticState {
   constructor() {
     this.actionsByPieceId = new Map(); // Map<pieceId, OptimisticAction[]>
@@ -154,7 +157,9 @@ class OptimisticState {
         moveToken,
         actionId: this.getIncrActionId(),
         couldBeACapture,
+        weThinkItWasACapture: !!capturedPiece,
       };
+
       actions.push(action);
       // CR nroyalty: increment capture count, increment move count,
       // handle promotion (simulated!)
@@ -272,11 +277,15 @@ class OptimisticState {
     const lastAction = actions[actions.length - 1];
 
     if (lastAction.type === OACTION.MOVE) {
+      const incrMoves = actions.length;
+      const incrCaptures = actions.filter((a) => a.weThinkItWasACapture).length;
       return {
         state: OACTION.MOVE,
         x: lastAction.x,
         y: lastAction.y,
         couldBeACapture: lastAction.couldBeACapture,
+        incrMoves,
+        incrCaptures,
       };
     } else if (lastAction.type === OACTION.CAPTURE) {
       return {
@@ -772,7 +781,12 @@ class PieceHandler {
             // let us capture a piece!
             if (ourPredictedState?.couldBeACapture) {
               // CR nroyalty: simulate a capture here?
-              // animationsByPieceId.delete(pieceId);
+              // nroyalty: my best idea is - when we ack a move, we can also supply
+              // the ID of the piece that the move *actually* captured.
+              //
+              // With that state, we should be able to tack on a capture here
+              // and then revert the capture if our ack doesn't include the ID
+              // of the piece that we're simulating as captured
             } else {
               revertPieceId(predictedPieceId);
             }
@@ -784,14 +798,14 @@ class PieceHandler {
             animationsByPieceId.delete(pieceId);
           } else if (predictedState?.state === OACTION.CAPTURE) {
             // no way this capture is correct; the piece wasn't in the place we thought
-            // probably doesn't invalidate our move though
-            // CR nroyalty: this fails for pawn moves that require a capture
             if (predictedState.captureRequired) {
               // we did a move (moved a pawn diagonally) that required a capture.
               // given that the capture would have failed, we need to back out
               // the entire move.
               revertPieceId(pieceId);
             } else {
+              // No capture required, not clear that this invalidates our
+              // entire move
               this.optimisticStateHandler.revertSinglePieceId(pieceId);
               predictedStateByPieceId.delete(pieceId);
               predictedStateToRevert.set(pieceId, predictedState);
@@ -1108,17 +1122,12 @@ class PieceHandler {
       return undefined;
     } else if (piece && predictedState) {
       if (predictedState.state === OACTION.CAPTURE) {
-        // CR nroyalty: this is wrong! We should indicate that the piece is simulated
-        // as being captured.
-        // console.warn(`POTENTIAL BUG`);
-        // return piece;
         return undefined;
       } else if (predictedState.state === OACTION.MOVE) {
-        // CR nroyalty: it would be nice to store additional piece metadata
-        // so that we can offer an accurate move and capture count to piece display
         return {
           ...piece,
-          moveCount: piece.moveCount + 1,
+          moveCount: piece.moveCount + predictedState.incrMoves,
+          captureCount: piece.captureCount + predictedState.incrCaptures,
           x: predictedState.x,
           y: predictedState.y,
         };
