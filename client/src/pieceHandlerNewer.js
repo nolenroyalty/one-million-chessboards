@@ -4,10 +4,14 @@ import { pieceKey, getMoveableSquares, TYPE_TO_NAME } from "./utils";
 // would give us a lot of confidence when reverting / confirming moves
 // and deciding which move to keep around. It's not obvious that we
 // need to do this, but it might be a good idea.
+//
+// Doing this removes the need to track previous captures or moves,
+// which is actually really nice! So I think we should do it.
 
 const OACTION = {
   MOVE: "move",
   CAPTURE: "capture",
+  UNCAPTURE: "uncapture",
 };
 
 const ANIMATION = {
@@ -187,16 +191,65 @@ class OptimisticState {
     }
 
     for (const a of actions) {
-      if (!this.actionsByPieceId.has(a.pieceId)) {
-        this.actionsByPieceId.set(a.pieceId, []);
-      }
-      this.actionsByPieceId.get(a.pieceId).push(a);
+      // if (!this.actionsByPieceId.has(a.pieceId)) {
+      // this.actionsByPieceId.set(a.pieceId, []);
+      // }
+      // this.actionsByPieceId.get(a.pieceId).push(a);
+      this._addActionForPieceId(a);
       this._maybeSetLastGroundTruthSeqnum(a.pieceId, groundTruthSeqNum);
       this._addForToken(moveToken, a);
       a.impactedSquares.forEach((sq) => this._addSquareTouch(sq, moveToken));
     }
 
     return animations;
+  }
+
+  _addActionForPieceId(action) {
+    if (!this.actionsByPieceId.has(action.pieceId)) {
+      this.actionsByPieceId.set(action.pieceId, []);
+    }
+    this.actionsByPieceId.get(action.pieceId).push(action);
+  }
+
+  addAfterTheFactSimulatedCapture({
+    capturingPieceId,
+    maybeCapturedPiece,
+    groundTruthSeqNum,
+    receivedAt,
+  }) {
+    const actionsForCapturingPiece =
+      this.actionsByPieceId.get(capturingPieceId) || [];
+    if (actionsForCapturingPiece.length === 0) {
+      return;
+    }
+
+    const lastActionForCapturingPiece =
+      actionsForCapturingPiece[actionsForCapturingPiece.length - 1];
+    if (lastActionForCapturingPiece.type !== OACTION.MOVE) {
+      return;
+    }
+
+    const moveTokenForLastAction = lastActionForCapturingPiece.moveToken;
+    const impactedSquares = new Set();
+    impactedSquares.add(pieceKey(maybeCapturedPiece.x, maybeCapturedPiece.y));
+    const action = {
+      type: OACTION.CAPTURE,
+      x: maybeCapturedPiece.x,
+      y: maybeCapturedPiece.y,
+      pieceId: maybeCapturedPiece.id,
+      impactedSquares,
+      moveToken: moveTokenForLastAction,
+      actionId: this.getIncrActionId(),
+      captureRequired: false,
+    };
+    this._addActionForPieceId(action);
+    this._maybeSetLastGroundTruthSeqnum(
+      maybeCapturedPiece.id,
+      groundTruthSeqNum
+    );
+    this._addForToken(moveTokenForLastAction, action);
+    const anim = animateCapture({ piece: maybeCapturedPiece, receivedAt });
+    return anim;
   }
 
   _maybeSetLastGroundTruthSeqnum(pieceId, groundTruthSeqNum) {
@@ -300,7 +353,7 @@ class OptimisticState {
     }
   }
 
-  processConfirmation(moveToken) {
+  processConfirmation({ moveToken, capturedPieceId }) {
     const confirmedActions = this.actionsByToken.get(moveToken) || [];
     if (confirmedActions.length === 0) {
       return { groundTruthUpdates: [] };
@@ -317,7 +370,15 @@ class OptimisticState {
           y: action.y,
         });
       } else if (action.type === OACTION.CAPTURE) {
-        finalStates.set(action.pieceId, { state: OACTION.CAPTURE });
+        if (action.pieceId === capturedPieceId) {
+          finalStates.set(action.pieceId, { state: OACTION.CAPTURE });
+        } else {
+          // our move succeeded, but it didn't capture the piece that we thought that it did!
+          finalStates.set(action.pieceId, {
+            state: OACTION.UNCAPTURE,
+            pieceId: action.pieceId,
+          });
+        }
       }
     });
 
@@ -326,13 +387,18 @@ class OptimisticState {
         this.lastGroundTruthSeqnumByPieceId.get(pieceId);
       if (state.state === OACTION.CAPTURE) {
         groundTruthUpdates.push({ pieceId, state: OACTION.CAPTURE });
-      } else {
+      } else if (state.state === OACTION.MOVE) {
         groundTruthUpdates.push({
           pieceId,
           state: OACTION.MOVE,
           x: state.x,
           y: state.y,
           lastGroundTruthSeqnum,
+        });
+      } else if (state.state === OACTION.UNCAPTURE) {
+        groundTruthUpdates.push({
+          pieceId,
+          state: OACTION.UNCAPTURE,
         });
       }
     });
@@ -441,6 +507,9 @@ class OptimisticState {
             pieceKey(predictedState.x, predictedState.y),
             pieceId
           );
+        } else if (predictedState.state === OACTION.UNCAPTURE) {
+          console.warn(`BUG? predicted state of UNCAPTURE for ${pieceId}`);
+          // nothing else to do
         }
       } else {
         console.warn(`BUG? No predicted state for piece ${pieceId}`);
@@ -557,16 +626,33 @@ class PieceHandler {
       additionalMovedPiece,
       capturedPiece: captureToUse,
       receivedAt,
+      groundTruthSeqNum: this.snapshotSeqnum.to,
       couldBeACapture,
       captureRequired,
     });
     this.broadcastAnimations({ animations, wasSnapshot: false });
   }
 
-  confirmOptimisticMove({ moveToken, asOfSeqnum }) {
+  // CR nroyalty: we can rework this to treat capturedPieceId separately.
+  // We should also double check that there aren't other places that we need
+  // to handle OACTION.UNCAPTURE - maybe we can mint a new type just for
+  // confirmation.
+  //
+  // We should engineer a case where we simulate a capture but then the piece
+  // moves out of the way and we un-capture it. this requires some tricky
+  // manipulation of timing.
+  //
+  // Finally, this is probably a place where we need to write some tests.
+  confirmOptimisticMove({ moveToken, asOfSeqnum, capturedPieceId }) {
+    console.log(
+      `confirmOptimisticMove: ${moveToken} ${asOfSeqnum} ${capturedPieceId}`
+    );
     // this.optimisticStateHandler._debugDumpState("before");
     const { groundTruthUpdates } =
-      this.optimisticStateHandler.processConfirmation(moveToken);
+      this.optimisticStateHandler.processConfirmation({
+        moveToken,
+        capturedPieceId,
+      });
     // this.optimisticStateHandler._debugDumpState("after");
     const animations = [];
 
@@ -614,6 +700,15 @@ class PieceHandler {
               })
             );
           }
+        } else if (ourPiece && update.state === OACTION.UNCAPTURE) {
+          animations.push(
+            animateAppearance({
+              piece: ourPiece,
+              receivedAt: performance.now(),
+            })
+          );
+        } else if (!ourPiece && update.state === OACTION.UNCAPTURE) {
+          // This is funny, but there's nothing to do.
         }
       } else {
         if (update.state === OACTION.MOVE) {
@@ -630,6 +725,18 @@ class PieceHandler {
           }
         } else if (update.state === OACTION.CAPTURE) {
           this.piecesById.delete(update.pieceId);
+        } else if (update.state === OACTION.UNCAPTURE) {
+          const ourPiece = this.piecesById.get(update.pieceId);
+          if (ourPiece) {
+            animations.push(
+              animateAppearance({
+                piece: ourPiece,
+                receivedAt: performance.now(),
+              })
+            );
+          } else {
+            // This is funny, but there's nothing to do.
+          }
         }
       }
     });
@@ -780,13 +887,23 @@ class PieceHandler {
             // we captured the piece. This is only valid if we did a move that
             // let us capture a piece!
             if (ourPredictedState?.couldBeACapture) {
-              // CR nroyalty: simulate a capture here?
-              // nroyalty: my best idea is - when we ack a move, we can also supply
-              // the ID of the piece that the move *actually* captured.
-              //
-              // With that state, we should be able to tack on a capture here
-              // and then revert the capture if our ack doesn't include the ID
-              // of the piece that we're simulating as captured
+              const capturedPieceId = pieceId;
+              const animationForCapturedPiece =
+                this.optimisticStateHandler.addAfterTheFactSimulatedCapture({
+                  capturingPieceId: predictedPiece.id,
+                  maybeCapturedPiece: anim.piece,
+                  groundTruthSeqNum: this.snapshotSeqnum.to,
+                  receivedAt,
+                });
+
+              if (animationForCapturedPiece) {
+                animationsByPieceId.set(
+                  capturedPieceId,
+                  animationForCapturedPiece
+                );
+              } else {
+                revertPieceId(predictedPieceId);
+              }
             } else {
               revertPieceId(predictedPieceId);
             }
@@ -1062,15 +1179,9 @@ class PieceHandler {
           seqNum: capture.seqNum,
         });
         if (ourPiece === undefined) {
-          // Do nothing?
-          // Maybe we can still deal with invalidation if we get a capture
-          // and it references a piece with x and y coordinates that disagree
-          // with our optimistic update
+          // probably a capture for somewhere we're not looking anymore?
         } else {
           this.piecesById.delete(ourPiece.id);
-          // INVALIDATION: handle the case that we have a simulated move active
-          // for a piece that was captured
-
           const pieceType = TYPE_TO_NAME[ourPiece.type];
           const wasWhite = ourPiece.isWhite;
           const wasKing = pieceType === "king";

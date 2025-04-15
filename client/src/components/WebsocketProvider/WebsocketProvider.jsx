@@ -204,6 +204,7 @@ function useWebsocket({
           pieceHandler.current.confirmOptimisticMove({
             moveToken: data.moveToken,
             asOfSeqnum: data.asOfSeqnum,
+            capturedPieceId: data.capturedPieceId,
           });
         } else if (data.type === "invalidMove") {
           pieceHandler.current.rejectOptimisticMove({
