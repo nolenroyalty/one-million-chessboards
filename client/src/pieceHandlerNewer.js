@@ -1294,4 +1294,6 @@ And relatedly we need to display whether we're connected
 DONE ^
 
 Don't forget that you need to fix the zoomed out view :(
+
+DONE ^ (could be better)
  */
