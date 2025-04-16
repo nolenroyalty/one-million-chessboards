@@ -134,6 +134,10 @@ function makeMoveAnimationState(move) {
     maxMoveDistance: MAX_DMOVE,
   });
   const endTime = move.receivedAt + animationDuration;
+  // we allow noops to make the case that a piece appears and then moves
+  // much smoother. It's an artifact of a previous implementation and there's
+  // a chance we don't actually need it anymore, but it's cheap to support.
+  const noop = move.fromX === move.piece.x && move.fromY === move.piece.y;
   const ret = {
     fromX: move.fromX,
     fromY: move.fromY,
@@ -143,6 +147,7 @@ function makeMoveAnimationState(move) {
     endTime,
     animationDuration,
     receivedAt: move.receivedAt,
+    noop,
   };
   return ret;
 }
@@ -222,17 +227,24 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
   const getAnimatedCoords = React.useCallback(({ pieceId, now }) => {
     const recentMove = recentMoveByPieceIdRef.current.get(pieceId);
     if (recentMove) {
-      const { fromX, fromY, toX, toY, receivedAt, endTime, animationDuration } =
-        recentMove;
+      const {
+        fromX,
+        fromY,
+        toX,
+        toY,
+        receivedAt,
+        endTime,
+        animationDuration,
+        noop,
+      } = recentMove;
       if (now > endTime) {
-        return { x: toX, y: toY, finished: true };
+        return { x: toX, y: toY, noop, finished: true };
       }
-      //   console.log(`now: ${now}, recentMove: ${JSON.stringify(recentMove)}`);
       const elapsed = now - receivedAt;
       const progress = easeInOutSquare(elapsed / animationDuration);
       const x = fromX + (toX - fromX) * progress;
       const y = fromY + (toY - fromY) * progress;
-      return { x, y, finished: false };
+      return { x, y, finished: false, noop };
     }
     return null;
   }, []);
@@ -500,18 +512,18 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
           maybeSetRefTransform(ref, move.toX, move.toY);
           continue;
         }
-        const { x: animatedX, y: animatedY, finished } = maybeAnimated;
-        const { x, y } = getScreenRelativeCoords({
-          x: animatedX,
-          y: animatedY,
-          startingX,
-          startingY,
-        });
-        if (!finished) {
+        if (!maybeAnimated.noop) {
+          const { x: animatedX, y: animatedY } = maybeAnimated;
+          const { x, y } = getScreenRelativeCoords({
+            x: animatedX,
+            y: animatedY,
+            startingX,
+            startingY,
+          });
           maybeSetRefTransform(ref, x, y);
+        }
+        if (!maybeAnimated.finished) {
           toKeep.set(move.pieceId, move);
-        } else {
-          maybeSetRefTransform(ref, x, y);
         }
       }
       recentMoveByPieceIdRef.current = toKeep;

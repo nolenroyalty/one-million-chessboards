@@ -18,6 +18,8 @@ export function CoordsContextProvider({ children }) {
     y: initialArgs.y,
   });
 
+  const { hash, clearStoredHash } = useHash();
+
   const setCoords = React.useCallback(
     (newCoordsOrFn, updateHash = true) => {
       setRawCoords((prev) => {
@@ -39,6 +41,7 @@ export function CoordsContextProvider({ children }) {
             const url = new URL(window.location.href);
             url.hash = `${x},${y}`;
             window.history.replaceState({}, "", url);
+            clearStoredHash();
           }, 120);
         }
         return {
@@ -47,14 +50,17 @@ export function CoordsContextProvider({ children }) {
         };
       });
     },
-    [pieceHandler]
+    [pieceHandler, clearStoredHash]
   );
 
-  const hash = useHash();
+  console.log(`hash outside: ${hash}`);
   React.useEffect(() => {
+    console.log("hash in coords useeffect", hash);
     if (hash && hash !== "") {
       const initialArgs = computeInitialArguments(hash);
+      console.log("initialArgs", initialArgs);
       const { x, y } = initialArgs;
+      console.log("x, y", x, y);
       if (x === null || y === null) {
         return;
       }

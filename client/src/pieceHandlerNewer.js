@@ -1,13 +1,6 @@
 import { pieceKey, getMoveableSquares, TYPE_TO_NAME } from "./utils";
 
-// CR nroyalty: it's a little annoying, but storing a seqnum per piece
-// would give us a lot of confidence when reverting / confirming moves
-// and deciding which move to keep around. It's not obvious that we
-// need to do this, but it might be a good idea.
-//
-// Doing this removes the need to track previous captures or moves,
-// which is actually really nice! So I think we should do it.
-
+// CR nroyalty: figure out how to remove seqnums from captures?
 const OACTION = {
   MOVE: "move",
   CAPTURE: "capture",
@@ -45,14 +38,11 @@ function animateAppearance({ piece, receivedAt }) {
   return { type: ANIMATION.APPEARANCE, piece: { ...piece }, receivedAt };
 }
 
-// add the ability to add an optimistic capture after the fact; we confirm this
-// if the piece id is in the server ack, we back it out otherwise
-
 class OptimisticState {
   constructor() {
-    this.actionsByPieceId = new Map(); // Map<pieceId, OptimisticAction[]>
-    this.actionsByToken = new Map(); // Map<moveToken, OptimisticAction[]>
-    this.tokensTouchingSquare = new Map(); // Map<squareKey, Set<moveToken>>
+    this.actionsByPieceId = new Map();
+    this.actionsByToken = new Map();
+    this.tokensTouchingSquare = new Map();
     this.actionId = 1;
 
     if (REGULARLY_LOG_DEBUG_STATE) {
@@ -426,6 +416,13 @@ class OptimisticState {
 
     return { preRevertVisualStates };
   }
+
+  revertAll() {
+    const allTokens = new Set(this.actionsByToken.keys());
+    const allPieceIds = new Set(this.actionsByPieceId.keys());
+    return this.processRevert({ tokens: allTokens, pieceIds: allPieceIds });
+  }
+
   revertSinglePieceId(pieceId) {
     console.log(`Single piece revert / ${pieceId}`);
     const actions = this.actionsByPieceId.get(pieceId) || [];
@@ -485,6 +482,33 @@ class PieceHandler {
     // CR nroyalty: implement this...
     this.cachedCombinedView = null;
     this.isCombinedViewCacheValid = false;
+    this.connected = false;
+  }
+
+  setConnected(connected) {
+    const wasConnected = this.connected;
+    const nowConnected = connected;
+    this.connected = connected;
+    if (wasConnected && !nowConnected) {
+      console.log(`disconnected - reverting optimistic state, etc`);
+      const { preRevertVisualStates } = this.optimisticStateHandler.revertAll();
+      this.activeCaptures = [];
+      const receivedAt = performance.now();
+      const animations = [];
+      for (const [pieceId, visualState] of preRevertVisualStates.entries()) {
+        const animation = this.animationForRevertedPiece({
+          pieceId,
+          preRevertVisualState: visualState,
+          receivedAt,
+        });
+        if (animation) {
+          animations.push(animation);
+        }
+      }
+      if (animations.length > 0) {
+        this.broadcastAnimations({ animations, wasSnapshot: false });
+      }
+    }
   }
 
   _invalidateCaches() {
@@ -493,6 +517,9 @@ class PieceHandler {
   }
 
   getIncrMoveToken() {
+    if (this.moveToken > 65000) {
+      this.moveToken = 0;
+    }
     this.moveToken++;
     return this.moveToken;
   }
@@ -548,7 +575,6 @@ class PieceHandler {
     const receivedAt = performance.now();
     let captureToUse = capturedPiece;
     if (capturedPiece) {
-      console.log(`CAPTURED PIECE: ${capturedPiece.id}`);
       // CR nroyalty: do you want to use getPieceById here?
       const mostRecentCapturedPiece = this.getPieceById(capturedPiece.id);
       if (
@@ -556,7 +582,6 @@ class PieceHandler {
         mostRecentCapturedPiece.x !== capturedPiece.x ||
         mostRecentCapturedPiece.y !== capturedPiece.y
       ) {
-        console.log(`MOST RECENT CHANGED: ${mostRecentCapturedPiece.id}`);
         if (captureRequired) {
           // We were making a pawn move that required a capture but the piece
           // moved; we can almost certainly bail. I guess it's possible that
@@ -586,9 +611,6 @@ class PieceHandler {
   //
   // Finally, this is probably a place where we need to write some tests.
   confirmOptimisticMove({ moveToken, asOfSeqnum, capturedPieceId }) {
-    console.log(
-      `confirmOptimisticMove: ${moveToken} ${asOfSeqnum} ${capturedPieceId}`
-    );
     // this.optimisticStateHandler._debugDumpState("before");
     const { groundTruthUpdates } =
       this.optimisticStateHandler.processConfirmation({
@@ -691,41 +713,16 @@ class PieceHandler {
       }
     );
     const animations = [];
+    const receivedAt = performance.now();
+
     for (const [pieceId, visualState] of preRevertVisualStates.entries()) {
-      const ourPiece = this.piecesById.get(pieceId);
-      if (!ourPiece && visualState.state === OACTION.CAPTURE) {
-        // nothing to do!
-      } else if (ourPiece && visualState.state === OACTION.CAPTURE) {
-        // There's a piece in the server state that we captured optimistically,
-        // revert it by re-appearing it
-        animations.push(
-          animateAppearance({ piece: ourPiece, receivedAt: performance.now() })
-        );
-      } else if (ourPiece && visualState.state === OACTION.MOVE) {
-        // There's a piece in the server state that we moved optimistically,
-        // maybe revert it if it's not in the right spot (it probably isn't)
-        const ourX = ourPiece.x;
-        const ourY = ourPiece.y;
-        const visualX = visualState.x;
-        const visualY = visualState.y;
-        if (ourX !== visualX || ourY !== visualY) {
-          console.log(
-            `reverting move for ${ourPiece.id} from ${ourX},${ourY} to ${visualX},${visualY}`
-          );
-          const move = animateMove({
-            fromX: visualX,
-            fromY: visualY,
-            piece: ourPiece,
-            receivedAt: performance.now(),
-          });
-          animations.push(move);
-        }
-      } else if (!ourPiece && visualState.state === OACTION.MOVE) {
-        // ok SO this is tricky.
-        // it feels like we need to simulate a capture for a piece that doesn't exist.
-        // but if the piece doesn't exist, we should already have simulated the capture,
-        // unless we've moved to another area of the grid.
-        // it's probably fine to do nothing here.
+      const animation = this.animationForRevertedPiece({
+        pieceId,
+        preRevertVisualState: visualState,
+        receivedAt,
+      });
+      if (animation) {
+        animations.push(animation);
       }
     }
     if (animations.length > 0) {
@@ -864,27 +861,55 @@ class PieceHandler {
     }
 
     for (const [pieceId, predictedState] of predictedStateToRevert) {
-      const ourPiece = this.piecesById.get(pieceId);
-      if (!ourPiece && predictedState.state === OACTION.CAPTURE) {
-        // convenient. Nothing to do.
-        animationsByPieceId.delete(pieceId);
-      } else if (!ourPiece && predictedState.state === OACTION.MOVE) {
-        // we *should* already have a capture animation here
-      } else if (ourPiece && predictedState.state === OACTION.CAPTURE) {
-        const appearance = animateAppearance({ piece: ourPiece, receivedAt });
-        animationsByPieceId.set(pieceId, appearance);
-      } else if (ourPiece && predictedState.state === OACTION.MOVE) {
-        const move = animateMove({
-          piece: ourPiece,
-          receivedAt,
-          fromX: predictedState.x,
-          fromY: predictedState.y,
-        });
-        animationsByPieceId.set(pieceId, move);
+      const animation = this.animationForRevertedPiece({
+        pieceId,
+        preRevertVisualState: predictedState,
+        receivedAt,
+      });
+      // nroyalty: in the past we deleted here if animation was null. Consider
+      // bringing that back if you see weird bugs, idk.
+      if (animation) {
+        animationsByPieceId.set(pieceId, animation);
       }
     }
 
-    return { processAnimationsByPieceId: animationsByPieceId };
+    return { processedAnimationsByPieceId: animationsByPieceId };
+  }
+
+  animationForRevertedPiece({ pieceId, preRevertVisualState, receivedAt }) {
+    const ourPiece = this.piecesById.get(pieceId);
+    if (!ourPiece && preRevertVisualState.state === OACTION.CAPTURE) {
+      // We simulated a capture, it was wrong, but we don't have a piece.
+      // This could mean that we're looking somewhere else, or that the
+      // piece was captured by a different move. Nothing to do.
+      return null;
+    } else if (!ourPiece && preRevertVisualState.state === OACTION.MOVE) {
+      // We simulated a move and it was wrong but we don't have the piece anymore.
+      // If the piece was captured we've already animated a capture for it.
+      // We can't revert it back to its position (we don't have it!) so nothing to do.
+      return null;
+    } else if (ourPiece && preRevertVisualState.state === OACTION.CAPTURE) {
+      // We simulated a capture but it was wrong! Make the piece appear
+      return animateAppearance({ piece: ourPiece, receivedAt });
+    } else if (ourPiece && preRevertVisualState.state === OACTION.MOVE) {
+      const ourX = ourPiece.x;
+      const ourY = ourPiece.y;
+      const oldX = preRevertVisualState.x;
+      const oldY = preRevertVisualState.y;
+      if (ourX !== oldX || ourY !== oldY) {
+        // Animate our piece back to its last known state
+        return animateMove({
+          piece: ourPiece,
+          receivedAt,
+          fromX: oldX,
+          fromY: oldY,
+        });
+      } else {
+        // We got lucky and our piece is in the right spot? maybe someone
+        // else moved it there already.
+        return null;
+      }
+    }
   }
 
   handleSnapshot({ snapshot }) {
@@ -971,11 +996,11 @@ class PieceHandler {
           stalePieceCount++;
           piecesById.set(piece.id, oldPiece);
         } else {
-          // if (piece.id === 10617952) {
-          //   console.log(
-          //     `SNAPSHOT: seqnum (${oldPiece.seqnum} | ${snapshot.seqnum})equal for ${piece.id} (oldx: ${oldPiece.x}, oldy: ${oldPiece.y}, newx: ${piece.x}, newy: ${piece.y})`
-          //   );
-          // }
+          if (oldPiece.x !== piece.x || oldPiece.y !== piece.y) {
+            console.warn(
+              `BUG? piece ${piece.id} has same seqnum but different coords`
+            );
+          }
         }
       } else {
         // No need to compute appearances if the snapshot is far away from our
@@ -1017,13 +1042,13 @@ class PieceHandler {
       to: snapshot.endingSeqnum,
     };
 
-    const { processAnimationsByPieceId } = this.processGroundTruthAnimations({
+    const { processedAnimationsByPieceId } = this.processGroundTruthAnimations({
       animationsByPieceId,
       receivedAt,
     });
 
     this.broadcastAnimations({
-      animations: processAnimationsByPieceId.values(),
+      animations: processedAnimationsByPieceId.values(),
       wasSnapshot: true,
     });
   }
@@ -1113,14 +1138,14 @@ class PieceHandler {
       dBlackKings,
     });
 
-    const { processAnimationsByPieceId } = this.processGroundTruthAnimations({
+    const { processedAnimationsByPieceId } = this.processGroundTruthAnimations({
       animationsByPieceId,
       receivedAt,
     });
 
     this.broadcastAnimations({
       wasSnapshot: false,
-      animations: processAnimationsByPieceId.values(),
+      animations: processedAnimationsByPieceId.values(),
     });
   }
 
@@ -1241,9 +1266,13 @@ IN PROGRESS:
 * overlay optimistic locations on piecesByLocation map (related)
 * don't roll back on color mismatch IF the relevant piece was capturable
 
+DONE ^
+
 
 * Once that works, figure out how to make everything work with state snapshot processing.
 I think you can run this against just the delta that we compute?
+
+DONE ^
 
 * Remember, the most controversial rule is "if you currently have a 
 simulated piece position that occupies a square that is now occupied by a piece
@@ -1253,8 +1282,16 @@ we need to create an additional fake optimistic move associated with the relevan
 move token? Alternatively, maybe we can just handle it in our function that creates
 a simulated view of the world?? Doing that seems preferrable if we can swing it
 
+DONE ^
+
 Finally, don't forget that we need to remove all optimistic moves 
-when we disconnect from the server. And relatedly we need to display whether we're connected
+when we disconnect from the server. 
+
+DONE ^
+
+And relatedly we need to display whether we're connected
+
+DONE ^
 
 Don't forget that you need to fix the zoomed out view :(
  */

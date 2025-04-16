@@ -119,6 +119,8 @@ function useStartBot({ pieceHandler, submitMove, onlyId }) {
       clearInterval(botInterval);
     };
   }, [pieceHandler, submitMove, started, onlyId]);
+
+  return { setRunBot: setStarted };
 }
 
 function useWebsocket({
@@ -327,9 +329,23 @@ export const WebsocketContext = React.createContext();
 
 function WebsocketProvider({ children }) {
   const websocketRef = React.useRef(null);
-  const [connected, setConnected] = React.useState(false);
+  const [connected, _setConnected] = React.useState(false);
   const { pieceHandler, statsHandler, minimapHandler } =
     React.useContext(HandlersContext);
+
+  const setConnected = React.useCallback(
+    (valueOrFunction) => {
+      _setConnected((prev) => {
+        const newValue =
+          typeof valueOrFunction === "function"
+            ? valueOrFunction(prev)
+            : valueOrFunction;
+        pieceHandler.current.setConnected(newValue);
+        return newValue;
+      });
+    },
+    [pieceHandler]
+  );
 
   const safelySendJSON = React.useCallback((json) => {
     const ws = websocketRef.current;
@@ -399,12 +415,12 @@ function WebsocketProvider({ children }) {
     [pieceHandler, safelySendJSON, statsHandler]
   );
 
+  useStartBot({ pieceHandler, submitMove });
+
   const value = React.useMemo(
     () => ({ connected, safelySendJSON, submitMove }),
     [connected, safelySendJSON, submitMove]
   );
-
-  useStartBot({ pieceHandler, submitMove });
 
   return (
     <WebsocketContext.Provider value={value}>

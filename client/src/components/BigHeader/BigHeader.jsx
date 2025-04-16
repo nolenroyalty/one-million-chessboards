@@ -29,7 +29,7 @@ const Wrapper = styled.header`
   transform: translate(-50%, 0);
   background-color: var(--color-neutral-950);
   animation: ${moveUp} 1s ease-in-out both;
-  animation-delay: 1s;
+  animation-delay: 2s;
   background-image:
     linear-gradient(#0c4a6e55 0.8px, transparent 0.8px),
     linear-gradient(to right, #0c4a6e55 0.8px, #0a0a0a 0.8px);

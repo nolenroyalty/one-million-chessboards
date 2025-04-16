@@ -16,6 +16,9 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// CR nroyalty: send seqnum with global stats and then updating global stats is
+// pretty easy.
+
 const (
 	PeriodicUpdateInterval = time.Second * 5
 	activityThreshold      = time.Second * 20
@@ -458,13 +461,16 @@ func (c *Client) SendStateSnapshot(snapshot StateSnapshot) {
 		return
 	}
 
-	select {
-	case <-c.done:
-		return
-	case c.send <- data:
-	default:
-		c.server.unregister <- c
-	}
+	go func() {
+		sleepSimulatedLatency()
+		select {
+		case <-c.done:
+			return
+		case c.send <- data:
+		default:
+			c.server.unregister <- c
+		}
+	}()
 }
 
 // PERFORMANCE nroyalty: To avoid the cost of sending information about each piece
@@ -513,6 +519,8 @@ func (c *Client) SendInvalidMove(moveToken uint32) {
 		MoveToken: moveToken,
 	}
 
+	log.Printf("sending invalid move: %v", message)
+
 	data, err := json.Marshal(message)
 	if err != nil {
 		log.Printf("Error marshaling invalid move: %v", err)
@@ -543,7 +551,6 @@ func (c *Client) SendValidMove(moveToken uint32, asOfSeqnum uint64, capturedPiec
 		AsOfSeqnum:      asOfSeqnum,
 		CapturedPieceID: capturedPieceId,
 	}
-	log.Printf("move token valid: %v", moveToken)
 
 	data, err := json.Marshal(message)
 	if err != nil {

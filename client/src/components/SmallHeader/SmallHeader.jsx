@@ -1,6 +1,6 @@
 import React from "react";
 import styled from "styled-components";
-
+import { WebsocketContext } from "../WebsocketProvider/WebsocketProvider";
 const Wrapper = styled.div`
   /* width: calc(100% + 2 * var(--main-side-padding)); */
   width: 100%;
@@ -15,6 +15,7 @@ const Wrapper = styled.div`
   padding: 0 var(--main-side-padding);
   border-bottom: 1px solid var(--color-sky-700);
   margin-bottom: 0.25rem;
+  position: relative;
 `;
 
 const Title = styled.span`
@@ -22,9 +23,43 @@ const Title = styled.span`
   font-family: "Sunset Demi";
 `;
 
+const DisconnectedDiv = styled.div`
+  position: absolute;
+  top: 0%;
+  left: 50%;
+  transform: translate(-50%, var(--translate-y));
+  background-color: var(--background-color);
+  color: var(--color-neutral-100);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0 0 0.25rem 0.25rem;
+  transition:
+    transform 0.5s ease-in-out 1.5s,
+    background-color 0.5s ease-in-out 0.2s;
+  min-width: 13ch;
+  text-align: center;
+`;
+
+function MaybeShowDisconnected() {
+  const { connected } = React.useContext(WebsocketContext);
+  const text = connected ? "Connected" : "Disconnected";
+  return (
+    <DisconnectedDiv
+      style={{
+        "--translate-y": connected ? "-115%" : "0%",
+        "--background-color": connected
+          ? "var(--color-blue-800)"
+          : "var(--color-pink-400)",
+      }}
+    >
+      {text}
+    </DisconnectedDiv>
+  );
+}
+
 function SmallHeader() {
   return (
     <Wrapper>
+      <MaybeShowDisconnected />
       <Title>One Million Chessboards</Title>
     </Wrapper>
   );

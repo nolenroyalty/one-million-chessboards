@@ -7,11 +7,20 @@ function getHash() {
 export function useHash() {
   const [hash, setHash] = React.useState(getHash());
   React.useEffect(() => {
-    const handleHashChange = () => setHash(getHash());
+    const handleHashChange = () => {
+      const h = getHash();
+      console.log("hashchange", h);
+      setHash(h);
+    };
     window.addEventListener("hashchange", handleHashChange);
     return () => {
       window.removeEventListener("hashchange", handleHashChange);
     };
   }, []);
-  return hash;
+
+  const clearStoredHash = React.useCallback(() => {
+    setHash("");
+  }, [setHash]);
+
+  return { hash, clearStoredHash };
 }
