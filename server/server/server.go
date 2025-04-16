@@ -338,9 +338,9 @@ func (s *Server) processMoves() {
 			continue
 		}
 		if moveResult.CapturedPiece.Piece.IsEmpty() {
-			moveReq.Client.SendValidMove(moveReq.Move.MoveToken, moveResult.SeqNum, 0)
+			moveReq.Client.SendValidMove(moveReq.Move.MoveToken, moveResult.Seqnum, 0)
 		} else {
-			moveReq.Client.SendValidMove(moveReq.Move.MoveToken, moveResult.SeqNum, moveResult.CapturedPiece.Piece.ID)
+			moveReq.Client.SendValidMove(moveReq.Move.MoveToken, moveResult.Seqnum, moveResult.CapturedPiece.Piece.ID)
 		}
 
 		capturedPiece := moveResult.CapturedPiece
@@ -359,7 +359,7 @@ func (s *Server) processMoves() {
 				IsWhite:      moveResult.MovedPieces[i].Piece.IsWhite,
 				MoveCount:    moveResult.MovedPieces[i].Piece.MoveCount,
 				CaptureCount: moveResult.MovedPieces[i].Piece.CaptureCount,
-				SeqNum:       moveResult.SeqNum,
+				Seqnum:       moveResult.Seqnum,
 			}
 		}
 
@@ -370,11 +370,11 @@ func (s *Server) processMoves() {
 
 			captureMove = &PieceCapture{
 				CapturedPieceID: capturedPiece.Piece.ID,
-				SeqNum:          moveResult.SeqNum,
+				Seqnum:          moveResult.Seqnum,
 			}
 		}
 
-		s.persistentBoard.ApplyMove(moveReq.Move, moveResult.SeqNum)
+		s.persistentBoard.ApplyMove(moveReq.Move, moveResult.Seqnum)
 
 		// CR nroyalty: this could block; move it to the background goroutine instead
 		// More generally, think about the buffers we have here

@@ -53,7 +53,7 @@ class OptimisticState {
   constructor() {
     this.actionsByPieceId = new Map(); // Map<pieceId, OptimisticAction[]>
     this.actionsByToken = new Map(); // Map<moveToken, OptimisticAction[]>
-    this.lastGroundTruthSeqnumByPieceId = new Map(); // Map<pieceId, seqNum>
+    this.lastGroundTruthSeqnumByPieceId = new Map(); // Map<pieceId, seqnum>
     this.tokensTouchingSquare = new Map(); // Map<squareKey, Set<moveToken>>
     this.actionId = 1;
 
@@ -136,7 +136,7 @@ class OptimisticState {
     additionalMovedPiece,
     capturedPiece,
     receivedAt,
-    groundTruthSeqNum,
+    groundTruthSeqnum,
     couldBeACapture,
     captureRequired,
   }) {
@@ -165,8 +165,6 @@ class OptimisticState {
       };
 
       actions.push(action);
-      // CR nroyalty: increment capture count, increment move count,
-      // handle promotion (simulated!)
       const fromX = move.piece.x;
       const fromY = move.piece.y;
       const piece = { ...move.piece, x: move.toX, y: move.toY };
@@ -191,12 +189,8 @@ class OptimisticState {
     }
 
     for (const a of actions) {
-      // if (!this.actionsByPieceId.has(a.pieceId)) {
-      // this.actionsByPieceId.set(a.pieceId, []);
-      // }
-      // this.actionsByPieceId.get(a.pieceId).push(a);
       this._addActionForPieceId(a);
-      this._maybeSetLastGroundTruthSeqnum(a.pieceId, groundTruthSeqNum);
+      this._maybeSetLastGroundTruthSeqnum(a.pieceId, groundTruthSeqnum);
       this._addForToken(moveToken, a);
       a.impactedSquares.forEach((sq) => this._addSquareTouch(sq, moveToken));
     }
@@ -214,7 +208,7 @@ class OptimisticState {
   addAfterTheFactSimulatedCapture({
     capturingPieceId,
     maybeCapturedPiece,
-    groundTruthSeqNum,
+    groundTruthSeqnum,
     receivedAt,
   }) {
     const actionsForCapturingPiece =
@@ -245,34 +239,34 @@ class OptimisticState {
     this._addActionForPieceId(action);
     this._maybeSetLastGroundTruthSeqnum(
       maybeCapturedPiece.id,
-      groundTruthSeqNum
+      groundTruthSeqnum
     );
     this._addForToken(moveTokenForLastAction, action);
     const anim = animateCapture({ piece: maybeCapturedPiece, receivedAt });
     return anim;
   }
 
-  _maybeSetLastGroundTruthSeqnum(pieceId, groundTruthSeqNum) {
+  _maybeSetLastGroundTruthSeqnum(pieceId, groundTruthSeqnum) {
     if (!this.lastGroundTruthSeqnumByPieceId.has(pieceId)) {
-      this.lastGroundTruthSeqnumByPieceId.set(pieceId, groundTruthSeqNum);
+      this.lastGroundTruthSeqnumByPieceId.set(pieceId, groundTruthSeqnum);
     } else {
-      const lastSeqNum = this.lastGroundTruthSeqnumByPieceId.get(pieceId);
-      if (lastSeqNum < groundTruthSeqNum) {
-        this.lastGroundTruthSeqnumByPieceId.set(pieceId, groundTruthSeqNum);
+      const lastSeqnum = this.lastGroundTruthSeqnumByPieceId.get(pieceId);
+      if (lastSeqnum < groundTruthSeqnum) {
+        this.lastGroundTruthSeqnumByPieceId.set(pieceId, groundTruthSeqnum);
       }
     }
   }
 
-  maybeBumpGroundTruthSeqnum(pieceId, groundTruthSeqNum) {
+  maybeBumpGroundTruthSeqnum(pieceId, groundTruthSeqnum) {
     // if we're not tracking this piece, no need to maintain seqnum
     // state for it
     if (!this.lastGroundTruthSeqnumByPieceId.has(pieceId)) {
       return;
     }
 
-    const lastSeqNum = this.lastGroundTruthSeqnumByPieceId.get(pieceId);
-    if (lastSeqNum < groundTruthSeqNum) {
-      this.lastGroundTruthSeqnumByPieceId.set(pieceId, groundTruthSeqNum);
+    const lastSeqnum = this.lastGroundTruthSeqnumByPieceId.get(pieceId);
+    if (lastSeqnum < groundTruthSeqnum) {
+      this.lastGroundTruthSeqnumByPieceId.set(pieceId, groundTruthSeqnum);
     }
   }
 
@@ -479,7 +473,7 @@ class OptimisticState {
 
     return { preRevertVisualStates };
   }
-
+  // CR nroyalty: should this use UNCAPTURE?
   revertSinglePieceId(pieceId) {
     console.log(`Single piece revert / ${pieceId}`);
     const actions = this.actionsByPieceId.get(pieceId) || [];
@@ -536,6 +530,7 @@ class PieceHandler {
     this.activeMoves = [];
     this.activeCaptures = [];
 
+    // CR nroyalty: implement this...
     this.cachedCombinedView = null;
     this.isCombinedViewCacheValid = false;
   }
@@ -598,11 +593,11 @@ class PieceHandler {
     captureRequired,
     couldBeACapture,
   }) {
-    // CR nroyalty: handle pawn captures here.
     const receivedAt = performance.now();
     let captureToUse = capturedPiece;
     if (capturedPiece) {
       console.log(`CAPTURED PIECE: ${capturedPiece.id}`);
+      // CR nroyalty: do you want to use getPieceById here?
       const mostRecentCapturedPiece = this.getPieceById(capturedPiece.id);
       if (
         !mostRecentCapturedPiece ||
@@ -626,7 +621,7 @@ class PieceHandler {
       additionalMovedPiece,
       capturedPiece: captureToUse,
       receivedAt,
-      groundTruthSeqNum: this.snapshotSeqnum.to,
+      groundTruthSeqnum: this.snapshotSeqnum.to,
       couldBeACapture,
       captureRequired,
     });
@@ -892,7 +887,7 @@ class PieceHandler {
                 this.optimisticStateHandler.addAfterTheFactSimulatedCapture({
                   capturingPieceId: predictedPiece.id,
                   maybeCapturedPiece: anim.piece,
-                  groundTruthSeqNum: this.snapshotSeqnum.to,
+                  groundTruthSeqnum: this.snapshotSeqnum.to,
                   receivedAt,
                 });
 
@@ -1007,7 +1002,7 @@ class PieceHandler {
     });
 
     this.activeMoves.forEach((move) => {
-      if (move.seqNum > snapshot.startingSeqNum) {
+      if (move.seqnum > snapshot.startingSeqnum) {
         const movePieceId = move.piece.id;
         const ourPiece = piecesById.get(movePieceId);
         activeMoves.push(move);
@@ -1037,7 +1032,7 @@ class PieceHandler {
     });
 
     this.activeCaptures.forEach((capture) => {
-      if (capture.seqNum > snapshot.startingSeqNum) {
+      if (capture.seqnum > snapshot.startingSeqnum) {
         activeCaptures.push(capture);
         if (piecesById.has(capture.pieceId)) {
           piecesById.delete(capture.pieceId);
@@ -1093,8 +1088,8 @@ class PieceHandler {
     this.activeCaptures = activeCaptures;
     this.piecesById = piecesById;
     this.snapshotSeqnum = {
-      from: snapshot.startingSeqNum,
-      to: snapshot.endingSeqNum,
+      from: snapshot.startingSeqnum,
+      to: snapshot.endingSeqnum,
     };
 
     const { processAnimationsByPieceId } = this.processGroundTruthAnimations({
@@ -1119,7 +1114,7 @@ class PieceHandler {
     const animationsByPieceId = new Map();
 
     moves.forEach((move) => {
-      if (move.seqNum <= this.snapshotSeqnum.from) {
+      if (move.seqnum <= this.snapshotSeqnum.from) {
         // nothing to do!
       } else {
         const ourPiece = this.piecesById.get(move.pieceId);
@@ -1138,7 +1133,7 @@ class PieceHandler {
           captureCount: move.captureCount,
           justDoubleMoved,
         };
-        this.activeMoves.push({ seqNum: move.seqNum, piece: movedPiece });
+        this.activeMoves.push({ seqnum: move.seqnum, piece: movedPiece });
         if (ourPiece === undefined) {
           const animation = animateAppearance({
             piece: movedPiece,
@@ -1170,13 +1165,13 @@ class PieceHandler {
     // around server restarts and captures getting reverted, which we'll need to
     // figure out down the line
     captures.forEach((capture) => {
-      if (capture.seqNum <= this.snapshotSeqnum.from) {
+      if (capture.seqnum <= this.snapshotSeqnum.from) {
         // do nothing
       } else {
         const ourPiece = this.piecesById.get(capture.capturedPieceId);
         this.activeCaptures.push({
           pieceId: capture.capturedPieceId,
-          seqNum: capture.seqNum,
+          seqnum: capture.seqnum,
         });
         if (ourPiece === undefined) {
           // probably a capture for somewhere we're not looking anymore?

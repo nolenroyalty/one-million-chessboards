@@ -64,7 +64,7 @@ type PieceMove struct {
 	IsWhite      bool      `json:"isWhite"`
 	MoveCount    uint8     `json:"moveCount"`
 	CaptureCount uint8     `json:"captureCount"`
-	SeqNum       uint64    `json:"seqNum"`
+	Seqnum       uint64    `json:"seqnum"`
 }
 
 // PieceCapture represents a capture update to send to clients
@@ -73,7 +73,7 @@ type PieceMove struct {
 // be stale! So we never need to include this!!!
 type PieceCapture struct {
 	CapturedPieceID uint32 `json:"capturedPieceId"`
-	SeqNum          uint64 `json:"seqNum"`
+	Seqnum          uint64 `json:"seqnum"`
 }
 
 // MoveUpdates contains batched move updates to send to clients

@@ -51,8 +51,8 @@ type PieceData struct {
 type SnapshotMessage struct {
 	Type           string      `json:"type"`
 	Pieces         []PieceData `json:"pieces"`
-	StartingSeqNum uint64      `json:"startingSeqNum"`
-	EndingSeqNum   uint64      `json:"endingSeqNum"`
+	StartingSeqnum uint64      `json:"startingSeqnum"`
+	EndingSeqnum   uint64      `json:"endingSeqnum"`
 	XCoord         uint16      `json:"xCoord"`
 	YCoord         uint16      `json:"yCoord"`
 }
@@ -75,8 +75,8 @@ func (snapshot *StateSnapshot) ToSnapshotMessage() SnapshotMessage {
 	message := SnapshotMessage{
 		Type:           "stateSnapshot",
 		Pieces:         pieces,
-		StartingSeqNum: snapshot.StartingSeqNum,
-		EndingSeqNum:   snapshot.EndingSeqNum,
+		StartingSeqnum: snapshot.StartingSeqnum,
+		EndingSeqnum:   snapshot.EndingSeqnum,
 		XCoord:         snapshot.XCoord,
 		YCoord:         snapshot.YCoord,
 	}

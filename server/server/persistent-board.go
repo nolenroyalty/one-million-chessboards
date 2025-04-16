@@ -31,7 +31,7 @@ type PersistentBoard struct {
 	movesToApply           chan Move
 	stateDir               string
 	movesToSerializeBuffer []Move
-	lastSerializedSeqNum   atomic.Uint64
+	lastSerializedSeqnum   atomic.Uint64
 }
 
 type PieceWithCoords struct {
@@ -41,7 +41,7 @@ type PieceWithCoords struct {
 
 type BoardHeader struct {
 	NextID              uint32
-	SeqNum              uint64
+	Seqnum              uint64
 	TotalMoves          uint64
 	WhitePiecesCaptured uint32
 	BlackPiecesCaptured uint32
@@ -51,7 +51,7 @@ type BoardHeader struct {
 
 type BoardSnapshot struct {
 	NextID              uint32
-	SeqNum              uint64
+	Seqnum              uint64
 	TotalMoves          uint64
 	WhitePiecesCaptured uint32
 	BlackPiecesCaptured uint32
@@ -60,17 +60,17 @@ type BoardSnapshot struct {
 	PiecesWithCoords    []PieceWithCoords
 }
 
-type FileWithSeqNumAndTimestamp struct {
+type FileWithSeqnumAndTimestamp struct {
 	prefix        string
-	lastSeqNum    uint64
+	lastSeqnum    uint64
 	timestampNano int64
 }
 
-func (f *FileWithSeqNumAndTimestamp) toFilename() string {
-	return fmt.Sprintf("%s-%d-%d.bin", f.prefix, f.lastSeqNum, f.timestampNano)
+func (f *FileWithSeqnumAndTimestamp) toFilename() string {
+	return fmt.Sprintf("%s-%d-%d.bin", f.prefix, f.lastSeqnum, f.timestampNano)
 }
 
-func (f *FileWithSeqNumAndTimestamp) ofFilename(filename string, expectedPrefix string) error {
+func (f *FileWithSeqnumAndTimestamp) ofFilename(filename string, expectedPrefix string) error {
 	withoutExt := strings.TrimSuffix(filepath.Base(filename), ".bin")
 	parts := strings.Split(withoutExt, "-")
 
@@ -94,7 +94,7 @@ func (f *FileWithSeqNumAndTimestamp) ofFilename(filename string, expectedPrefix 
 		return err
 	}
 	f.prefix = prefix
-	f.lastSeqNum = seqNumInt
+	f.lastSeqnum = seqNumInt
 	f.timestampNano = timestampNanoInt
 	return nil
 }
@@ -103,7 +103,7 @@ func (b *Board) GetBoardSnapshot() BoardSnapshot {
 	start := time.Now()
 	snapshot := BoardSnapshot{
 		NextID:              b.nextID,
-		SeqNum:              b.seqNum.Load(),
+		Seqnum:              b.seqNum.Load(),
 		TotalMoves:          b.totalMoves.Load(),
 		WhitePiecesCaptured: b.whitePiecesCaptured.Load(),
 		BlackPiecesCaptured: b.blackPiecesCaptured.Load(),
@@ -130,13 +130,13 @@ func (b *Board) GetBoardSnapshot() BoardSnapshot {
 func (s *BoardSnapshot) SaveToFile(stateDir string, baseFilename string, seqNum uint64) error {
 	start := time.Now()
 	timestampNano := time.Now().UnixNano()
-	mf := FileWithSeqNumAndTimestamp{prefix: baseFilename, lastSeqNum: seqNum, timestampNano: timestampNano}
+	mf := FileWithSeqnumAndTimestamp{prefix: baseFilename, lastSeqnum: seqNum, timestampNano: timestampNano}
 	filename := filepath.Join(stateDir, mf.toFilename())
 
 	err := WriteFileAtomic(filename, func(writer io.Writer) error {
 		header := BoardHeader{
 			NextID:              s.NextID,
-			SeqNum:              s.SeqNum,
+			Seqnum:              s.Seqnum,
 			TotalMoves:          s.TotalMoves,
 			WhitePiecesCaptured: s.WhitePiecesCaptured,
 			BlackPiecesCaptured: s.BlackPiecesCaptured,
@@ -175,13 +175,13 @@ func (b *Board) LoadFromSnapshotFile(filename string) error {
 		return err
 	}
 	b.nextID = header.NextID
-	b.seqNum.Store(header.SeqNum)
+	b.seqNum.Store(header.Seqnum)
 	b.totalMoves.Store(header.TotalMoves)
 	b.whitePiecesCaptured.Store(header.WhitePiecesCaptured)
 	b.blackPiecesCaptured.Store(header.BlackPiecesCaptured)
 	b.whiteKingsCaptured.Store(header.WhiteKingsCaptured)
 	b.blackKingsCaptured.Store(header.BlackKingsCaptured)
-	log.Printf("Loaded board from snapshot file: seqnum %d, nextid %d, totalmoves %d, whitepiecescaptured %d, blackpiecescaptured %d, whitekingscaptured %d, blackkingscaptured %d", header.SeqNum, header.NextID, header.TotalMoves, header.WhitePiecesCaptured, header.BlackPiecesCaptured, header.WhiteKingsCaptured, header.BlackKingsCaptured)
+	log.Printf("Loaded board from snapshot file: seqnum %d, nextid %d, totalmoves %d, whitepiecescaptured %d, blackpiecescaptured %d, whitekingscaptured %d, blackkingscaptured %d", header.Seqnum, header.NextID, header.TotalMoves, header.WhitePiecesCaptured, header.BlackPiecesCaptured, header.WhiteKingsCaptured, header.BlackKingsCaptured)
 
 	for y := uint16(0); y < BOARD_SIZE; y++ {
 		for x := uint16(0); x < BOARD_SIZE; x++ {
@@ -206,7 +206,7 @@ func (b *Board) LoadFromSnapshotFile(filename string) error {
 	return nil
 }
 
-func GetSortedSnapshotFilenames(stateDir, prefix string) ([]FileWithSeqNumAndTimestamp, error) {
+func GetSortedSnapshotFilenames(stateDir, prefix string) ([]FileWithSeqnumAndTimestamp, error) {
 	files, err := filepath.Glob(filepath.Join(stateDir, fmt.Sprintf("%s-*.bin", prefix)))
 	if err != nil {
 		return nil, err
@@ -214,15 +214,15 @@ func GetSortedSnapshotFilenames(stateDir, prefix string) ([]FileWithSeqNumAndTim
 	if len(files) == 0 {
 		return nil, nil
 	}
-	filesWithSeqNumAndTimestamp := make([]FileWithSeqNumAndTimestamp, len(files))
+	filesWithSeqnumAndTimestamp := make([]FileWithSeqnumAndTimestamp, len(files))
 	for i, file := range files {
-		err = filesWithSeqNumAndTimestamp[i].ofFilename(file, prefix)
+		err = filesWithSeqnumAndTimestamp[i].ofFilename(file, prefix)
 		if err != nil {
 			return nil, err
 		}
 	}
-	slices.SortFunc(filesWithSeqNumAndTimestamp, func(i, j FileWithSeqNumAndTimestamp) int {
-		if i.lastSeqNum == j.lastSeqNum {
+	slices.SortFunc(filesWithSeqnumAndTimestamp, func(i, j FileWithSeqnumAndTimestamp) int {
+		if i.lastSeqnum == j.lastSeqnum {
 			if i.timestampNano == j.timestampNano {
 				return -1
 			}
@@ -231,12 +231,12 @@ func GetSortedSnapshotFilenames(stateDir, prefix string) ([]FileWithSeqNumAndTim
 			}
 			return -1
 		}
-		if i.lastSeqNum > j.lastSeqNum {
+		if i.lastSeqnum > j.lastSeqnum {
 			return 1
 		}
 		return -1
 	})
-	return filesWithSeqNumAndTimestamp, nil
+	return filesWithSeqnumAndTimestamp, nil
 }
 
 func NewFakePersistentBoard() *PersistentBoard {
@@ -245,7 +245,7 @@ func NewFakePersistentBoard() *PersistentBoard {
 		movesToApply:           make(chan Move, 8192),
 		stateDir:               "",
 		movesToSerializeBuffer: make([]Move, 0, 512),
-		lastSerializedSeqNum:   atomic.Uint64{},
+		lastSerializedSeqnum:   atomic.Uint64{},
 	}
 	pb.board.InitializeRandom()
 	return pb
@@ -260,7 +260,7 @@ func NewPersistentBoard(stateDir string) *PersistentBoard {
 		movesToApply:           make(chan Move, 8192),
 		stateDir:               stateDir,
 		movesToSerializeBuffer: make([]Move, 0, 512),
-		lastSerializedSeqNum:   atomic.Uint64{},
+		lastSerializedSeqnum:   atomic.Uint64{},
 	}
 
 	snapshotFilenames, err := GetSortedSnapshotFilenames(stateDir, snapshotPrefix)
@@ -274,15 +274,15 @@ func NewPersistentBoard(stateDir string) *PersistentBoard {
 		board.InitializeRandom()
 		snapshot := board.GetBoardSnapshot()
 		snapshot.SaveToFile(stateDir, snapshotPrefix, board.seqNum.Load())
-		pb.lastSerializedSeqNum.Store(board.seqNum.Load())
+		pb.lastSerializedSeqnum.Store(board.seqNum.Load())
 	} else {
 		lastSnapshot := snapshotFilenames[len(snapshotFilenames)-1]
 		snapshotFilename := filepath.Join(stateDir, lastSnapshot.toFilename())
 		board.LoadFromSnapshotFile(snapshotFilename)
-		if board.seqNum.Load() != lastSnapshot.lastSeqNum {
-			log.Printf("ERROR: Last seqNum from board %d does not match last seqNum from file %d", board.seqNum.Load(), lastSnapshot.lastSeqNum)
+		if board.seqNum.Load() != lastSnapshot.lastSeqnum {
+			log.Printf("ERROR: Last seqNum from board %d does not match last seqNum from file %d", board.seqNum.Load(), lastSnapshot.lastSeqnum)
 		}
-		pb.lastSerializedSeqNum.Store(board.seqNum.Load())
+		pb.lastSerializedSeqnum.Store(board.seqNum.Load())
 	}
 
 	moveFilenames, err := GetSortedSnapshotFilenames(stateDir, movePrefix)
@@ -292,8 +292,8 @@ func NewPersistentBoard(stateDir string) *PersistentBoard {
 	}
 
 	for _, moveFilename := range moveFilenames {
-		if moveFilename.lastSeqNum < pb.lastSerializedSeqNum.Load() {
-			log.Printf("Skipping move file %s because seqNum %d is less than lastSeqNum %d", moveFilename.toFilename(), moveFilename.lastSeqNum, pb.lastSerializedSeqNum.Load())
+		if moveFilename.lastSeqnum < pb.lastSerializedSeqnum.Load() {
+			log.Printf("Skipping move file %s because seqNum %d is less than lastSeqnum %d", moveFilename.toFilename(), moveFilename.lastSeqnum, pb.lastSerializedSeqnum.Load())
 			continue
 		}
 		path := filepath.Join(stateDir, moveFilename.toFilename())
@@ -358,17 +358,17 @@ func (pb *PersistentBoard) ApplyMove(move Move, seqNum uint64) {
 	pb.movesToApply <- move
 }
 
-func (pb *PersistentBoard) SerializeMoves(moves []Move, lastSeqNum uint64) error {
+func (pb *PersistentBoard) SerializeMoves(moves []Move, lastSeqnum uint64) error {
 	if len(moves) == 0 {
 		log.Printf("No moves to serialize")
 		return nil
 	}
 
 	timestampNano := time.Now().UnixNano()
-	mf := FileWithSeqNumAndTimestamp{prefix: movePrefix, lastSeqNum: lastSeqNum, timestampNano: timestampNano}
+	mf := FileWithSeqnumAndTimestamp{prefix: movePrefix, lastSeqnum: lastSeqnum, timestampNano: timestampNano}
 	finalFilename := filepath.Join(pb.stateDir, mf.toFilename())
 
-	log.Printf("Serializing moves for seqnum %d to file %s", lastSeqNum, finalFilename)
+	log.Printf("Serializing moves for seqnum %d to file %s", lastSeqnum, finalFilename)
 	err := WriteFileAtomic(finalFilename, func(writer io.Writer) error {
 		bufferedWriter := bufio.NewWriterSize(writer, 8*1024*1024)
 		for _, move := range moves {
@@ -406,17 +406,17 @@ func (pb *PersistentBoard) Run() {
 				moves := make([]Move, len(pb.movesToSerializeBuffer))
 				copy(moves, pb.movesToSerializeBuffer)
 				pb.movesToSerializeBuffer = pb.movesToSerializeBuffer[:0]
-				lastSeqNum := pb.lastSerializedSeqNum.Load()
-				go pb.SerializeMoves(moves, lastSeqNum)
+				lastSeqnum := pb.lastSerializedSeqnum.Load()
+				go pb.SerializeMoves(moves, lastSeqnum)
 			}
 		case <-snapshotTicker.C:
 			if disabled {
 				continue
 			}
 			snapshot := pb.board.GetBoardSnapshot()
-			pb.lastSerializedSeqNum.Store(snapshot.SeqNum)
+			pb.lastSerializedSeqnum.Store(snapshot.Seqnum)
 			go func() {
-				snapshot.SaveToFile(pb.stateDir, "board", snapshot.SeqNum)
+				snapshot.SaveToFile(pb.stateDir, "board", snapshot.Seqnum)
 			}()
 		case <-moveSerializeTicker.C:
 			if disabled {
@@ -426,8 +426,8 @@ func (pb *PersistentBoard) Run() {
 				moves := make([]Move, len(pb.movesToSerializeBuffer))
 				copy(moves, pb.movesToSerializeBuffer)
 				pb.movesToSerializeBuffer = pb.movesToSerializeBuffer[:0]
-				lastSeqNum := pb.lastSerializedSeqNum.Load()
-				go pb.SerializeMoves(moves, lastSeqNum)
+				lastSeqnum := pb.lastSerializedSeqnum.Load()
+				go pb.SerializeMoves(moves, lastSeqnum)
 			}
 		}
 	}

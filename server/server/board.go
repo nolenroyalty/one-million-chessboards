@@ -75,7 +75,7 @@ type MoveResult struct {
 	MovedPieces   [2]MovedPieceResult
 	Length        uint16
 	CapturedPiece CaptureResult
-	SeqNum        uint64
+	Seqnum        uint64
 }
 
 func (b *Board) crossedSquaresAreEmpty(fromX, fromY, toX, toY uint16) bool {
@@ -352,7 +352,7 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 		}
 		movedPieces := [2]MovedPieceResult{kingMoveResult, rookMoveResult}
 
-		return MoveResult{Valid: true, MovedPieces: movedPieces, Length: 2, SeqNum: seqNum}
+		return MoveResult{Valid: true, MovedPieces: movedPieces, Length: 2, Seqnum: seqNum}
 
 	case MoveTypeEnPassant:
 		// Must be a pawn
@@ -433,7 +433,7 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 				X:     capturedX,
 				Y:     capturedY,
 			},
-			SeqNum: seqNum,
+			Seqnum: seqNum,
 		}
 
 	case MoveTypeNormal:
@@ -516,10 +516,10 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 					X:     move.ToX,
 					Y:     move.ToY,
 				},
-				SeqNum: seqNum,
+				Seqnum: seqNum,
 			}
 		} else {
-			return MoveResult{Valid: true, MovedPieces: movedPieces, Length: 1, SeqNum: seqNum}
+			return MoveResult{Valid: true, MovedPieces: movedPieces, Length: 1, Seqnum: seqNum}
 		}
 	default:
 		log.Printf("Invalid move: Move type not supported")
@@ -630,7 +630,7 @@ func (b *Board) GetStats() GameStats {
 
 // GetStateForPosition returns all pieces in a window around the given position
 func (b *Board) GetStateForPosition(pos Position) StateSnapshot {
-	startingSeqNum := b.seqNum.Load()
+	startingSeqnum := b.seqNum.Load()
 	minX := uint16(0)
 	minY := uint16(0)
 	maxX := uint16(BOARD_SIZE - 1)
@@ -669,8 +669,8 @@ func (b *Board) GetStateForPosition(pos Position) StateSnapshot {
 
 	return StateSnapshot{
 		Pieces:         pieces,
-		StartingSeqNum: startingSeqNum,
-		EndingSeqNum:   b.seqNum.Load(),
+		StartingSeqnum: startingSeqnum,
+		EndingSeqnum:   b.seqNum.Load(),
 		XCoord:         pos.X,
 		YCoord:         pos.Y,
 	}
@@ -707,8 +707,8 @@ type Position struct {
 
 type StateSnapshot struct {
 	Pieces         []PieceState
-	StartingSeqNum uint64
-	EndingSeqNum   uint64
+	StartingSeqnum uint64
+	EndingSeqnum   uint64
 	XCoord         uint16
 	YCoord         uint16
 }
