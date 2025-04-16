@@ -58,7 +58,7 @@ function ZoomedOutOverview({ opacity, boardSizeParams }) {
         }
         piecesRef.current = piecesById;
         for (const move of data.moves) {
-          recentMovesRef.current.set(move.pieceId, move);
+          recentMovesRef.current.set(move.piece.id, move);
         }
         // nroyalty: PERFORMANCE....maybe don't do this...
         setForcePieceRerender((x) => x + 1);
@@ -272,8 +272,10 @@ function ZoomedOutOverview({ opacity, boardSizeParams }) {
       const ctx = animationCanvasRef.current.getContext("2d");
       ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
       for (const move of recentMovesRef.current.values()) {
-        const { fromX, fromY, toX, toY, receivedAt } = move;
-        const piece = piecesRef.current.get(move.pieceId);
+        const { fromX, fromY, receivedAt } = move;
+        const piece = move.piece;
+        const toX = piece.x;
+        const toY = piece.y;
         if (!piece) {
           continue;
         }
@@ -302,7 +304,7 @@ function ZoomedOutOverview({ opacity, boardSizeParams }) {
             pieceType: piece.type,
             isWhite: piece.isWhite,
           });
-          recentMovesRef.current.delete(move.pieceId);
+          recentMovesRef.current.delete(piece.id);
           continue;
         }
         const progress = easeInOutSquare(elapsed / animationDuration);
