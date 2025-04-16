@@ -351,15 +351,21 @@ func (s *Server) processMoves() {
 				moveResult.MovedPieces[i].ToX,
 				moveResult.MovedPieces[i].ToY,
 				moveResult.MovedPieces[i].Piece)
+
+			pieceData := PieceData{
+				ID:              moveResult.MovedPieces[i].Piece.ID,
+				X:               moveResult.MovedPieces[i].ToX,
+				Y:               moveResult.MovedPieces[i].ToY,
+				Type:            moveResult.MovedPieces[i].Piece.Type,
+				JustDoubleMoved: moveResult.MovedPieces[i].Piece.JustDoubleMoved,
+				IsWhite:         moveResult.MovedPieces[i].Piece.IsWhite,
+				MoveCount:       moveResult.MovedPieces[i].Piece.MoveCount,
+				CaptureCount:    moveResult.MovedPieces[i].Piece.CaptureCount,
+			}
+
 			movedPieces[i] = PieceMove{
-				PieceID:      moveResult.MovedPieces[i].Piece.ID,
-				ToX:          moveResult.MovedPieces[i].ToX,
-				ToY:          moveResult.MovedPieces[i].ToY,
-				PieceType:    moveResult.MovedPieces[i].Piece.Type,
-				IsWhite:      moveResult.MovedPieces[i].Piece.IsWhite,
-				MoveCount:    moveResult.MovedPieces[i].Piece.MoveCount,
-				CaptureCount: moveResult.MovedPieces[i].Piece.CaptureCount,
-				Seqnum:       moveResult.Seqnum,
+				Piece:  pieceData,
+				Seqnum: moveResult.Seqnum,
 			}
 		}
 

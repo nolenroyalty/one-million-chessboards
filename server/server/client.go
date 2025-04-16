@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	PeriodicUpdateInterval = time.Second * 30
+	PeriodicUpdateInterval = time.Second * 5
 	activityThreshold      = time.Second * 20
 	simulatedLatency       = 2 * time.Second
 	simulatedJitterMs      = 1
@@ -37,22 +37,13 @@ func sleepSimulatedLatency() {
 	time.Sleep(getSimulatedLatency())
 }
 
-type PieceData struct {
-	ID              uint32    `json:"id"`
-	X               uint16    `json:"x"`
-	Y               uint16    `json:"y"`
-	Type            PieceType `json:"type"`
-	JustDoubleMoved bool      `json:"justDoubleMoved"`
-	IsWhite         bool      `json:"isWhite"`
-	MoveCount       uint8     `json:"moveCount"`
-	CaptureCount    uint8     `json:"captureCount"`
-}
-
+// CR nroyalty: removing starting and ending seqnum (we'll use a mutex to make this safe)
 type SnapshotMessage struct {
 	Type           string      `json:"type"`
 	Pieces         []PieceData `json:"pieces"`
 	StartingSeqnum uint64      `json:"startingSeqnum"`
 	EndingSeqnum   uint64      `json:"endingSeqnum"`
+	Seqnum         uint64      `json:"seqnum"`
 	XCoord         uint16      `json:"xCoord"`
 	YCoord         uint16      `json:"yCoord"`
 }
@@ -77,6 +68,7 @@ func (snapshot *StateSnapshot) ToSnapshotMessage() SnapshotMessage {
 		Pieces:         pieces,
 		StartingSeqnum: snapshot.StartingSeqnum,
 		EndingSeqnum:   snapshot.EndingSeqnum,
+		Seqnum:         snapshot.EndingSeqnum,
 		XCoord:         snapshot.XCoord,
 		YCoord:         snapshot.YCoord,
 	}

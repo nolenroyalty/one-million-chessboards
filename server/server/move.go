@@ -56,15 +56,27 @@ func (move *Move) ExceedsMaxMoveDistance() bool {
 // CR nroyalty: our life is going to be much much much easier if we use the same PieceData
 // struct for snapshots and moves. Both can follow the same logic (PieceData can use two
 // int8s that represent offsets from a center coordinate)
+type PieceData struct {
+	ID              uint32    `json:"id"`
+	X               uint16    `json:"x"`
+	Y               uint16    `json:"y"`
+	Type            PieceType `json:"type"`
+	JustDoubleMoved bool      `json:"justDoubleMoved"`
+	IsWhite         bool      `json:"isWhite"`
+	MoveCount       uint8     `json:"moveCount"`
+	CaptureCount    uint8     `json:"captureCount"`
+}
+
 type PieceMove struct {
-	PieceID      uint32    `json:"pieceId"`
-	ToX          uint16    `json:"toX"`
-	ToY          uint16    `json:"toY"`
-	PieceType    PieceType `json:"pieceType"`
-	IsWhite      bool      `json:"isWhite"`
-	MoveCount    uint8     `json:"moveCount"`
-	CaptureCount uint8     `json:"captureCount"`
-	Seqnum       uint64    `json:"seqnum"`
+	// PieceID uint32 `json:"pieceId"`
+	// ToX   uint16 `json:"toX"`
+	// ToY   uint16 `json:"toY"`
+	Piece  PieceData `json:"piece"`
+	Seqnum uint64    `json:"seqnum"`
+	// PieceType    PieceType `json:"pieceType"`
+	// IsWhite      bool      `json:"isWhite"`
+	// MoveCount    uint8     `json:"moveCount"`
+	// CaptureCount uint8     `json:"captureCount"`
 }
 
 // PieceCapture represents a capture update to send to clients

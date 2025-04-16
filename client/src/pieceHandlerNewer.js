@@ -11,7 +11,6 @@ import { pieceKey, getMoveableSquares, TYPE_TO_NAME } from "./utils";
 const OACTION = {
   MOVE: "move",
   CAPTURE: "capture",
-  UNCAPTURE: "uncapture",
 };
 
 const ANIMATION = {
@@ -53,7 +52,6 @@ class OptimisticState {
   constructor() {
     this.actionsByPieceId = new Map(); // Map<pieceId, OptimisticAction[]>
     this.actionsByToken = new Map(); // Map<moveToken, OptimisticAction[]>
-    this.lastGroundTruthSeqnumByPieceId = new Map(); // Map<pieceId, seqnum>
     this.tokensTouchingSquare = new Map(); // Map<squareKey, Set<moveToken>>
     this.actionId = 1;
 
@@ -136,7 +134,6 @@ class OptimisticState {
     additionalMovedPiece,
     capturedPiece,
     receivedAt,
-    groundTruthSeqnum,
     couldBeACapture,
     captureRequired,
   }) {
@@ -190,7 +187,6 @@ class OptimisticState {
 
     for (const a of actions) {
       this._addActionForPieceId(a);
-      this._maybeSetLastGroundTruthSeqnum(a.pieceId, groundTruthSeqnum);
       this._addForToken(moveToken, a);
       a.impactedSquares.forEach((sq) => this._addSquareTouch(sq, moveToken));
     }
@@ -208,7 +204,6 @@ class OptimisticState {
   addAfterTheFactSimulatedCapture({
     capturingPieceId,
     maybeCapturedPiece,
-    groundTruthSeqnum,
     receivedAt,
   }) {
     const actionsForCapturingPiece =
@@ -237,37 +232,9 @@ class OptimisticState {
       captureRequired: false,
     };
     this._addActionForPieceId(action);
-    this._maybeSetLastGroundTruthSeqnum(
-      maybeCapturedPiece.id,
-      groundTruthSeqnum
-    );
     this._addForToken(moveTokenForLastAction, action);
     const anim = animateCapture({ piece: maybeCapturedPiece, receivedAt });
     return anim;
-  }
-
-  _maybeSetLastGroundTruthSeqnum(pieceId, groundTruthSeqnum) {
-    if (!this.lastGroundTruthSeqnumByPieceId.has(pieceId)) {
-      this.lastGroundTruthSeqnumByPieceId.set(pieceId, groundTruthSeqnum);
-    } else {
-      const lastSeqnum = this.lastGroundTruthSeqnumByPieceId.get(pieceId);
-      if (lastSeqnum < groundTruthSeqnum) {
-        this.lastGroundTruthSeqnumByPieceId.set(pieceId, groundTruthSeqnum);
-      }
-    }
-  }
-
-  maybeBumpGroundTruthSeqnum(pieceId, groundTruthSeqnum) {
-    // if we're not tracking this piece, no need to maintain seqnum
-    // state for it
-    if (!this.lastGroundTruthSeqnumByPieceId.has(pieceId)) {
-      return;
-    }
-
-    const lastSeqnum = this.lastGroundTruthSeqnumByPieceId.get(pieceId);
-    if (lastSeqnum < groundTruthSeqnum) {
-      this.lastGroundTruthSeqnumByPieceId.set(pieceId, groundTruthSeqnum);
-    }
   }
 
   _removeActions(actionsToRemove) {
@@ -307,7 +274,6 @@ class OptimisticState {
         );
         if (remainingActions.length === 0) {
           this.actionsByPieceId.delete(pId);
-          this.lastGroundTruthSeqnumByPieceId.delete(pId);
         } else {
           this.actionsByPieceId.set(pId, remainingActions);
         }
@@ -347,7 +313,7 @@ class OptimisticState {
     }
   }
 
-  processConfirmation({ moveToken, capturedPieceId }) {
+  processConfirmation({ moveToken }) {
     const confirmedActions = this.actionsByToken.get(moveToken) || [];
     if (confirmedActions.length === 0) {
       return { groundTruthUpdates: [] };
@@ -364,21 +330,14 @@ class OptimisticState {
           y: action.y,
         });
       } else if (action.type === OACTION.CAPTURE) {
-        if (action.pieceId === capturedPieceId) {
-          finalStates.set(action.pieceId, { state: OACTION.CAPTURE });
-        } else {
-          // our move succeeded, but it didn't capture the piece that we thought that it did!
-          finalStates.set(action.pieceId, {
-            state: OACTION.UNCAPTURE,
-            pieceId: action.pieceId,
-          });
-        }
+        finalStates.set(action.pieceId, {
+          state: OACTION.CAPTURE,
+          pieceId: action.pieceId,
+        });
       }
     });
 
     finalStates.forEach((state, pieceId) => {
-      const lastGroundTruthSeqnum =
-        this.lastGroundTruthSeqnumByPieceId.get(pieceId);
       if (state.state === OACTION.CAPTURE) {
         groundTruthUpdates.push({ pieceId, state: OACTION.CAPTURE });
       } else if (state.state === OACTION.MOVE) {
@@ -387,12 +346,6 @@ class OptimisticState {
           state: OACTION.MOVE,
           x: state.x,
           y: state.y,
-          lastGroundTruthSeqnum,
-        });
-      } else if (state.state === OACTION.UNCAPTURE) {
-        groundTruthUpdates.push({
-          pieceId,
-          state: OACTION.UNCAPTURE,
         });
       }
     });
@@ -473,7 +426,6 @@ class OptimisticState {
 
     return { preRevertVisualStates };
   }
-  // CR nroyalty: should this use UNCAPTURE?
   revertSinglePieceId(pieceId) {
     console.log(`Single piece revert / ${pieceId}`);
     const actions = this.actionsByPieceId.get(pieceId) || [];
@@ -501,9 +453,10 @@ class OptimisticState {
             pieceKey(predictedState.x, predictedState.y),
             pieceId
           );
-        } else if (predictedState.state === OACTION.UNCAPTURE) {
-          console.warn(`BUG? predicted state of UNCAPTURE for ${pieceId}`);
-          // nothing else to do
+        } else {
+          console.warn(
+            `BUG? predicted state of ${predictedState.state} for ${pieceId}`
+          );
         }
       } else {
         console.warn(`BUG? No predicted state for piece ${pieceId}`);
@@ -527,7 +480,6 @@ class PieceHandler {
     // based on the data we get from new snapshots!!!!
     this.lastSnapshotCoords = { x: null, y: null };
 
-    this.activeMoves = [];
     this.activeCaptures = [];
 
     // CR nroyalty: implement this...
@@ -621,19 +573,14 @@ class PieceHandler {
       additionalMovedPiece,
       capturedPiece: captureToUse,
       receivedAt,
-      groundTruthSeqnum: this.snapshotSeqnum.to,
       couldBeACapture,
       captureRequired,
     });
     this.broadcastAnimations({ animations, wasSnapshot: false });
   }
 
-  // CR nroyalty: we can rework this to treat capturedPieceId separately.
-  // We should also double check that there aren't other places that we need
-  // to handle OACTION.UNCAPTURE - maybe we can mint a new type just for
-  // confirmation.
-  //
-  // We should engineer a case where we simulate a capture but then the piece
+  // CR nroyalty; We should engineer a case where we simulate a
+  // capture but then the piece
   // moves out of the way and we un-capture it. this requires some tricky
   // manipulation of timing.
   //
@@ -646,81 +593,22 @@ class PieceHandler {
     const { groundTruthUpdates } =
       this.optimisticStateHandler.processConfirmation({
         moveToken,
-        capturedPieceId,
       });
     // this.optimisticStateHandler._debugDumpState("after");
     const animations = [];
+    let needToSimulateAdditionalCapture = true;
 
-    // It really shouldn't happen, but if we get a late confirmation for a piece
-    // and already have more up to date ground truth state for it, we want to avoid
-    // updating our ground truth state based on the ack!
     groundTruthUpdates.forEach((update) => {
-      const lastGroundTruthSeqnum = update.lastGroundTruthSeqnum;
-      if (
-        lastGroundTruthSeqnum !== undefined &&
-        lastGroundTruthSeqnum > asOfSeqnum
-      ) {
-        // we have a ground truth update for this piece that is *NEWER* than the
-        // confirmation that we received. In practice this should roughly never happen
-        // based on how the server is designed, but let's be careful to handle it correctly
-        console.log(
-          `Ground truth update for piece ${update.pieceId} is newer than the confirmation that we received.`
-        );
-        const ourPiece = this.piecesById.get(update.pieceId);
-        if (!ourPiece && update.state === OACTION.CAPTURE) {
-          // This is expected...if the piece is confirmed captured, what else is there to say?
-        } else if (ourPiece && update.state === OACTION.CAPTURE) {
-          // This should be impossible - we should have already deleted the piece!
-          console.warn(
-            `BUG? Piece ${update.pieceId} is confirmed captured but still exists in our state`
-          );
-          this.piecesById.delete(update.pieceId);
-        } else if (!ourPiece && update.state === OACTION.MOVE) {
-          // Either the piece is captured and this is a late confirmation, or we've moved
-          // to a new part of the grid. If it's the former there's nothing to do and if it's
-          // the latter we don't care about this piece because we're not looking at it.
-          console.debug(
-            `Ignoring move confirmation for ${update.pieceId} because we do not have ground truth state for it`
-          );
-        } else if (ourPiece && update.state === OACTION.MOVE) {
-          // If the simulated state for this piece doesn't line up with the ground truth
-          // we should simulate a move to get the piece into the right place.
-          if (ourPiece.x !== update.x || ourPiece.y !== update.y) {
-            animations.push(
-              animateMove({
-                fromX: update.x,
-                fromY: update.y,
-                piece: ourPiece,
-                receivedAt: performance.now(),
-              })
-            );
-          }
-        } else if (ourPiece && update.state === OACTION.UNCAPTURE) {
-          animations.push(
-            animateAppearance({
-              piece: ourPiece,
-              receivedAt: performance.now(),
-            })
-          );
-        } else if (!ourPiece && update.state === OACTION.UNCAPTURE) {
-          // This is funny, but there's nothing to do.
-        }
-      } else {
-        if (update.state === OACTION.MOVE) {
-          const ourPiece = this.piecesById.get(update.pieceId);
-          if (ourPiece) {
-            ourPiece.x = update.x;
-            ourPiece.y = update.y;
-            this.piecesById.set(update.pieceId, ourPiece);
-          } else {
-            // maybe we've moved to another part of the grid? don't worry about it
-            console.log(
-              `Move confirmation for unknown piece, skipping: ${update.pieceId}`
-            );
-          }
-        } else if (update.state === OACTION.CAPTURE) {
-          this.piecesById.delete(update.pieceId);
-        } else if (update.state === OACTION.UNCAPTURE) {
+      if (update.state === OACTION.CAPTURE) {
+        if (update.pieceId === capturedPieceId) {
+          // We captured the piece that we thought we were capturing!
+          needToSimulateAdditionalCapture = false;
+          this.activeCaptures.push({
+            pieceId: capturedPieceId,
+            seqnum: asOfSeqnum,
+          });
+        } else {
+          // we simulated a capture for a piece that we didn't actually capture lol
           const ourPiece = this.piecesById.get(update.pieceId);
           if (ourPiece) {
             animations.push(
@@ -730,11 +618,60 @@ class PieceHandler {
               })
             );
           } else {
-            // This is funny, but there's nothing to do.
+            // Well, maybe we moved somewhere else? Nothing to do here.
           }
+        }
+      } else if (update.state === OACTION.MOVE) {
+        const ourPiece = this.piecesById.get(update.pieceId);
+        if (ourPiece) {
+          if (ourPiece.seqnum > update.seqnum) {
+            if (ourPiece.x !== update.x || ourPiece.y !== update.y) {
+              // We have a newer state for this piece and should make that
+              // visible to the client.
+              animations.push(
+                animateMove({
+                  piece: ourPiece,
+                  fromX: update.x,
+                  fromY: update.y,
+                  receivedAt: performance.now(),
+                })
+              );
+            } else {
+              // we have newer state for this piece but it's consistent
+            }
+          } else {
+            // let's not bump the seqnum here in case we get some other
+            // metadata via a move...
+            ourPiece.x = update.x;
+            ourPiece.y = update.y;
+            ourPiece.moveCount++;
+            if (capturedPieceId) {
+              ourPiece.captureCount++;
+            }
+            this.piecesById.set(update.pieceId, ourPiece);
+          }
+        } else {
+          // We probably moved somewhere else on the board.
         }
       }
     });
+
+    if (needToSimulateAdditionalCapture) {
+      if (this.piecesById.has(capturedPieceId)) {
+        const ourPiece = this.piecesById.get(capturedPieceId);
+        animations.push(
+          animateCapture({
+            piece: ourPiece,
+            receivedAt: performance.now(),
+          })
+        );
+        this.activeCaptures.push({
+          pieceId: capturedPieceId,
+          seqnum: asOfSeqnum,
+        });
+        this.piecesById.delete(capturedPieceId);
+      }
+    }
 
     if (animations.length > 0) {
       this.broadcastAnimations({ animations, wasSnapshot: false });
@@ -887,7 +824,6 @@ class PieceHandler {
                 this.optimisticStateHandler.addAfterTheFactSimulatedCapture({
                   capturingPieceId: predictedPiece.id,
                   maybeCapturedPiece: anim.piece,
-                  groundTruthSeqnum: this.snapshotSeqnum.to,
                   receivedAt,
                 });
 
@@ -952,6 +888,9 @@ class PieceHandler {
   }
 
   handleSnapshot({ snapshot }) {
+    // CR nroyalty: revise this with a snapshot generation number that we use
+    // to indicate a server bounce?
+    //
     // We intentionally do NOT drop stale snapshots. It's possible that we get
     // snapshots with an old seqnum if the server bounces and loses a little bit of state.
     // Otherwise I think we can assume messages are ordered (TCP, etc) so this should be fine?
@@ -975,7 +914,6 @@ class PieceHandler {
     let shouldComputeSimulatedChanges = false;
     const SIMULATED_CHANGES_THRESHOLD = 20;
     const piecesById = new Map();
-    const activeMoves = [];
     const activeCaptures = [];
     const animationsByPieceId = new Map();
 
@@ -998,41 +936,12 @@ class PieceHandler {
     }
 
     snapshot.pieces.forEach((piece) => {
+      piece.seqnum = snapshot.seqnum;
       piecesById.set(piece.id, piece);
     });
 
-    this.activeMoves.forEach((move) => {
-      if (move.seqnum > snapshot.startingSeqnum) {
-        const movePieceId = move.piece.id;
-        const ourPiece = piecesById.get(movePieceId);
-        activeMoves.push(move);
-        if (ourPiece) {
-          if (ourPiece.x !== move.x || ourPiece.y !== move.y) {
-            ourPiece.x = move.x;
-            ourPiece.y = move.y;
-            piecesById.set(movePieceId, ourPiece);
-          }
-        } else {
-          const oldPiece = this.piecesById.get(movePieceId);
-          if (!oldPiece) {
-            // Move isn't in our snapshot, and also we haven't
-            // processed it in the past? This seems insane
-            console.warn(
-              `BUG? ${JSON.stringify(move)} is not in old or new snapshot`
-            );
-          } else {
-            // Move isn't in snapshot, but we processed it in the past
-            // And added it to our old state
-            oldPiece.x = move.x;
-            oldPiece.y = move.y;
-            piecesById.set(movePieceId, oldPiece);
-          }
-        }
-      }
-    });
-
     this.activeCaptures.forEach((capture) => {
-      if (capture.seqnum > snapshot.startingSeqnum) {
+      if (capture.seqnum > snapshot.seqnum) {
         activeCaptures.push(capture);
         if (piecesById.has(capture.pieceId)) {
           piecesById.delete(capture.pieceId);
@@ -1043,17 +952,30 @@ class PieceHandler {
     const receivedAt = performance.now();
     // we need to do this *after* we process the active moves and captures,
     // otherwise we'll end up potentially simulating a move or capture twice!
+    const snapshotSeqnum = snapshot.seqnum;
+    let stalePieceCount = 0;
     snapshot.pieces.forEach((piece) => {
       if (this.piecesById.has(piece.id)) {
         const oldPiece = this.piecesById.get(piece.id);
-        if (oldPiece.x !== piece.x || oldPiece.y !== piece.y) {
-          const animation = animateMove({
-            fromX: oldPiece.x,
-            fromY: oldPiece.y,
-            piece: piece,
-            receivedAt,
-          });
-          animationsByPieceId.set(piece.id, animation);
+        if (oldPiece.seqnum < snapshotSeqnum) {
+          if (oldPiece.x !== piece.x || oldPiece.y !== piece.y) {
+            const animation = animateMove({
+              fromX: oldPiece.x,
+              fromY: oldPiece.y,
+              piece: piece,
+              receivedAt,
+            });
+            animationsByPieceId.set(piece.id, animation);
+          }
+        } else if (oldPiece.seqnum > snapshotSeqnum) {
+          stalePieceCount++;
+          piecesById.set(piece.id, oldPiece);
+        } else {
+          // if (piece.id === 10617952) {
+          //   console.log(
+          //     `SNAPSHOT: seqnum (${oldPiece.seqnum} | ${snapshot.seqnum})equal for ${piece.id} (oldx: ${oldPiece.x}, oldy: ${oldPiece.y}, newx: ${piece.x}, newy: ${piece.y})`
+          //   );
+          // }
         }
       } else {
         // No need to compute appearances if the snapshot is far away from our
@@ -1064,6 +986,10 @@ class PieceHandler {
         }
       }
     });
+
+    if (stalePieceCount > 0) {
+      console.warn(`${stalePieceCount} stale pieces in snapshot`);
+    }
 
     // No need to compute captures if this snapshot is far away from our last
     // one (we'll be missing lots of pieces regardless)
@@ -1084,7 +1010,6 @@ class PieceHandler {
       }
     }
 
-    this.activeMoves = activeMoves;
     this.activeCaptures = activeCaptures;
     this.piecesById = piecesById;
     this.snapshotSeqnum = {
@@ -1114,47 +1039,30 @@ class PieceHandler {
     const animationsByPieceId = new Map();
 
     moves.forEach((move) => {
-      if (move.seqnum <= this.snapshotSeqnum.from) {
-        // nothing to do!
+      const { piece, seqnum } = move;
+      piece.seqnum = seqnum;
+      const currentPiece = this.piecesById.get(piece.id);
+      if (!currentPiece) {
+        // CR nroyalty: soon - only add move if it's somewhat close to where
+        // we're looking!
+        this.piecesById.set(piece.id, piece);
+        const animation = animateAppearance({ piece, receivedAt });
+        animationsByPieceId.set(piece.id, animation);
+      } else if (seqnum < currentPiece.seqnum) {
+        // Nothing to do! We already know about this state
       } else {
-        const ourPiece = this.piecesById.get(move.pieceId);
-        // CR nroyalty: THIS IS SO MUCH BETTER WHEN WE JUST SUPPLY
-        // PIECEDATA DIRECTLY, DO THAT SOON PLEASE
-        const dy = Math.abs(move.toY - move.fromY);
-        const justDoubleMoved =
-          dy === 2 && TYPE_TO_NAME[move.pieceType] === "pawn";
-        const movedPiece = {
-          id: move.pieceId,
-          x: move.toX,
-          y: move.toY,
-          type: move.pieceType,
-          isWhite: move.isWhite,
-          moveCount: move.moveCount,
-          captureCount: move.captureCount,
-          justDoubleMoved,
-        };
-        this.activeMoves.push({ seqnum: move.seqnum, piece: movedPiece });
-        if (ourPiece === undefined) {
-          const animation = animateAppearance({
-            piece: movedPiece,
+        this.piecesById.set(piece.id, piece);
+        if (currentPiece.x === piece.x && currentPiece.y === piece.y) {
+          // Weird, but nothing to do
+        } else {
+          dTotalMoves++;
+          const animation = animateMove({
+            fromX: currentPiece.x,
+            fromY: currentPiece.y,
+            piece,
             receivedAt,
           });
-          animationsByPieceId.set(movedPiece.id, animation);
-          this.piecesById.set(movedPiece.id, movedPiece);
-        } else {
-          if (ourPiece.x === movedPiece.x && ourPiece.y === movedPiece.y) {
-            this.piecesById.set(movedPiece.id, movedPiece);
-          } else {
-            this.piecesById.set(movedPiece.id, movedPiece);
-            dTotalMoves++;
-            const animation = animateMove({
-              fromX: ourPiece.x,
-              fromY: ourPiece.y,
-              piece: movedPiece,
-              receivedAt,
-            });
-            animationsByPieceId.set(movedPiece.id, animation);
-          }
+          animationsByPieceId.set(piece.id, animation);
         }
       }
     });
@@ -1169,13 +1077,13 @@ class PieceHandler {
         // do nothing
       } else {
         const ourPiece = this.piecesById.get(capture.capturedPieceId);
-        this.activeCaptures.push({
-          pieceId: capture.capturedPieceId,
-          seqnum: capture.seqnum,
-        });
         if (ourPiece === undefined) {
           // probably a capture for somewhere we're not looking anymore?
         } else {
+          this.activeCaptures.push({
+            pieceId: capture.capturedPieceId,
+            seqnum: capture.seqnum,
+          });
           this.piecesById.delete(ourPiece.id);
           const pieceType = TYPE_TO_NAME[ourPiece.type];
           const wasWhite = ourPiece.isWhite;
@@ -1220,7 +1128,6 @@ class PieceHandler {
     return new Set(this.piecesById.keys());
   }
 
-  // CR nroyalty: this needs to account for the case that we're simulating a capture!
   getPieceById(id) {
     const predictedState = this.optimisticStateHandler.getPredictedState(id);
     const piece = this.piecesById.get(id);

@@ -110,7 +110,7 @@ function useStartBot({ pieceHandler, submitMove, onlyId }) {
         }
       }
     };
-    const freq = onlyId ? 400 : 100;
+    const freq = onlyId ? 400 : 500;
     console.log("starting bot");
     botInterval = setInterval(loop, freq);
 
