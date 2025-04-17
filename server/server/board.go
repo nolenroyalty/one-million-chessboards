@@ -610,14 +610,12 @@ func (b *Board) setupPiecesForColor(baseX, baseY uint16, isWhite bool, newPieces
 	}
 }
 
-// createPiece creates a new piece and increments the ID counter
 func (b *Board) createPiece(pieceType PieceType, isWhite bool) Piece {
 	piece := NewPiece(b.nextID, pieceType, isWhite)
 	b.nextID++
 	return piece
 }
 
-// GetStats returns a copy of the current game statistics
 func (b *Board) GetStats() GameStats {
 	return GameStats{
 		TotalMoves:           b.totalMoves.Load(),
@@ -628,7 +626,6 @@ func (b *Board) GetStats() GameStats {
 	}
 }
 
-// GetStateForPosition returns all pieces in a window around the given position
 func (b *Board) GetStateForPosition(pos Position) StateSnapshot {
 	startingSeqnum := b.seqNum.Load()
 	minX := uint16(0)
@@ -650,8 +647,7 @@ func (b *Board) GetStateForPosition(pos Position) StateSnapshot {
 		maxY = pos.Y + VIEW_RADIUS
 	}
 
-	// Collect pieces in the viewport
-	pieces := make([]PieceState, 0, 200) // Approximate capacity
+	pieces := make([]PieceState, 0, 200)
 
 	for y := minY; y <= maxY; y++ {
 		for x := minX; x <= maxX; x++ {
@@ -692,14 +688,12 @@ func (b *Board) InitializeRandom() {
 	}
 }
 
-// PieceState combines a piece with its position
 type PieceState struct {
 	Piece Piece
 	X     uint16
 	Y     uint16
 }
 
-// Position represents a client's current view position
 type Position struct {
 	X uint16 `json:"x"`
 	Y uint16 `json:"y"`

@@ -236,7 +236,7 @@ function Board() {
         }}
         ref={sizedInnerRef}
       >
-        <LoadingView />
+        <LoadingView boardSizeParams={boardSizeParams} />
         {coordsAreNotNull && (
           <>
             {smallMounted && (

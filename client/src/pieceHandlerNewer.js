@@ -734,7 +734,6 @@ class PieceHandler {
   broadcastCoordsState() {
     this.coordSubscribers.forEach(({ callback }) => {
       callback({
-        currentCoords: this.currentCoords,
         lastSnapshotCoords: this.lastSnapshotCoords,
       });
     });
@@ -742,7 +741,6 @@ class PieceHandler {
 
   setCurrentCoords({ x, y }) {
     this.currentCoords = { x, y };
-    this.broadcastCoordsState();
   }
 
   _setLastSnapshotCoords({ x, y }) {

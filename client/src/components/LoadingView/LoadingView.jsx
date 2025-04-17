@@ -2,6 +2,7 @@ import React from "react";
 import styled from "styled-components";
 import HandlersContext from "../HandlersContext/HandlersContext";
 import CoordsContext from "../CoordsContext/CoordsContext";
+import ShowLargeBoardContext from "../ShowLargeBoardContext/ShowLargeBoardContext";
 // CR nroyalty: consider zoomed out overview too?
 
 const Wrapper = styled.div`
@@ -15,18 +16,19 @@ const Wrapper = styled.div`
 
   background-color: #000000;
   opacity: var(--opacity);
-  transition: opacity var(--transition-time) ease-in-out;
+  transition: opacity var(--transition-time) ease-in-out var(--transition-delay);
   z-index: 1000;
   pointer-events: none;
 `;
 
-function LoadingView() {
+function LoadingView({ boardSizeParams }) {
   const { pieceHandler } = React.useContext(HandlersContext);
   const { coords } = React.useContext(CoordsContext);
   const [lastSnapshotCoords, setLastSnapshotCoords] = React.useState({
     x: null,
     y: null,
   });
+  const { showLargeBoard } = React.useContext(ShowLargeBoardContext);
 
   React.useEffect(() => {
     pieceHandler.current.subscribe({
@@ -42,22 +44,32 @@ function LoadingView() {
   }, [pieceHandler]);
 
   const isLoading = React.useMemo(() => {
+    const SNAPSHOT_HALF_WIDTH = 47;
     if (lastSnapshotCoords.x === null || lastSnapshotCoords.y === null) {
       return true;
     }
     if (coords.x === null || coords.y === null) {
       return true;
     }
+    const halfWidth = showLargeBoard
+      ? Math.floor(boardSizeParams.zoomedOut.squaresWide / 2)
+      : Math.floor(boardSizeParams.squareWidth / 2);
+    const halfHeight = showLargeBoard
+      ? Math.floor(boardSizeParams.zoomedOut.squaresHigh / 2)
+      : Math.floor(boardSizeParams.squareHeight / 2);
     const deltaX = Math.abs(lastSnapshotCoords.x - coords.x);
     const deltaY = Math.abs(lastSnapshotCoords.y - coords.y);
-    return deltaX > 32 || deltaY > 32;
-  }, [lastSnapshotCoords, coords]);
+    const xThreshold = SNAPSHOT_HALF_WIDTH - halfWidth;
+    const yThreshold = SNAPSHOT_HALF_WIDTH - halfHeight;
+    return deltaX > xThreshold || deltaY > yThreshold;
+  }, [lastSnapshotCoords, coords, showLargeBoard, boardSizeParams]);
 
   return (
     <Wrapper
       style={{
-        "--opacity": isLoading ? 0.6 : 0,
-        "--transition-time": isLoading ? "0.1s" : "0.5s",
+        "--opacity": isLoading ? 0.8 : 0,
+        "--transition-time": isLoading ? "0.1s" : "0.75s",
+        "--transition-delay": isLoading ? "0s" : "0.2s",
       }}
     ></Wrapper>
   );

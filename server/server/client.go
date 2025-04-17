@@ -3,6 +3,10 @@ package server
 // CR nroyalty: it would be nice if we ran all of our to-client actions through a
 // queue that let us guarantee better ordering of the messages that they receive...
 
+// CR nroyalty: figure out how to debounce snapshot requests to the degree that we can;
+// also make sure when we move to a read-lock approach that we use our latest position
+// after getting the lock, instead of the position from when we tried to take the lock.
+
 import (
 	"encoding/json"
 	"fmt"
@@ -22,8 +26,8 @@ import (
 const (
 	PeriodicUpdateInterval = time.Second * 5
 	activityThreshold      = time.Second * 20
-	simulatedLatency       = 2 * time.Second
-	simulatedJitterMs      = 1
+	simulatedLatency       = 1 * time.Second
+	simulatedJitterMs      = 10
 )
 
 func getSimulatedLatency() time.Duration {
