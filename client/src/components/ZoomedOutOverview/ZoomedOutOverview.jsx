@@ -51,6 +51,7 @@ function ZoomedOutOverview({ opacity, boardSizeParams }) {
   React.useEffect(() => {
     pieceHandler.current.subscribe({
       id: "zoomed-out-overview",
+      type: "pieces",
       callback: (data) => {
         const piecesById = new Map();
         for (const [pieceId, piece] of data.piecesById) {
@@ -67,6 +68,7 @@ function ZoomedOutOverview({ opacity, boardSizeParams }) {
     return () => {
       pieceHandler.current.unsubscribe({
         id: "zoomed-out-overview",
+        type: "pieces",
       });
     };
   }, [pieceHandler]);

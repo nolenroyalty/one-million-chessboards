@@ -53,14 +53,10 @@ export function CoordsContextProvider({ children }) {
     [pieceHandler, clearStoredHash]
   );
 
-  console.log(`hash outside: ${hash}`);
   React.useEffect(() => {
-    console.log("hash in coords useeffect", hash);
     if (hash && hash !== "") {
       const initialArgs = computeInitialArguments(hash);
-      console.log("initialArgs", initialArgs);
       const { x, y } = initialArgs;
-      console.log("x, y", x, y);
       if (x === null || y === null) {
         return;
       }

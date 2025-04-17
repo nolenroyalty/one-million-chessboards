@@ -472,6 +472,7 @@ class PieceHandler {
 
     this.moveToken = 1;
     this.subscribers = [];
+    this.coordSubscribers = [];
     this.currentCoords = { x: null, y: null };
     // CR nroyalty: omg. We need to actually set last snapshot coords
     // based on the data we get from new snapshots!!!!
@@ -730,20 +731,51 @@ class PieceHandler {
     }
   }
 
+  broadcastCoordsState() {
+    this.coordSubscribers.forEach(({ callback }) => {
+      callback({
+        currentCoords: this.currentCoords,
+        lastSnapshotCoords: this.lastSnapshotCoords,
+      });
+    });
+  }
+
   setCurrentCoords({ x, y }) {
     this.currentCoords = { x, y };
+    this.broadcastCoordsState();
   }
 
-  subscribe({ id, callback }) {
-    this.subscribers.push({ id, callback });
-    console.log(`SUBSCRIBER COUNT: ${this.subscribers.length}`);
+  _setLastSnapshotCoords({ x, y }) {
+    this.lastSnapshotCoords = { x, y };
+    this.broadcastCoordsState();
   }
 
-  unsubscribe({ id }) {
-    this.subscribers = this.subscribers.filter(
-      ({ id: subscriberId }) => subscriberId !== id
-    );
-    console.log(`SUBSCRIBER COUNT: ${this.subscribers.length}`);
+  subscribe({ id, callback, type = "pieces" }) {
+    if (type === "coords") {
+      this.coordSubscribers.push({ id, callback });
+      callback({
+        currentCoords: this.currentCoords,
+        lastSnapshotCoords: this.lastSnapshotCoords,
+      });
+    } else if (type === "pieces") {
+      this.subscribers.push({ id, callback });
+    } else {
+      throw new Error(`Unknown subscriber type: ${type}`);
+    }
+  }
+
+  unsubscribe({ id, type = "pieces" }) {
+    if (type === "coords") {
+      this.coordSubscribers = this.coordSubscribers.filter(
+        ({ id: subscriberId }) => subscriberId !== id
+      );
+    } else if (type === "pieces") {
+      this.subscribers = this.subscribers.filter(
+        ({ id: subscriberId }) => subscriberId !== id
+      );
+    } else {
+      throw new Error(`Unknown subscriber type: ${type}`);
+    }
   }
 
   processGroundTruthAnimations({ animationsByPieceId, receivedAt }) {
@@ -1003,12 +1035,8 @@ class PieceHandler {
           }
         }
       } else {
-        // No need to compute appearances if the snapshot is far away from our
-        // last one
-        if (shouldComputeSimulatedChanges) {
-          const animation = animateAppearance({ piece, receivedAt });
-          animationsByPieceId.set(piece.id, animation);
-        }
+        const animation = animateAppearance({ piece, receivedAt });
+        animationsByPieceId.set(piece.id, animation);
       }
     });
 
@@ -1018,7 +1046,7 @@ class PieceHandler {
 
     // No need to compute captures if this snapshot is far away from our last
     // one (we'll be missing lots of pieces regardless)
-    // CR nroyalty: we could make this a little smarter by asking "should we expect
+    // CR nroyalty: we should make this a little smarter by asking "should we expect
     // the missing piece to exist in the new snapshot window"
     if (shouldComputeSimulatedChanges) {
       for (const [oldPieceId, oldPiece] of this.piecesById) {
@@ -1045,6 +1073,11 @@ class PieceHandler {
     const { processedAnimationsByPieceId } = this.processGroundTruthAnimations({
       animationsByPieceId,
       receivedAt,
+    });
+
+    this._setLastSnapshotCoords({
+      x: snapshot.xCoord,
+      y: snapshot.yCoord,
     });
 
     this.broadcastAnimations({

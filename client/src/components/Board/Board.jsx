@@ -9,6 +9,7 @@ import PanzoomBox from "../PanzoomBox/PanzoomBox";
 import useBoardSizeParams from "../../hooks/use-board-size-params";
 import CoordsContext from "../CoordsContext/CoordsContext";
 import ShowLargeBoardContext from "../ShowLargeBoardContext/ShowLargeBoardContext";
+import LoadingView from "../LoadingView/LoadingView";
 
 const Outer = styled.div`
   width: 100%;
@@ -235,6 +236,7 @@ function Board() {
         }}
         ref={sizedInnerRef}
       >
+        <LoadingView />
         {coordsAreNotNull && (
           <>
             {smallMounted && (

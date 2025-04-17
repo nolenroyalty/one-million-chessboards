@@ -267,6 +267,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
 
     pieceHandler.current.subscribe({
       id: "piece-display",
+      type: "pieces",
       callback: (data) => {
         // we do an update if we need to re-render the visible pieces because
         // a move has made a piece visible, because an appearance is within the visible
@@ -446,6 +447,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
 
     return () => {
       pieceHandler.current.unsubscribe({
+        type: "pieces",
         id: "piece-display",
       });
     };
