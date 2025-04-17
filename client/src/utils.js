@@ -613,7 +613,8 @@ export function getColorPref() {
   return colorPref;
 }
 
-export function storeColorPref(colorPref) {
+export function storeColorPref({ playingWhite }) {
+  const colorPref = playingWhite ? "white" : "black";
   localStorage.setItem("colorPref", colorPref);
 }
 

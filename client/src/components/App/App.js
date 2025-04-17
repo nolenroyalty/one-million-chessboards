@@ -12,6 +12,7 @@ import { HandlersContextProvider } from "../HandlersContext/HandlersContext";
 import { CoordsContextProvider } from "../CoordsContext/CoordsContext";
 import { ShowLargeBoardContextProvider } from "../ShowLargeBoardContext/ShowLargeBoardContext";
 import { SelectedPieceAndSquaresContextProvider } from "../SelectedPieceAndSquaresContext/SelectedPieceAndSquaresContext";
+import { CurrentColorProvider } from "../CurrentColorProvider/CurrentColorProvider";
 import WebsocketProvider from "../WebsocketProvider/WebsocketProvider";
 
 const Main = styled.main`
@@ -69,19 +70,21 @@ function App() {
       minimapHandler={minimapHandler}
     >
       <CoordsContextProvider>
-        <WebsocketProvider>
-          <ShowLargeBoardContextProvider>
-            <SelectedPieceAndSquaresContextProvider>
-              <Main>
-                <SmallHeader />
-                <BigHeader />
-                {/* <ChessPieceColorer /> */}
-                <Board />
-                <BoardControls />
-              </Main>
-            </SelectedPieceAndSquaresContextProvider>
-          </ShowLargeBoardContextProvider>
-        </WebsocketProvider>
+        <CurrentColorProvider>
+          <WebsocketProvider>
+            <ShowLargeBoardContextProvider>
+              <SelectedPieceAndSquaresContextProvider>
+                <Main>
+                  <SmallHeader />
+                  <BigHeader />
+                  {/* <ChessPieceColorer /> */}
+                  <Board />
+                  <BoardControls />
+                </Main>
+              </SelectedPieceAndSquaresContextProvider>
+            </ShowLargeBoardContextProvider>
+          </WebsocketProvider>
+        </CurrentColorProvider>
       </CoordsContextProvider>
     </HandlersContextProvider>
   );

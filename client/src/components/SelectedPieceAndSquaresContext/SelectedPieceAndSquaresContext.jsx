@@ -1,7 +1,8 @@
 import React from "react";
 import HandlersContext from "../HandlersContext/HandlersContext";
 import ShowLargeBoardContext from "../ShowLargeBoardContext/ShowLargeBoardContext";
-
+import CurrentColorContext from "../CurrentColorProvider/CurrentColorProvider";
+import { RESPECT_COLOR_REQUIREMENT } from "../../constants";
 const SelectedPieceAndSquaresContext = React.createContext();
 
 export function SelectedPieceAndSquaresContextProvider({ children }) {
@@ -11,6 +12,7 @@ export function SelectedPieceAndSquaresContextProvider({ children }) {
     moveableSquares: new Map(),
   });
   const { showLargeBoard } = React.useContext(ShowLargeBoardContext);
+  const { currentColor } = React.useContext(CurrentColorContext);
 
   const clearSelectedPiece = React.useCallback(() => {
     setSelectedPieceAndSquares({
@@ -21,12 +23,22 @@ export function SelectedPieceAndSquaresContextProvider({ children }) {
 
   const setSelectedPiece = React.useCallback(
     (piece) => {
+      let moveableSquares;
+      if (RESPECT_COLOR_REQUIREMENT) {
+        if (piece.isWhite !== currentColor.playingWhite) {
+          moveableSquares = new Map();
+        } else {
+          moveableSquares = pieceHandler.current.getMoveableSquares(piece);
+        }
+      } else {
+        moveableSquares = pieceHandler.current.getMoveableSquares(piece);
+      }
       setSelectedPieceAndSquares({
         selectedPiece: piece,
-        moveableSquares: pieceHandler.current.getMoveableSquares(piece),
+        moveableSquares,
       });
     },
-    [pieceHandler]
+    [pieceHandler, currentColor.playingWhite]
   );
 
   const clearSelectedPieceForId = React.useCallback((id) => {
@@ -68,13 +80,22 @@ export function SelectedPieceAndSquaresContextProvider({ children }) {
         ),
       }));
     };
-    if (selectedPieceAndSquares.selectedPiece) {
+    const haveSelectedPiece = !!selectedPieceAndSquares.selectedPiece;
+    const colorMatches = RESPECT_COLOR_REQUIREMENT
+      ? selectedPieceAndSquares.selectedPiece?.isWhite ===
+        currentColor.playingWhite
+      : true;
+    if (haveSelectedPiece && colorMatches) {
       intervalId = setInterval(refreshMoveableSquares, 800);
     } else {
       clearInterval(intervalId);
     }
     return () => clearInterval(intervalId);
-  }, [pieceHandler, selectedPieceAndSquares.selectedPiece]);
+  }, [
+    pieceHandler,
+    selectedPieceAndSquares.selectedPiece,
+    currentColor.playingWhite,
+  ]);
 
   const value = React.useMemo(
     () => ({

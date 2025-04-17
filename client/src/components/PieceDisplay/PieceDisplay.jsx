@@ -3,6 +3,7 @@ import styled from "styled-components";
 import HandlersContext from "../HandlersContext/HandlersContext";
 import CoordsContext from "../CoordsContext/CoordsContext";
 import SelectedPieceAndSquaresContext from "../SelectedPieceAndSquaresContext/SelectedPieceAndSquaresContext";
+import CurrentColorContext from "../CurrentColorProvider/CurrentColorProvider";
 import {
   imageForPieceType,
   getStartingAndEndingCoords,
@@ -11,6 +12,7 @@ import {
   computeAnimationDuration,
   getZoomedInScreenAbsoluteCoords,
 } from "../../utils";
+import { RESPECT_COLOR_REQUIREMENT } from "../../constants";
 
 const MAX_ANIMATION_DURATION = 750;
 const MIN_ANIMATION_DURATION = 350;
@@ -27,7 +29,7 @@ const PieceImg = styled.img`
   transform-origin: center;
   transform: var(--transform);
   &:hover {
-    transform: scale(1.12);
+    transform: scale(var(--hover-scale));
   }
 
   &[data-captured="true"] {
@@ -70,20 +72,25 @@ function _Piece({
   savePieceRef,
   maybeHandlePieceClick,
   captured,
+  moveable,
 }) {
   const style = React.useMemo(() => {
+    const defaultCursor = moveable ? "pointer" : "default";
     return {
       "--size": `${size}px`,
       transform: translate,
       "--opacity": opacity,
       "--pointer-events": hidden || captured ? "none" : "auto",
-      "--cursor": hidden || captured ? "none" : "pointer",
+      "--cursor": hidden || captured ? "none" : defaultCursor,
     };
-  }, [size, translate, captured, opacity, hidden]);
+  }, [size, translate, captured, opacity, hidden, moveable]);
 
   const imgStyle = React.useMemo(() => {
-    return { "--transform": selected ? "scale(1.12)" : "scale(1)" };
-  }, [selected]);
+    return {
+      "--transform": moveable && selected ? "scale(1.12)" : "scale(1)",
+      "--hover-scale": moveable ? 1.12 : 1,
+    };
+  }, [selected, moveable]);
 
   const onClick = React.useCallback(() => {
     if (captured) {
@@ -168,7 +175,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
   const piecesRefsMap = React.useRef(new Map());
   const capturedPiecesByIdRef = React.useRef(new Map());
   const [forceUpdate, setForceUpdate] = React.useState(0);
-
+  const { currentColor } = React.useContext(CurrentColorContext);
   const recentMoveByPieceIdRef = React.useRef(new Map());
 
   const isNotVisible = React.useCallback(
@@ -594,6 +601,13 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
         y: piece.y,
       });
 
+      let moveable = RESPECT_COLOR_REQUIREMENT
+        ? piece.isWhite === currentColor.playingWhite
+        : true;
+      if (captured) {
+        moveable = false;
+      }
+
       memoizedPieces.push({
         piece,
         imageSrc: imageForPieceType({
@@ -603,6 +617,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
         translate: `translate(${absoluteX}px, ${absoluteY}px)`,
         selected,
         captured,
+        moveable,
       });
     }
 
@@ -612,32 +627,36 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
 
     return memoizedPieces;
   }, [
-    isInvisibleNowAndViaMove,
+    forceUpdate,
     getAnimatedCoords,
     startingX,
     startingY,
     boardSizeParams,
+    isInvisibleNowAndViaMove,
+    currentColor.playingWhite,
     selectedPiece?.id,
-    forceUpdate,
   ]);
 
-  return memoizedPieces.map(({ piece, imageSrc, translate, captured }) => {
-    return (
-      <Piece
-        key={piece.id}
-        savePieceRef={savePieceRef}
-        src={imageSrc}
-        dataId={piece.id}
-        translate={translate}
-        size={boardSizeParams.squarePx}
-        hidden={hidden}
-        opacity={opacity}
-        maybeHandlePieceClick={maybeHandlePieceClick}
-        selected={piece.id === selectedPiece?.id}
-        captured={captured}
-      />
-    );
-  });
+  return memoizedPieces.map(
+    ({ piece, imageSrc, translate, captured, moveable }) => {
+      return (
+        <Piece
+          key={piece.id}
+          savePieceRef={savePieceRef}
+          src={imageSrc}
+          dataId={piece.id}
+          translate={translate}
+          size={boardSizeParams.squarePx}
+          hidden={hidden}
+          opacity={opacity}
+          maybeHandlePieceClick={maybeHandlePieceClick}
+          selected={piece.id === selectedPiece?.id}
+          captured={captured}
+          moveable={moveable}
+        />
+      );
+    }
+  );
 }
 
 export default PieceDisplay;

@@ -7,6 +7,8 @@ package server
 // also make sure when we move to a read-lock approach that we use our latest position
 // after getting the lock, instead of the position from when we tried to take the lock.
 
+// CR nroyalty: we need to specify whether the client is playing white or black
+// and then use that to determine which pieces they can move.
 import (
 	"encoding/json"
 	"fmt"
@@ -99,8 +101,7 @@ type Client struct {
 	// CR nroyalty: atomic.bool
 	isClosed       bool
 	lastActionTime atomic.Int64
-	// CR nroyalty: atomic.bool
-	playingWhite bool
+	playingWhite   atomic.Bool
 }
 
 // SubscriptionRequest represents a client request to subscribe to a position
@@ -124,7 +125,7 @@ func NewClient(conn *websocket.Conn, server *Server) *Client {
 		bufferMu:       sync.Mutex{},
 		closeMu:        sync.Mutex{},
 		lastActionTime: atomic.Int64{},
-		playingWhite:   false,
+		playingWhite:   atomic.Bool{},
 	}
 	c.lastActionTime.Store(time.Now().Unix())
 	c.position.Store(Position{X: 0, Y: 0})
@@ -133,7 +134,7 @@ func NewClient(conn *websocket.Conn, server *Server) *Client {
 }
 
 func (c *Client) InitializeFromPreferences(playingWhite bool, pos Position) {
-	c.playingWhite = playingWhite
+	c.playingWhite.Store(playingWhite)
 	c.position.Store(pos)
 	c.lastSnapshotPosition.Store(pos)
 }
@@ -170,7 +171,7 @@ func (c *Client) sendInitialState() {
 		MinimapAggregation: aggregation,
 		GlobalStats:        stats,
 		Position:           currentPosition,
-		PlayingWhite:       c.playingWhite,
+		PlayingWhite:       c.playingWhite.Load(),
 		Snapshot:           snapshot.ToSnapshotMessage(),
 	}
 	data, err := json.Marshal(initialInfo)
@@ -178,6 +179,7 @@ func (c *Client) sendInitialState() {
 		log.Printf("Error marshaling initial info: %v", err)
 		return
 	}
+	sleepSimulatedLatency()
 	select {
 	case c.send <- data:
 	case <-c.done:
@@ -285,16 +287,16 @@ func (c *Client) handleMessage(message []byte) {
 		c.BumpActive()
 
 		move := Move{
-			PieceID:   uint32(pieceID),
-			FromX:     uint16(fromX),
-			FromY:     uint16(fromY),
-			ToX:       uint16(toX),
-			ToY:       uint16(toY),
-			MoveType:  moveTypeEnum,
-			MoveToken: uint32(moveToken),
+			PieceID:              uint32(pieceID),
+			FromX:                uint16(fromX),
+			FromY:                uint16(fromY),
+			ToX:                  uint16(toX),
+			ToY:                  uint16(toY),
+			MoveType:             moveTypeEnum,
+			MoveToken:            uint32(moveToken),
+			ClientIsPlayingWhite: c.playingWhite.Load(),
 		}
 
-		// Submit the move request
 		c.server.moveRequests <- MoveRequest{
 			Move:   move,
 			Client: c,

@@ -1,5 +1,7 @@
 package server
 
+// CR nroyalty: remove log lines here before shipping to prod?
+
 import (
 	"log"
 	"math"
@@ -246,6 +248,13 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 	if movedPiece.IsEmpty() {
 		log.Printf("Invalid move: No piece at from position (expected id %d)", move.PieceID)
 		return MoveResult{Valid: false}
+	}
+
+	if move.ClientIsPlayingWhite != movedPiece.IsWhite {
+		if RESPECT_COLOR_REQUIREMENT {
+			log.Printf("Invalid move: Piece is not the correct color")
+			return MoveResult{Valid: false}
+		}
 	}
 
 	// piece ID must match

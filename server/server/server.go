@@ -49,8 +49,8 @@ type Server struct {
 	getClients     chan CurrentClients
 	moveRequests   chan MoveRequest
 	subscriptions  chan SubscriptionRequest
-	whiteCount     atomic.Uint32
-	blackCount     atomic.Uint32
+	whiteCount     atomic.Int32
+	blackCount     atomic.Int32
 	connectedUsers atomic.Uint32
 	// HTTP server components
 	upgrader websocket.Upgrader
@@ -220,8 +220,8 @@ func NewServer(stateDir string) *Server {
 		getClients:        make(chan CurrentClients, 128),
 		moveRequests:      make(chan MoveRequest, 1024),
 		subscriptions:     make(chan SubscriptionRequest, 1024),
-		whiteCount:        atomic.Uint32{},
-		blackCount:        atomic.Uint32{},
+		whiteCount:        atomic.Int32{},
+		blackCount:        atomic.Int32{},
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -423,9 +423,19 @@ func applyColorPref(colorPref ColorPreference) bool {
 	}
 }
 
-func (s *Server) DetermineColor(colorPref ColorPreference) bool {
+func (s *Server) _DetermineColor(colorPref ColorPreference) bool {
 	whiteCount := s.whiteCount.Load()
 	blackCount := s.blackCount.Load()
+	if whiteCount < 0 {
+		log.Printf("BUG? whiteCount is negative: %d", whiteCount)
+		whiteCount = 0
+		s.whiteCount.Store(0)
+	}
+	if blackCount < 0 {
+		log.Printf("BUG? blackCount is negative: %d", blackCount)
+		blackCount = 0
+		s.blackCount.Store(0)
+	}
 	total := whiteCount + blackCount
 	if total == 0 {
 		return applyColorPref(colorPref)
@@ -440,6 +450,16 @@ func (s *Server) DetermineColor(colorPref ColorPreference) bool {
 		}
 	}
 	return applyColorPref(colorPref)
+}
+
+func (s *Server) DetermineColor(colorPref ColorPreference) bool {
+	playingWhite := s._DetermineColor(colorPref)
+	if playingWhite {
+		s.whiteCount.Add(1)
+	} else {
+		s.blackCount.Add(1)
+	}
+	return playingWhite
 }
 
 var DEFAULT_COORD_ARRAY = [][]int{
@@ -527,7 +547,13 @@ func (s *Server) handleClientRegistrations() {
 			log.Printf("subscribing client to position: %v", pos)
 			s.subscriptions <- subscribeReq
 		case client := <-s.unregister:
+			if client.playingWhite.Load() {
+				s.whiteCount.Add(-1)
+			} else {
+				s.blackCount.Add(-1)
+			}
 			delete(s.clients, client)
+
 			log.Printf("Client unregistered, total: %d", len(s.clients))
 			s.connectedUsers.Store(uint32(len(s.clients)))
 			go func() {

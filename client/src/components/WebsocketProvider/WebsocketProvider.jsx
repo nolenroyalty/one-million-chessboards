@@ -1,5 +1,6 @@
 import React from "react";
 import HandlersContext from "../HandlersContext/HandlersContext";
+import CurrentColorContext from "../CurrentColorProvider/CurrentColorProvider";
 import {
   createMoveRequest,
   keyToCoords,
@@ -132,6 +133,7 @@ function useWebsocket({
 }) {
   const failedReconnections = React.useRef(0);
   const { setCoords } = React.useContext(CoordsContext);
+  const { setCurrentColor } = React.useContext(CurrentColorContext);
 
   React.useEffect(() => {
     let reconnectTimeout = null;
@@ -200,8 +202,8 @@ function useWebsocket({
           minimapHandler.current.setState({
             state: data.minimapAggregation.aggregations,
           });
-          // CR nroyalty: handle playing white / black
           statsHandler.current.setGlobalStats({ stats: data.globalStats });
+          setCurrentColor({ playingWhite: data.playingWhite });
         } else if (data.type === "validMove") {
           pieceHandler.current.confirmOptimisticMove({
             moveToken: data.moveToken,

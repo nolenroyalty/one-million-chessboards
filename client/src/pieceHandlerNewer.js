@@ -663,11 +663,10 @@ class PieceHandler {
               // we have newer state for this piece but it's consistent
             }
           } else {
-            // let's not bump the seqnum here in case we get some other
-            // metadata via a move...
             ourPiece.x = update.x;
             ourPiece.y = update.y;
             ourPiece.moveCount++;
+            ourPiece.seqnum = update.seqnum;
             if (capturedPieceId) {
               ourPiece.captureCount++;
             }

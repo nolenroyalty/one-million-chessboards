@@ -12,18 +12,17 @@ const (
 	MoveTypeEnPassant
 )
 
-// Move represents a chess piece move
 type Move struct {
-	PieceID   uint32
-	FromX     uint16
-	FromY     uint16
-	ToX       uint16
-	ToY       uint16
-	MoveType  MoveType
-	MoveToken uint32
+	PieceID              uint32
+	FromX                uint16
+	FromY                uint16
+	ToX                  uint16
+	ToY                  uint16
+	MoveType             MoveType
+	MoveToken            uint32
+	ClientIsPlayingWhite bool
 }
 
-// MoveRequest combines a move with the client that requested it
 type MoveRequest struct {
 	Move   Move
 	Client *Client
@@ -68,15 +67,8 @@ type PieceData struct {
 }
 
 type PieceMove struct {
-	// PieceID uint32 `json:"pieceId"`
-	// ToX   uint16 `json:"toX"`
-	// ToY   uint16 `json:"toY"`
 	Piece  PieceData `json:"piece"`
 	Seqnum uint64    `json:"seqnum"`
-	// PieceType    PieceType `json:"pieceType"`
-	// IsWhite      bool      `json:"isWhite"`
-	// MoveCount    uint8     `json:"moveCount"`
-	// CaptureCount uint8     `json:"captureCount"`
 }
 
 // PieceCapture represents a capture update to send to clients

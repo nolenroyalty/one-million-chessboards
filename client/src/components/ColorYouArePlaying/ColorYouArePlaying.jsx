@@ -2,6 +2,8 @@ import React from "react";
 import styled from "styled-components";
 import BoardControlsPanel from "../BoardControlsPanel/BoardControlsPanel";
 import { QUERY } from "../../constants";
+import CurrentColorContext from "../CurrentColorProvider/CurrentColorProvider";
+
 const Wrapper = styled(BoardControlsPanel)`
   grid-area: you-are-playing;
   position: relative;
@@ -49,16 +51,32 @@ const WhiteTextSpan = styled.span`
   color: var(--color-neutral-100);
 `;
 
-function ColorYouArePlaying({ isWhite }) {
-  const text = isWhite ? "white pieces" : "black pieces";
-  const absoluteText = isWhite ? "white" : "black";
+function ColorYouArePlaying() {
+  const { currentColor } = React.useContext(CurrentColorContext);
+  let absoluteText = "";
+  let notAbsoluteText = "";
+  let absoluteTextStatic = "";
+  let notAbsoluteTextStatic = "";
+  if (currentColor.playingWhite === null) {
+    absoluteText = "loading...";
+    notAbsoluteText = "loading...";
+    absoluteTextStatic = "";
+    notAbsoluteTextStatic = "";
+  } else {
+    absoluteText = currentColor.playingWhite ? "white" : "black";
+    notAbsoluteText = currentColor.playingWhite
+      ? "white pieces"
+      : "black pieces";
+    absoluteTextStatic = "playing";
+    notAbsoluteTextStatic = "you are the";
+  }
   return (
     <Wrapper>
       <TextNotAbsolute>
-        you are the <WhiteTextSpan>{text}</WhiteTextSpan>
+        {notAbsoluteTextStatic} <WhiteTextSpan>{notAbsoluteText}</WhiteTextSpan>
       </TextNotAbsolute>
       <TextAbsolute>
-        playing <WhiteTextSpan>{absoluteText}</WhiteTextSpan>
+        {absoluteTextStatic} <WhiteTextSpan>{absoluteText}</WhiteTextSpan>
       </TextAbsolute>
     </Wrapper>
   );
