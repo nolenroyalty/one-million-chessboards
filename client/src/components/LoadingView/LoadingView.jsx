@@ -3,7 +3,6 @@ import styled from "styled-components";
 import HandlersContext from "../HandlersContext/HandlersContext";
 import CoordsContext from "../CoordsContext/CoordsContext";
 import ShowLargeBoardContext from "../ShowLargeBoardContext/ShowLargeBoardContext";
-// CR nroyalty: consider zoomed out overview too?
 
 const Wrapper = styled.div`
   position: absolute;
@@ -14,7 +13,7 @@ const Wrapper = styled.div`
   width: 100%;
   height: 100%;
 
-  background-color: #000000;
+  background-color: var(--color-neutral-950);
   opacity: var(--opacity);
   transition: opacity var(--transition-time) ease-in-out var(--transition-delay);
   z-index: 1000;
