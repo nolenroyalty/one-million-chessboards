@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -26,20 +25,22 @@ import (
 // pretty easy.
 
 const (
-	PeriodicUpdateInterval = time.Second * 5
+	// CR nroyalty: MAKE SURE THIS IS NOT BELOW 60 AND MAYBE MAKE IT HIGHER
+	PeriodicUpdateInterval = time.Second * 60
 	activityThreshold      = time.Second * 20
-	simulatedLatency       = 1 * time.Second
-	simulatedJitterMs      = 10
+	// CR nroyalty: remove before release
+	simulatedLatency  = 1 * time.Millisecond
+	simulatedJitterMs = 1
 )
 
 func getSimulatedLatency() time.Duration {
-	jitterInt := rand.Intn(simulatedJitterMs)
-	jitterSign := rand.Intn(2)
-	if jitterSign == 0 {
-		jitterInt = -jitterInt
-	}
-	jitter := time.Duration(jitterInt) * time.Millisecond
-	return simulatedLatency + jitter
+	// jitterInt := rand.Intn(simulatedJitterMs)
+	// jitterSign := rand.Intn(2)
+	// if jitterSign == 0 {
+	// 	jitterInt = -jitterInt
+	// }
+	// jitter := time.Duration(jitterInt) * time.Millisecond
+	return simulatedLatency
 }
 
 func sleepSimulatedLatency() {
@@ -179,7 +180,6 @@ func (c *Client) sendInitialState() {
 		log.Printf("Error marshaling initial info: %v", err)
 		return
 	}
-	sleepSimulatedLatency()
 	select {
 	case c.send <- data:
 	case <-c.done:

@@ -4,6 +4,7 @@ import HandlersContext from "../HandlersContext/HandlersContext";
 import CoordsContext from "../CoordsContext/CoordsContext";
 import SelectedPieceAndSquaresContext from "../SelectedPieceAndSquaresContext/SelectedPieceAndSquaresContext";
 import CurrentColorContext from "../CurrentColorProvider/CurrentColorProvider";
+import { Swords, Star, Crown, Axe } from "lucide-react";
 import {
   imageForPieceType,
   getStartingAndEndingCoords,
@@ -13,6 +14,11 @@ import {
   getZoomedInScreenAbsoluteCoords,
 } from "../../utils";
 import { RESPECT_COLOR_REQUIREMENT } from "../../constants";
+
+// CR nroyalty:
+// - icon in lower left for kill count of piece (sword, change color)
+// - maybe a star or change the color for sponsored pieces
+// - add sponsored pieces
 
 const MAX_ANIMATION_DURATION = 750;
 const MIN_ANIMATION_DURATION = 350;
@@ -70,9 +76,11 @@ function _Piece({
   selected,
   translate,
   savePieceRef,
+  isWhite,
   maybeHandlePieceClick,
   captured,
   moveable,
+  captureCount,
 }) {
   const style = React.useMemo(() => {
     const defaultCursor = moveable ? "pointer" : "default";
@@ -106,6 +114,35 @@ function _Piece({
     [savePieceRef, dataId]
   );
 
+  let killsFillColor = null;
+  if (captureCount >= 64) {
+    killsFillColor = "var(--color-purple-600)";
+  } else if (captureCount >= 32) {
+    killsFillColor = "var(--color-blue-500)";
+  } else if (captureCount >= 16) {
+    killsFillColor = "var(--color-emerald-600)";
+  } else if (captureCount >= 3) {
+    killsFillColor = "var(--color-gray-400)";
+  }
+
+  let KillsIcon = null;
+  if (killsFillColor) {
+    KillsIcon = (
+      <Axe
+        size={16}
+        strokeWidth={2}
+        fill={killsFillColor}
+        color="var(--color-neutral-900)"
+        style={{
+          position: "absolute",
+          bottom: "0px",
+          right: "0px",
+          pointerEvents: "none",
+        }}
+      />
+    );
+  }
+
   return (
     <PieceButtonWrapper
       data-id={dataId}
@@ -123,7 +160,9 @@ function _Piece({
         src={src}
         style={imgStyle}
         data-captured={captured}
+        draggable={false}
       />
+      {KillsIcon}
     </PieceButtonWrapper>
   );
 }
@@ -653,6 +692,8 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
           selected={piece.id === selectedPiece?.id}
           captured={captured}
           moveable={moveable}
+          isWhite={piece.isWhite}
+          captureCount={piece.captureCount}
         />
       );
     }
