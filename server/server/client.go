@@ -26,10 +26,10 @@ import (
 
 const (
 	// CR nroyalty: MAKE SURE THIS IS NOT BELOW 60 AND MAYBE MAKE IT HIGHER
-	PeriodicUpdateInterval = time.Second * 60
+	PeriodicUpdateInterval = time.Second * 120
 	activityThreshold      = time.Second * 20
 	// CR nroyalty: remove before release
-	simulatedLatency  = 3 * time.Second
+	simulatedLatency  = 1 * time.Millisecond
 	simulatedJitterMs = 1
 )
 

@@ -5,6 +5,7 @@ package server
 import (
 	"log"
 	"math"
+	"math/rand"
 	"sync/atomic"
 )
 
@@ -695,12 +696,14 @@ func (b *Board) InitializeRandom() {
 	startY := uint16(0)
 	for dx := range 1000 {
 		for dy := range 1000 {
-			// random := rand.Intn(1500)
-			// includeWhite := random > dy
-			// includeBlack := random > dx
+			random := rand.Intn(1500)
+			includeWhite := random > dy
+			includeBlack := random > dx
+			// includeWhite := true
+			// includeBlack := true
 			// includeWhite := random < 50
 			// includeBlack := random >= 50
-			b.ResetBoardSection(startX+uint16(dx), startY+uint16(dy), true, true)
+			b.ResetBoardSection(startX+uint16(dx), startY+uint16(dy), includeWhite, includeBlack)
 		}
 	}
 }

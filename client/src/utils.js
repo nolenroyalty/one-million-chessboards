@@ -657,7 +657,7 @@ export function computeInitialArguments() {
   }
   try {
     const [x, y] = hash.split(",").map(Number);
-    if (x < 0 || x >= 8000 || y < 0 || y >= 8000) {
+    if (x < 0 || x >= 8000 || y < 0 || y >= 8000 || isNaN(x) || isNaN(y)) {
       return { x: null, y: null, colorPref };
     }
     return { x, y, colorPref };

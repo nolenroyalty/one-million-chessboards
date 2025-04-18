@@ -135,10 +135,12 @@ function MinimapCanvas({ coords, setCoords }) {
       const x = i % MINIMAP_WIDTH;
       const y = Math.floor(i / MINIMAP_WIDTH);
       const index = (y * MINIMAP_WIDTH + x) * 4;
-      if (cell.amount > 0) {
-        const amount = clamp(cell.amount, 1, 3);
+      let amount = cell & 0x7;
+      const whiteAhead = (cell >> 3) & 1;
+      if (amount > 0) {
+        amount = clamp(amount, 1, 3);
         let rgb;
-        if (cell.whiteAhead) {
+        if (whiteAhead) {
           rgb = WHITE_ADVANTAGE_COLORS_RGB[amount - 1];
         } else {
           rgb = BLACK_ADVANTAGE_COLORS_RGB[amount - 1];

@@ -31,14 +31,30 @@ type minimapCaptureUpdate struct {
 	Piece Piece
 }
 
-type SingleAggregation struct {
-	WhiteAhead bool   `json:"whiteAhead"`
-	Amount     uint16 `json:"amount"`
+type packedAggregation uint8
+
+// CR nroyalty: we can pack two of these into a byte and get some real savings...
+const (
+	amountShift     = 0
+	whiteAheadShift = 3
+	amountMask      = 0x7
+)
+
+func makePackedAggregation(whiteAhead bool, amount uint8) packedAggregation {
+	if amount == 0 {
+		return packedAggregation(0)
+	}
+	amountMasked := amount & amountMask
+	whiteAheadMasked := 0
+	if whiteAhead {
+		whiteAheadMasked = 1 << whiteAheadShift
+	}
+	return packedAggregation(amountMasked | uint8(whiteAheadMasked))
 }
 
 type AggregationResponse struct {
 	Type         string                                               `json:"type"`
-	Aggregations [NUMBER_OF_CELLS * NUMBER_OF_CELLS]SingleAggregation `json:"aggregations"`
+	Aggregations [NUMBER_OF_CELLS * NUMBER_OF_CELLS]packedAggregation `json:"aggregations"`
 }
 
 type AggregationRequest struct {
@@ -146,7 +162,6 @@ func (m *MinimapAggregator) handleAggregationRequest(request AggregationRequest)
 		Type: "minimapUpdate",
 	}
 	for i := 0; i < NUMBER_OF_CELLS*NUMBER_OF_CELLS; i++ {
-		response.Aggregations[i] = SingleAggregation{}
 		x := i % NUMBER_OF_CELLS
 		y := i / NUMBER_OF_CELLS
 		whiteCount := m.cells[x][y].WhiteCount
@@ -162,10 +177,7 @@ func (m *MinimapAggregator) handleAggregationRequest(request AggregationRequest)
 			amount = 1
 		}
 
-		response.Aggregations[i] = SingleAggregation{
-			WhiteAhead: whiteCount > blackCount,
-			Amount:     uint16(amount),
-		}
+		response.Aggregations[i] = makePackedAggregation(whiteCount > blackCount, uint8(amount))
 	}
 	jsonResponse, err := json.Marshal(response)
 	if err != nil {
