@@ -311,9 +311,13 @@ function useWebsocket({
   ]);
 }
 
-// CR nroyalty: do a tiny debounce here (10 or 20 ms?)
+// CR nroyalty: if we wanted to be smart (and we should), we can debounce much
+// more aggressively if we've recently requested a snapshot, and can skip
+// debouncing if we just did a big jump in position!
+const DEBOUNCE_TIME = 100;
 function useUpdateCoords({ connected, safelySendJSON }) {
   const { coords } = React.useContext(CoordsContext);
+  const debounceTimeoutRef = React.useRef(null);
   React.useEffect(() => {
     if (!connected) {
       return;
@@ -321,11 +325,22 @@ function useUpdateCoords({ connected, safelySendJSON }) {
     if (coords.x === null || coords.y === null) {
       return;
     }
-    safelySendJSON({
-      type: "subscribe",
-      centerX: coords.x,
-      centerY: coords.y,
-    });
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+    debounceTimeoutRef.current = setTimeout(() => {
+      safelySendJSON({
+        type: "subscribe",
+        centerX: coords.x,
+        centerY: coords.y,
+      });
+    }, DEBOUNCE_TIME);
+
+    return () => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
+    };
   }, [safelySendJSON, coords, connected]);
 }
 export const WebsocketContext = React.createContext();

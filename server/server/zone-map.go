@@ -53,7 +53,7 @@ func NewZoneMap() *ZoneMap {
 	return zm
 }
 
-func (zm *ZoneMap) processZoneMap() {
+func (zm *ZoneMap) Run() {
 	for {
 		select {
 		case op := <-zm.additions:

@@ -104,11 +104,6 @@ type Client struct {
 	playingWhite         atomic.Bool
 }
 
-type SubscriptionRequest struct {
-	Client   *Client
-	Position Position
-}
-
 func NewClient(conn *websocket.Conn, server *Server) *Client {
 	c := &Client{
 		conn:           conn,
@@ -130,13 +125,11 @@ func NewClient(conn *websocket.Conn, server *Server) *Client {
 	return c
 }
 
-func (c *Client) InitializeFromPreferences(playingWhite bool, pos Position) {
+func (c *Client) Run(playingWhite bool, pos Position) {
 	c.playingWhite.Store(playingWhite)
 	c.position.Store(pos)
 	c.lastSnapshotPosition.Store(pos)
-}
-
-func (c *Client) Run() {
+	c.server.zoneMap.AddClientToZones(c, pos)
 	go c.ReadPump()
 	go c.WritePump()
 	go c.SendPeriodicUpdates()
@@ -207,6 +200,7 @@ func shouldSendSnapshot(lastSnapshotPosition Position, currentPosition Position)
 
 func (c *Client) UpdatePositionAndMaybeSnapshot(pos Position) {
 	c.position.Store(pos)
+	c.server.zoneMap.AddClientToZones(c, pos)
 	lastSnapshotPosition := c.lastSnapshotPosition.Load().(Position)
 	if shouldSendSnapshot(lastSnapshotPosition, pos) {
 		snapshot := c.server.board.GetStateForPosition(pos)
@@ -315,13 +309,15 @@ func (c *Client) handleMessage(message []byte) {
 			c.SendError("Invalid coordinates")
 			return
 		}
-		c.BumpActive()
+		centerXInt := uint16(centerX)
+		centerYInt := uint16(centerY)
 
-		// Submit the subscription request
-		c.server.subscriptions <- SubscriptionRequest{
-			Client:   c,
-			Position: Position{X: uint16(centerX), Y: uint16(centerY)},
+		if centerXInt == c.position.Load().(Position).X && centerYInt == c.position.Load().(Position).Y {
+			return
 		}
+
+		c.BumpActive()
+		c.UpdatePositionAndMaybeSnapshot(Position{X: centerXInt, Y: centerYInt})
 
 	case "app-ping":
 		type AppPong struct {

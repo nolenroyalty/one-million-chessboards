@@ -11,6 +11,13 @@ import CoordsContext from "../CoordsContext/CoordsContext";
 import ShowLargeBoardContext from "../ShowLargeBoardContext/ShowLargeBoardContext";
 import LoadingView from "../LoadingView/LoadingView";
 
+// nroyalty: just in case it comes up: pieces can hang off the edge of the board
+// if the board gets below its min width or min height. Even if its a normal width
+// this can happen if the height is really small. I think this is a function of using
+// our minimum size values for width and height, resulting in values that aren't
+// nice multiples of our width and height and giving slightly weird behavior. it's
+// not a huge deal but it's kind of annoying.
+
 const Outer = styled.div`
   width: 100%;
   height: 100%;

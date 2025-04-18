@@ -47,7 +47,6 @@ type Server struct {
 	unregister     chan *Client
 	getClients     chan CurrentClients
 	moveRequests   chan MoveRequest
-	subscriptions  chan SubscriptionRequest
 	whiteCount     atomic.Int32
 	blackCount     atomic.Int32
 	connectedUsers atomic.Uint32
@@ -68,7 +67,6 @@ func NewServer(stateDir string) *Server {
 		unregister:        make(chan *Client, 512),
 		getClients:        make(chan CurrentClients, 128),
 		moveRequests:      make(chan MoveRequest, 1024),
-		subscriptions:     make(chan SubscriptionRequest, 1024),
 		whiteCount:        atomic.Int32{},
 		blackCount:        atomic.Int32{},
 		upgrader: websocket.Upgrader{
@@ -87,13 +85,11 @@ func NewServer(stateDir string) *Server {
 func (s *Server) Run() {
 
 	s.minimapAggregator.Initialize(s.board)
-	// Start the specialized processing goroutines
 	go s.processMoves()
-	go s.handleSubscriptions()
 	go s.minimapAggregator.Run()
 	go s.sendPeriodicAggregations()
 	go s.sendPeriodicStats()
-	go s.zoneMap.processZoneMap()
+	go s.zoneMap.Run()
 	go s.handleClientRegistrations()
 	go s.persistentBoard.Run()
 	select {}
@@ -244,16 +240,6 @@ func (s *Server) processMoves() {
 	}
 }
 
-// CR nroyalty: there's no need to have a goroutine here. We should just
-// do this directly from the client; it's an unnecessary buffer.
-func (s *Server) handleSubscriptions() {
-	for sub := range s.subscriptions {
-		pos := sub.Position
-		s.zoneMap.AddClientToZones(sub.Client, pos)
-		sub.Client.UpdatePositionAndMaybeSnapshot(pos)
-	}
-}
-
 type CurrentClients struct {
 	response chan map[*Client]struct{}
 }
@@ -381,21 +367,9 @@ func (s *Server) handleClientRegistrations() {
 		case req := <-s.register:
 			pos := s.GetMaybeRequestedCoords(req.RequestedXCoord, req.RequestedYCoord)
 			playingWhite := s.DetermineColor(req.ColorPreference)
-			req.Client.InitializeFromPreferences(playingWhite, pos)
+			go req.Client.Run(playingWhite, pos)
 			s.clients[req.Client] = struct{}{}
-			// log.Printf("Client registered, total: %d", len(s.clients))
 			s.connectedUsers.Store(uint32(len(s.clients)))
-			go req.Client.Run()
-			subscribeReq := SubscriptionRequest{
-				Client:   req.Client,
-				Position: pos,
-			}
-			// CR nroyalty: remove subscription queue. It makes sense to have a
-			// registration queue, since there is state that the server wants to
-			// have control of. But it's confusing to have a separate subscription
-			// queue.
-			// log.Printf("subscribing client to position: %v", pos)
-			s.subscriptions <- subscribeReq
 		case client := <-s.unregister:
 			if client.playingWhite.Load() {
 				s.whiteCount.Add(-1)
