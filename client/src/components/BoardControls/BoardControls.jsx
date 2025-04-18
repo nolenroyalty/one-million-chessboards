@@ -425,7 +425,7 @@ function SelectedPiece() {
     if (TYPE_TO_NAME[selectedPiece.type] !== "promotedPawn") {
       return null;
     }
-    return <PromotedText>promoted</PromotedText>;
+    return <PromotedText>Promoted</PromotedText>;
   }, [selectedPiece]);
 
   return (
