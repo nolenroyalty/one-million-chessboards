@@ -1,4 +1,9 @@
-import { pieceKey, getMoveableSquares, TYPE_TO_NAME } from "./utils";
+import {
+  pieceKey,
+  getMoveableSquares,
+  TYPE_TO_NAME,
+  NAME_TO_TYPE,
+} from "./utils";
 
 // CR nroyalty: figure out how to remove seqnums from captures?
 const OACTION = {
@@ -139,6 +144,12 @@ class OptimisticState {
       const impactedSquares = new Set();
       impactedSquares.add(pieceKey(move.piece.x, move.piece.y));
       impactedSquares.add(pieceKey(move.toX, move.toY));
+      let wasPromotion = false;
+      if (TYPE_TO_NAME[move.piece.type] === "pawn") {
+        wasPromotion =
+          (move.toY === 0 && move.piece.isWhite) ||
+          (move.toY === 7999 && !move.piece.isWhite);
+      }
       const action = {
         pieceId: move.piece.id,
         type: OACTION.MOVE,
@@ -146,6 +157,7 @@ class OptimisticState {
         y: move.toY,
         impactedSquares,
         moveToken,
+        wasPromotion,
         actionId: this.getIncrActionId(),
         couldBeACapture,
         weThinkItWasACapture: !!capturedPiece,
@@ -282,6 +294,7 @@ class OptimisticState {
     if (lastAction.type === OACTION.MOVE) {
       const incrMoves = actions.length;
       const incrCaptures = actions.filter((a) => a.weThinkItWasACapture).length;
+      const wasPromotion = actions.some((a) => a.wasPromotion);
       return {
         state: OACTION.MOVE,
         x: lastAction.x,
@@ -289,6 +302,7 @@ class OptimisticState {
         couldBeACapture: lastAction.couldBeACapture,
         incrMoves,
         incrCaptures,
+        wasPromotion,
       };
     } else if (lastAction.type === OACTION.CAPTURE) {
       return {
@@ -1192,12 +1206,17 @@ class PieceHandler {
       if (predictedState.state === OACTION.CAPTURE) {
         return undefined;
       } else if (predictedState.state === OACTION.MOVE) {
+        let type = piece.type;
+        if (predictedState.wasPromotion && TYPE_TO_NAME[type] === "pawn") {
+          type = NAME_TO_TYPE["promotedPawn"];
+        }
         return {
           ...piece,
           moveCount: piece.moveCount + predictedState.incrMoves,
           captureCount: piece.captureCount + predictedState.incrCaptures,
           x: predictedState.x,
           y: predictedState.y,
+          type,
         };
       }
     }

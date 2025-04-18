@@ -109,33 +109,62 @@ export const TYPE_TO_NAME = {
   3: "rook",
   4: "queen",
   5: "king",
+  6: "promotedPawn",
 };
 
+export const NAME_TO_TYPE = Object.fromEntries(
+  Object.entries(TYPE_TO_NAME).map(([key, value]) => [value, key])
+);
+console.log(NAME_TO_TYPE);
+
+export function humanNameForPieceType({ pieceType }) {
+  let name = TYPE_TO_NAME[pieceType];
+  if (name === "promotedPawn") {
+    return "Pawn";
+  }
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+export function frameImageForPieceType({ pieceType }) {
+  let name = TYPE_TO_NAME[pieceType];
+  if (name === "promotedPawn") {
+    name = "queen";
+  }
+  return `/pieces/frames/${name}.png`;
+}
+
 export function imageForPieceType({ pieceType, isWhite }) {
-  const name = TYPE_TO_NAME[pieceType];
+  let name = TYPE_TO_NAME[pieceType];
+  if (name === "promotedPawn") {
+    name = "queen";
+  }
   return `/pieces/${isWhite ? "white" : "black"}/${name}.png`;
 }
 
 // const defaultWhiteColor = "#3B82F6";
 const defaultWhiteColor = "#0284c7";
+const whiteQueenColor = "#0ea5e9";
 const WHITE_PIECE_COLORS = {
   pawn: "#fafafa",
   bishop: defaultWhiteColor,
   rook: defaultWhiteColor,
   // queen: "#c4b5fd",
-  queen: "#0ea5e9",
+  queen: whiteQueenColor,
+  promotedPawn: whiteQueenColor,
   // king: "#FDE047",
   king: "#7dd3fc",
   knight: defaultWhiteColor,
 };
 
 const defaultBlackColor = "#115e59";
+const blackQueenColor = "#0d9488";
 const BLACK_PIECE_COLORS = {
   pawn: "#0a0a0a",
   bishop: defaultBlackColor,
   rook: defaultBlackColor,
   // queen: "#5B21B6",
-  queen: "#0d9488",
+  queen: blackQueenColor,
+  promotedPawn: blackQueenColor,
   // king: "#CA8A04",
   king: "#2dd4bf",
   knight: defaultBlackColor,
@@ -565,6 +594,7 @@ export function getMoveableSquares(piece, pieces) {
         addMoveableSquaresForRook({ piece, pieces, squares });
         break;
       case "queen":
+      case "promotedPawn":
         addMoveableSquaresForBishop({ piece, pieces, squares });
         addMoveableSquaresForRook({ piece, pieces, squares });
         break;

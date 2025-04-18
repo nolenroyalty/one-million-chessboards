@@ -15,7 +15,11 @@ import {
   Mail,
   Twitter,
 } from "lucide-react";
-import { TYPE_TO_NAME } from "../../utils";
+import {
+  TYPE_TO_NAME,
+  humanNameForPieceType,
+  frameImageForPieceType,
+} from "../../utils";
 import BoardControlsPanel from "../BoardControlsPanel/BoardControlsPanel";
 import Minimap from "../Minimap/Minimap";
 import StatsDisplay from "../StatsDisplay/StatsDisplay";
@@ -214,19 +218,34 @@ const PieceImageAndStat = styled.div`
 
 const PieceId = styled.p`
   font-size: 0.625rem;
+  line-height: 1;
+`;
+
+const PromotedText = styled.p`
+  font-size: 0.625rem;
+  color: var(--color-sky-400);
+  line-height: 1;
 `;
 
 const PieceInfoOuter = styled.div`
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: space-between;
   align-items: center;
   flex-grow: 4;
+  padding-bottom: 0.5rem;
+`;
+
+const PieceInfoInner = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
 `;
 
 const PieceName = styled.p`
   font-size: 1rem;
-  line-height: 1.1;
+  line-height: 1;
 `;
 
 const PieceStats = styled.div`
@@ -234,9 +253,9 @@ const PieceStats = styled.div`
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  align-self: flex-start;
+  /* align-self: flex-start; */
   gap: 0.375rem;
-  flex-grow: 1;
+  /* flex-grow: 1; */
 `;
 
 const StatSquareOuter = styled.div`
@@ -374,11 +393,7 @@ function SelectedPiece() {
     if (!selectedPiece) {
       return null;
     }
-    const name = TYPE_TO_NAME[selectedPiece.type];
-    if (!name) {
-      return null;
-    }
-    return `/pieces/frames/${name}.png`;
+    return frameImageForPieceType({ pieceType: selectedPiece.type });
   }, [selectedPiece]);
 
   const pieceName = React.useMemo(() => {
@@ -386,11 +401,7 @@ function SelectedPiece() {
       return null;
     }
     const whiteText = selectedPiece.isWhite ? "White" : "Black";
-    const typeName = TYPE_TO_NAME[selectedPiece.type];
-    // capitalize first letter
-    const capitalizedTypeName =
-      typeName.charAt(0).toUpperCase() + typeName.slice(1);
-    return `${whiteText} ${capitalizedTypeName}`;
+    return `${whiteText} ${humanNameForPieceType({ pieceType: selectedPiece.type })}`;
   }, [selectedPiece]);
 
   const pieceCoords = React.useMemo(() => {
@@ -405,6 +416,16 @@ function SelectedPiece() {
       return null;
     }
     return "#" + selectedPiece.id;
+  }, [selectedPiece]);
+
+  const promoted = React.useMemo(() => {
+    if (!selectedPiece) {
+      return null;
+    }
+    if (TYPE_TO_NAME[selectedPiece.type] !== "promotedPawn") {
+      return null;
+    }
+    return <PromotedText>promoted</PromotedText>;
   }, [selectedPiece]);
 
   return (
@@ -423,8 +444,11 @@ function SelectedPiece() {
       <PieceInfoOuter>
         {selectedPiece && (
           <>
-            <PieceName>{pieceName}</PieceName>
-            <PieceId>{pieceId}</PieceId>
+            <PieceInfoInner>
+              <PieceName>{pieceName}</PieceName>
+              <PieceId>{pieceId}</PieceId>
+              {promoted}
+            </PieceInfoInner>
             <PieceStats>
               <StatSquare
                 icon={<ArrowDownUp />}

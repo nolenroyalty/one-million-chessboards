@@ -12,6 +12,7 @@ import {
   easeInOutSquare,
   computeAnimationDuration,
   getZoomedInScreenAbsoluteCoords,
+  TYPE_TO_NAME,
 } from "../../utils";
 import { RESPECT_COLOR_REQUIREMENT } from "../../constants";
 
@@ -340,6 +341,20 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
             // move = { ...move, fromX: oldPiece.x, fromY: oldPiece.y };
             // oldPiece.x = move.piece.x;
             // oldPiece.y = move.piece.y;
+            if (TYPE_TO_NAME[movedPiece.type] === "promotedPawn") {
+              const alreadyPromoted =
+                TYPE_TO_NAME[oldPiece.type] === "promotedPawn";
+              if (!alreadyPromoted) {
+                doUpdate = true;
+              }
+            }
+            if (TYPE_TO_NAME[oldPiece.type] === "promotedPawn") {
+              const notPromotedNow =
+                TYPE_TO_NAME[movedPiece.type] !== "promotedPawn";
+              if (notPromotedNow) {
+                doUpdate = true;
+              }
+            }
           }
           const endedVisible = !isNotVisible({
             x: movedPiece.x,

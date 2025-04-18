@@ -219,6 +219,8 @@ func (b *Board) satisfiesMoveRules(movedPiece Piece, capturedPiece Piece, move M
 		return b.satisfiesRookMoveRules(move)
 	case Queen:
 		return b.satisfiesQueenMoveRules(move)
+	case PromotedPawn:
+		return b.satisfiesQueenMoveRules(move)
 	case King:
 		return b.satisfiesKingMoveRules(move)
 	}
@@ -470,12 +472,19 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 			return MoveResult{Valid: false}
 		}
 
+		// Pawns must handle double move, promotion
 		if movedPiece.Type == Pawn {
 			dy := int32(move.ToY) - int32(move.FromY)
 			if dy == 2 || dy == -2 {
 				movedPiece.JustDoubleMoved = true
 			} else {
 				movedPiece.JustDoubleMoved = false
+			}
+
+			if move.ToY == 0 && movedPiece.IsWhite {
+				movedPiece.Type = PromotedPawn
+			} else if move.ToY == BOARD_SIZE-1 && !movedPiece.IsWhite {
+				movedPiece.Type = PromotedPawn
 			}
 		}
 		movedPiece.IncrementMoveCount()

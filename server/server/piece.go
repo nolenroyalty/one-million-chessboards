@@ -1,6 +1,5 @@
 package server
 
-// PieceType represents the type of chess piece
 type PieceType int
 
 const (
@@ -10,9 +9,9 @@ const (
 	Rook
 	Queen
 	King
+	PromotedPawn
 )
 
-// Piece represents a chess piece
 type Piece struct {
 	ID              uint32
 	Type            PieceType
@@ -26,15 +25,18 @@ type EncodedPiece uint64
 
 const EmptyEncodedPiece = EncodedPiece(0)
 
+// If we encode starting location in PieceId we can get rid of double move here
+// by just checking movecount and starting location. It's not super clear to me
+// that this is worth it (maybe we want to encode the starting location for other
+// reasons, but the complexity of double-moved detection gets higher for minor
+// savings, since JustDoubleMoved is default false so we don't have to encode it often)
 const (
 	PieceIdShift         = 0  // always 32 bits
-	PieceTypeShift       = 32 // give it 4 bits (6 piece types)
+	PieceTypeShift       = 32 // give it 4 bits (7 piece types)
 	IsWhiteShift         = 36 // only 1 bit ever
 	JustDoubleMovedShift = 37 // 1 bit (only needed for pawns)
 	MoveCountShift       = 38 // 8 bits
 	CaptureCountShift    = 46 // 8 bits
-	// CR nroyalty: handle promotion
-	PromotedShift = 54 // 1 bit
 
 	idMask              = uint64(^uint32(0))
 	typeMask            = 0xF << PieceTypeShift
@@ -42,7 +44,6 @@ const (
 	justDoubleMovedMask = 1 << JustDoubleMovedShift
 	moveCountMask       = 0xFF << MoveCountShift
 	captureCountMask    = 0xFF << CaptureCountShift
-	promotedMask        = 1 << PromotedShift
 )
 
 func EncodedIsEmpty(encodedPiece EncodedPiece) bool {
@@ -111,7 +112,6 @@ func (p *Piece) IncrementCaptureCount() {
 	}
 }
 
-// NewPiece creates a new piece with default values
 func NewPiece(id uint32, pieceType PieceType, isWhite bool) Piece {
 	return Piece{
 		ID:              id,
