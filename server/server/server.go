@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"net/http"
 	"strconv"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -54,155 +53,6 @@ type Server struct {
 	connectedUsers atomic.Uint32
 	// HTTP server components
 	upgrader websocket.Upgrader
-}
-type zoneOperation struct {
-	client   *Client
-	oldZones map[ZoneCoord]struct{}
-	newZones map[ZoneCoord]struct{}
-	done     chan struct{}
-}
-type zoneQuery struct {
-	zones    map[ZoneCoord]struct{}
-	response chan map[*Client]struct{}
-}
-
-// ZoneMap tracks which clients are interested in which zones
-type ZoneMap struct {
-	clientsByZone [ZONE_COUNT][ZONE_COUNT]map[*Client]struct{}
-	operations    chan zoneOperation
-	queries       chan zoneQuery
-	resultPool    sync.Pool
-}
-
-func NewZoneMap() *ZoneMap {
-	zm := &ZoneMap{
-		operations: make(chan zoneOperation, 1024),
-		queries:    make(chan zoneQuery, 1024),
-		resultPool: sync.Pool{
-			New: func() interface{} {
-				return make(map[*Client]struct{}, 64)
-			},
-		},
-	}
-
-	for i := range ZONE_COUNT {
-		for j := range ZONE_COUNT {
-			zm.clientsByZone[i][j] = make(map[*Client]struct{})
-		}
-	}
-
-	return zm
-}
-
-func (zm *ZoneMap) processZoneMap() {
-	for {
-		select {
-		case op := <-zm.operations:
-			for zone := range op.oldZones {
-				delete(zm.clientsByZone[zone.X][zone.Y], op.client)
-			}
-			for zone := range op.newZones {
-				zm.clientsByZone[zone.X][zone.Y][op.client] = struct{}{}
-			}
-			if op.done != nil {
-				close(op.done)
-			}
-		case query := <-zm.queries:
-			resultMap := zm.resultPool.Get().(map[*Client]struct{})
-			for k := range resultMap {
-				delete(resultMap, k)
-			}
-			for zone := range query.zones {
-				for client := range zm.clientsByZone[zone.X][zone.Y] {
-					resultMap[client] = struct{}{}
-				}
-			}
-			query.response <- resultMap
-		}
-	}
-}
-
-func (zm *ZoneMap) AddClientToZones(client *Client, newZones map[ZoneCoord]struct{}) {
-	op := zoneOperation{
-		client:   client,
-		oldZones: client.currentZones,
-		newZones: newZones,
-		done:     make(chan struct{}),
-	}
-	zm.operations <- op
-}
-
-func (zm *ZoneMap) RemoveClientFromZones(client *Client) {
-	op := zoneOperation{
-		client:   client,
-		oldZones: client.currentZones,
-		newZones: make(map[ZoneCoord]struct{}),
-		done:     make(chan struct{}),
-	}
-	zm.operations <- op
-}
-
-// GetClientsForZones returns all clients interested in any of the specified zones
-func (zm *ZoneMap) GetClientsForZones(zones map[ZoneCoord]struct{}) map[*Client]struct{} {
-	response := make(chan map[*Client]struct{}, 1)
-	query := zoneQuery{
-		zones:    zones,
-		response: response,
-	}
-	zm.queries <- query
-	result := <-response
-
-	return result
-}
-
-func (zm *ZoneMap) ReturnClientMap(m map[*Client]struct{}) {
-	zm.resultPool.Put(m)
-}
-
-func (zm *ZoneMap) GetAffectedZones(move Move) map[ZoneCoord]struct{} {
-	fromZone := GetZoneCoord(move.FromX, move.FromY)
-	toZone := GetZoneCoord(move.ToX, move.ToY)
-
-	// If they're the same, return a single zone
-	if fromZone == toZone {
-		return map[ZoneCoord]struct{}{fromZone: {}}
-	}
-
-	return map[ZoneCoord]struct{}{fromZone: {}, toZone: {}}
-}
-
-type ZoneCoord struct {
-	X uint16
-	Y uint16
-}
-
-func GetZoneCoord(x, y uint16) ZoneCoord {
-	zoneX := x / ZONE_SIZE
-	zoneY := y / ZONE_SIZE
-	zoneX = min(zoneX, ZONE_COUNT-1)
-	zoneY = min(zoneY, ZONE_COUNT-1)
-	zoneX = max(zoneX, 0)
-	zoneY = max(zoneY, 0)
-	return ZoneCoord{X: zoneX, Y: zoneY}
-}
-
-func GetRelevantZones(pos Position) map[ZoneCoord]struct{} {
-	// Calculate the center zone for the position
-	centerZone := GetZoneCoord(pos.X, pos.Y)
-
-	relevantZones := make(map[ZoneCoord]struct{})
-
-	relevantZones[centerZone] = struct{}{}
-
-	for dx := -1; dx <= 1; dx++ {
-		for dy := -1; dy <= 1; dy++ {
-			zone := GetZoneCoord(pos.X+uint16(dx)*ZONE_SIZE, pos.Y+uint16(dy)*ZONE_SIZE)
-			relevantZones[zone] = struct{}{}
-
-		}
-	}
-
-	return relevantZones
 }
 
 func NewServer(stateDir string) *Server {
@@ -380,29 +230,27 @@ func (s *Server) processMoves() {
 
 		s.persistentBoard.ApplyMove(moveReq.Move, moveResult.Seqnum)
 
-		// CR nroyalty: this could block; move it to the background goroutine instead
-		// More generally, think about the buffers we have here
-		affectedZones := s.zoneMap.GetAffectedZones(moveReq.Move)
-		interestedClients := s.zoneMap.GetClientsForZones(affectedZones)
-
 		// CR nroyalty: is there a way we can avoid the overhead of re-serializing a move
 		// for each client here? It's annoying that we might end up doing the same serialization
 		// for 100 different clients if they're looking at the same zones.
-		go func(clients map[*Client]struct{}, moves []PieceMove, capture *PieceCapture) {
-			for client := range clients {
+		go func(moves []PieceMove, capture *PieceCapture) {
+			affectedZones := s.zoneMap.GetAffectedZones(moveReq.Move)
+			interestedClients := s.zoneMap.GetClientsForZones(affectedZones)
+			for client := range interestedClients {
 				client.AddMovesToBuffer(moves, capture)
 			}
 			s.zoneMap.ReturnClientMap(interestedClients)
-		}(interestedClients, movedPieces, captureMove)
+		}(movedPieces, captureMove)
 	}
 }
 
+// CR nroyalty: there's no need to have a goroutine here. We should just
+// do this directly from the client; it's an unnecessary buffer.
 func (s *Server) handleSubscriptions() {
 	for sub := range s.subscriptions {
 		pos := sub.Position
-		zones := GetRelevantZones(pos)
-		s.zoneMap.AddClientToZones(sub.Client, zones)
-		sub.Client.UpdatePositionAndMaybeSnapshot(zones, pos)
+		s.zoneMap.AddClientToZones(sub.Client, pos)
+		sub.Client.UpdatePositionAndMaybeSnapshot(pos)
 	}
 }
 
@@ -535,14 +383,18 @@ func (s *Server) handleClientRegistrations() {
 			playingWhite := s.DetermineColor(req.ColorPreference)
 			req.Client.InitializeFromPreferences(playingWhite, pos)
 			s.clients[req.Client] = struct{}{}
-			log.Printf("Client registered, total: %d", len(s.clients))
+			// log.Printf("Client registered, total: %d", len(s.clients))
 			s.connectedUsers.Store(uint32(len(s.clients)))
 			go req.Client.Run()
 			subscribeReq := SubscriptionRequest{
 				Client:   req.Client,
 				Position: pos,
 			}
-			log.Printf("subscribing client to position: %v", pos)
+			// CR nroyalty: remove subscription queue. It makes sense to have a
+			// registration queue, since there is state that the server wants to
+			// have control of. But it's confusing to have a separate subscription
+			// queue.
+			// log.Printf("subscribing client to position: %v", pos)
 			s.subscriptions <- subscribeReq
 		case client := <-s.unregister:
 			if client.playingWhite.Load() {
@@ -555,7 +407,7 @@ func (s *Server) handleClientRegistrations() {
 			log.Printf("Client unregistered, total: %d", len(s.clients))
 			s.connectedUsers.Store(uint32(len(s.clients)))
 			go func() {
-				s.zoneMap.RemoveClientFromZones(client)
+				s.zoneMap.RemoveClient(client)
 				client.Close()
 			}()
 		case req := <-s.getClients:
@@ -568,7 +420,6 @@ func (s *Server) handleClientRegistrations() {
 	}
 }
 
-// ServeWs handles websocket requests from clients
 func (s *Server) ServeWs(w http.ResponseWriter, r *http.Request) {
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -623,7 +474,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request, staticDir str
 		return
 	}
 
-	// Serve static files
 	http.FileServer(http.Dir(staticDir)).ServeHTTP(w, r)
 }
 

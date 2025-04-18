@@ -23,6 +23,7 @@ import (
 
 // CR nroyalty: send seqnum with global stats and then updating global stats is
 // pretty easy.
+// CR nroyalty: standardize on a function for sending a message to the client or unsubbing
 
 const (
 	// CR nroyalty: MAKE SURE THIS IS NOT BELOW 60 AND MAYBE MAKE IT HIGHER
@@ -31,6 +32,8 @@ const (
 	// CR nroyalty: remove before release
 	simulatedLatency  = 1 * time.Millisecond
 	simulatedJitterMs = 1
+	moveBufferSize    = 200
+	captureBufferSize = 100
 )
 
 func getSimulatedLatency() time.Duration {
@@ -92,42 +95,35 @@ type Client struct {
 	send                 chan []byte
 	position             atomic.Value
 	lastSnapshotPosition atomic.Value
-	// CR nroyalty: data race around currentZones!
-	currentZones  map[ZoneCoord]struct{}
-	moveBuffer    []PieceMove
-	captureBuffer []PieceCapture
-	bufferMu      sync.Mutex
-	done          chan struct{}
-	closeMu       sync.Mutex
-	// CR nroyalty: atomic.bool
-	isClosed       bool
-	lastActionTime atomic.Int64
-	playingWhite   atomic.Bool
+	moveBuffer           []PieceMove
+	captureBuffer        []PieceCapture
+	bufferMu             sync.Mutex
+	done                 chan struct{}
+	isClosed             atomic.Bool
+	lastActionTime       atomic.Int64
+	playingWhite         atomic.Bool
 }
 
-// SubscriptionRequest represents a client request to subscribe to a position
 type SubscriptionRequest struct {
 	Client   *Client
 	Position Position
 }
 
-// NewClient creates a new client instance
 func NewClient(conn *websocket.Conn, server *Server) *Client {
 	c := &Client{
 		conn:           conn,
 		server:         server,
-		send:           make(chan []byte, 256),
+		send:           make(chan []byte, 64),
 		position:       atomic.Value{},
-		currentZones:   make(map[ZoneCoord]struct{}),
-		moveBuffer:     make([]PieceMove, 0, 400),
-		captureBuffer:  make([]PieceCapture, 0, 100),
+		moveBuffer:     make([]PieceMove, 0, moveBufferSize),
+		captureBuffer:  make([]PieceCapture, 0, captureBufferSize),
 		done:           make(chan struct{}),
-		isClosed:       false,
+		isClosed:       atomic.Bool{},
 		bufferMu:       sync.Mutex{},
-		closeMu:        sync.Mutex{},
 		lastActionTime: atomic.Int64{},
 		playingWhite:   atomic.Bool{},
 	}
+	c.isClosed.Store(false)
 	c.lastActionTime.Store(time.Now().Unix())
 	c.position.Store(Position{X: 0, Y: 0})
 	c.lastSnapshotPosition.Store(Position{X: 0, Y: 0})
@@ -184,6 +180,8 @@ func (c *Client) sendInitialState() {
 	case c.send <- data:
 	case <-c.done:
 		return
+	default:
+		c.server.unregister <- c
 	}
 }
 
@@ -207,8 +205,7 @@ func shouldSendSnapshot(lastSnapshotPosition Position, currentPosition Position)
 	return dx > float64(SNAPSHOT_THRESHOLD) || dy > float64(SNAPSHOT_THRESHOLD)
 }
 
-func (c *Client) UpdatePositionAndMaybeSnapshot(currentZones map[ZoneCoord]struct{}, pos Position) {
-	c.currentZones = currentZones
+func (c *Client) UpdatePositionAndMaybeSnapshot(pos Position) {
 	c.position.Store(pos)
 	lastSnapshotPosition := c.lastSnapshotPosition.Load().(Position)
 	if shouldSendSnapshot(lastSnapshotPosition, pos) {
@@ -218,7 +215,6 @@ func (c *Client) UpdatePositionAndMaybeSnapshot(currentZones map[ZoneCoord]struc
 	}
 }
 
-// ReadPump handles incoming messages from the client
 func (c *Client) ReadPump() {
 	defer func() {
 		c.server.unregister <- c
@@ -237,7 +233,8 @@ func (c *Client) ReadPump() {
 		c.conn.SetReadDeadline(time.Now().Add(120 * time.Second))
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err) {
-				log.Printf("client disconnected: %v", err)
+				now := time.Now().UnixNano()
+				log.Printf("client disconnected: %v, %d", err, now)
 			}
 			break
 		}
@@ -250,9 +247,7 @@ func CoordInBounds(coord float64) bool {
 	return coord >= 0 && uint16(coord) < BOARD_SIZE
 }
 
-// handleMessage processes incoming messages from clients
 func (c *Client) handleMessage(message []byte) {
-	// Parse the JSON message
 	var msg map[string]interface{}
 	if err := json.Unmarshal(message, &msg); err != nil {
 		c.SendError("Invalid message format")
@@ -390,15 +385,10 @@ func (c *Client) SendPeriodicUpdates() {
 	for {
 		select {
 		case <-ticker.C:
-			if len(c.currentZones) > 0 {
-				log.Printf("Sending periodic update for position: %v", c.position.Load().(Position))
-				snapshot := c.server.board.GetStateForPosition(c.position.Load().(Position))
-				c.SendStateSnapshot(snapshot)
-			} else {
-				log.Printf("No zones to update")
-			}
+			// log.Printf("Sending periodic update for position: %v", c.position.Load().(Position))
+			snapshot := c.server.board.GetStateForPosition(c.position.Load().(Position))
+			c.SendStateSnapshot(snapshot)
 		case <-c.done:
-			log.Printf("Stopping periodic updates")
 			return
 		}
 	}
@@ -445,7 +435,7 @@ func (c *Client) AddMovesToBuffer(moves []PieceMove, capture *PieceCapture) {
 	}
 
 	// Send immediately if buffer gets large
-	if len(c.moveBuffer) >= 400 || len(c.captureBuffer) >= 200 {
+	if len(c.moveBuffer) >= moveBufferSize || len(c.captureBuffer) >= captureBufferSize {
 		moves := make([]PieceMove, len(c.moveBuffer))
 		copy(moves, c.moveBuffer)
 		c.moveBuffer = c.moveBuffer[:0]
@@ -458,7 +448,6 @@ func (c *Client) AddMovesToBuffer(moves []PieceMove, capture *PieceCapture) {
 	}
 }
 
-// SendStateSnapshot sends a state snapshot to the client
 func (c *Client) SendStateSnapshot(snapshot StateSnapshot) {
 	message := snapshot.ToSnapshotMessage()
 	data, err := json.Marshal(message)
@@ -525,8 +514,6 @@ func (c *Client) SendInvalidMove(moveToken uint32) {
 		MoveToken: moveToken,
 	}
 
-	log.Printf("sending invalid move: %v", message)
-
 	data, err := json.Marshal(message)
 	if err != nil {
 		log.Printf("Error marshaling invalid move: %v", err)
@@ -576,9 +563,7 @@ func (c *Client) SendValidMove(moveToken uint32, asOfSeqnum uint64, capturedPiec
 	}()
 }
 
-// SendError sends an error message to the client
 func (c *Client) SendError(errorMessage string) {
-	// Create a simple error message using JSON
 	message := struct {
 		Type    string `json:"type"`
 		Message string `json:"message"`
@@ -591,21 +576,17 @@ func (c *Client) SendError(errorMessage string) {
 
 	log.Printf("Sending error: %v", message)
 
-	// Marshal to JSON
 	data, err := json.Marshal(message)
 	if err != nil {
 		log.Printf("Error marshaling error message: %v", err)
 		return
 	}
 
-	// Send through the channel
 	select {
 	case <-c.done:
 		return
 	case c.send <- data:
-		// Sent successfully
 	default:
-		// Buffer full, client might be slow or disconnected
 		c.server.unregister <- c
 	}
 }
@@ -615,9 +596,7 @@ func (c *Client) SendMinimapUpdate(aggregation json.RawMessage) {
 	case <-c.done:
 		return
 	case c.send <- aggregation:
-		// Sent successfully
 	default:
-		// Buffer full, client might be slow or disconnected
 		c.server.unregister <- c
 	}
 }
@@ -627,23 +606,17 @@ func (c *Client) SendGlobalStats(stats json.RawMessage) {
 	case <-c.done:
 		return
 	case c.send <- stats:
-		// Sent successfully
 	default:
-		// Buffer full, client might be slow or disconnected
 		c.server.unregister <- c
 	}
 }
 
-// Close closes the client connection
 func (c *Client) Close() {
-	c.closeMu.Lock()
-	defer c.closeMu.Unlock()
-
-	if c.isClosed {
+	if c.isClosed.Load() {
 		return
 	}
 
 	close(c.done)
 	c.conn.Close()
-	c.isClosed = true
+	c.isClosed.Store(true)
 }

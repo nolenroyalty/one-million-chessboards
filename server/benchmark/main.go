@@ -14,7 +14,7 @@ import (
 const (
 	localURL = "ws://localhost:8080/ws"
 	prodURL  = "wss://onemillionchessboards.com/ws"
-	useProd  = true
+	useProd  = false
 )
 
 func getUrl() string {
@@ -38,34 +38,38 @@ func (c *MainCounter) logStats() {
 	log.Printf("CAPTURES: %d", c.numberOfCaptures.Load())
 }
 
-func (c *MainCounter) RunClient() {
+func (c *MainCounter) RunClient(serverDone chan struct{}) {
 	for {
-		sleepTime := 10 + rand.Intn(20)
-		time.Sleep(time.Duration(sleepTime) * time.Millisecond)
+		sleepTime := 5 + rand.Intn(13)
+		// time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 		ws, _, err := websocket.DefaultDialer.Dial(getUrl(), nil)
-		if err != nil {
-			log.Fatal(err)
-		}
-		// log.Printf("Connected to server")
-
 		timer := time.NewTimer(time.Duration(sleepTime) * time.Second)
-
 		done := make(chan struct{})
+
+		if err != nil {
+			// now := time.Now()
+			// log.Printf("connection error: %v, %v", err, now)
+			goto restart
+		}
 
 		go func() {
 			<-timer.C
 			close(done)
-			ws.Close()
-			// log.Printf("Disconnected from server")
 		}()
 
 		for {
 			select {
 			case <-done:
+				ws.Close()
 				goto restart
+			case <-serverDone:
+				log.Printf("Server done")
+				ws.Close()
+				return
 			default:
 				_, message, err := ws.ReadMessage()
 				if err != nil {
+					log.Printf("Error reading message: %v", err)
 					goto restart
 				}
 				c.receivedBytes.Add(int64(len(message)))
@@ -120,16 +124,40 @@ func (c *MainCounter) ConnectAndLogSizes() {
 	}
 }
 
+const NUM_CLIENTS = 250
+const TEST_RUN_TIME = 60 * time.Second
+
+func (c *MainCounter) runRandomSubscribe() {
+	doneChans := make([]chan struct{}, NUM_CLIENTS)
+	for i := 0; i < NUM_CLIENTS; i++ {
+		doneChans[i] = make(chan struct{})
+		go c.RunClient(doneChans[i])
+		time.Sleep(5 * time.Millisecond)
+	}
+	statsTicker := time.NewTicker(5 * time.Second)
+	doneTicker := time.NewTicker(TEST_RUN_TIME)
+	c.logStats()
+	for {
+		select {
+		case <-doneTicker.C:
+			log.Printf("Done ticker fired")
+			for _, doneChan := range doneChans {
+				close(doneChan)
+			}
+			statsTicker.Stop()
+			doneTicker.Stop()
+			log.Printf("Done")
+			log.Printf("\n\nFINAL STATS\n")
+			c.logStats()
+			return
+		case <-statsTicker.C:
+			c.logStats()
+		}
+	}
+}
+
 func main() {
 	counter := MainCounter{}
-	for i := 0; i < 1000; i++ {
-		go counter.RunClient()
-		time.Sleep(10 * time.Millisecond)
-	}
-	// go counter.ConnectAndLogSizes()
-	ticker := time.NewTicker(5 * time.Second)
-	counter.logStats()
-	for range ticker.C {
-		counter.logStats()
-	}
+	counter.ConnectAndLogSizes()
+	// counter.runRandomSubscribe()
 }

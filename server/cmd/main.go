@@ -17,16 +17,13 @@ var (
 func main() {
 	flag.Parse()
 
-	// Create the server
 	s := server.NewServer(*stateDir)
 	piece := s.Testing_GetPiece(500, 496)
 	log.Printf("Piece at (500, 496): %v", piece)
 	log.Printf("Size of piece: %d", unsafe.Sizeof(piece))
 
-	// Start the server in a goroutine
 	go s.Run()
 
-	// Set up HTTP routes
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		s.ServeWs(w, r)
 	})
@@ -35,7 +32,6 @@ func main() {
 		s.ServeHTTP(w, r, *staticDir)
 	})
 
-	// Start the HTTP server
 	log.Printf("Starting server on %s", *addr)
 	log.Printf("Access web client at http://localhost%s", *addr)
 
