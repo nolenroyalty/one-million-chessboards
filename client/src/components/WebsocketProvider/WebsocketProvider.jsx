@@ -111,7 +111,7 @@ function useStartBot({ pieceHandler, submitMove, onlyId }) {
         }
       }
     };
-    const freq = onlyId ? 400 : 500;
+    const freq = onlyId ? 400 : 100;
     console.log("starting bot");
     botInterval = setInterval(loop, freq);
 
@@ -305,6 +305,7 @@ function useWebsocket({
     pieceHandler,
     setConnected,
     setCoords,
+    setCurrentColor,
     statsHandler,
     websocketRef,
   ]);

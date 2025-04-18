@@ -205,7 +205,6 @@ func GetRelevantZones(pos Position) map[ZoneCoord]struct{} {
 	return relevantZones
 }
 
-// NewServer creates a new game server
 func NewServer(stateDir string) *Server {
 	persistentBoard := NewPersistentBoard(stateDir)
 	board := persistentBoard.GetBoardCopy()
@@ -235,7 +234,6 @@ func NewServer(stateDir string) *Server {
 	return s
 }
 
-// Run starts all server processes
 func (s *Server) Run() {
 
 	s.minimapAggregator.Initialize(s.board)
