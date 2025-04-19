@@ -136,18 +136,8 @@ func (m *MinimapAggregator) createAndStoreAggregation() json.RawMessage {
 	return jsonResponse
 }
 
-func (m *MinimapAggregator) UpdateForMove(fromX uint16, fromY uint16, toX uint16, toY uint16, piece Piece) {
-	fromCoords := getAggregatorCoords(fromX, fromY)
-	toCoords := getAggregatorCoords(toX, toY)
-	if fromCoords != toCoords {
-		m.Lock()
-		m.updateForAggregatorCoords(fromCoords, piece.IsWhite, true)
-		m.updateForAggregatorCoords(toCoords, piece.IsWhite, false)
-		m.Unlock()
-	}
-}
-
-func (m *MinimapAggregator) updateForAggregatorCoords(coords AggregatorCoords, isWhite bool, decr bool) {
+// assumes that the lock is already held!
+func (m *MinimapAggregator) unsafeUpdateForAggregatorCoords(coords AggregatorCoords, isWhite bool, decr bool) {
 	if isWhite {
 		if decr && m.cells[coords.X][coords.Y].WhiteCount > 0 {
 			m.cells[coords.X][coords.Y].WhiteCount--
@@ -163,11 +153,43 @@ func (m *MinimapAggregator) updateForAggregatorCoords(coords AggregatorCoords, i
 	}
 }
 
-func (m *MinimapAggregator) UpdateForCapture(x uint16, y uint16, piece Piece) {
+func (m *MinimapAggregator) UpdateForMoveResult(moveResult MoveResult) {
+	needsUpdate := false
+	if !moveResult.CapturedPiece.Piece.IsEmpty() {
+		needsUpdate = true
+	} else {
+		for i := range moveResult.Length {
+			movedPiece := moveResult.MovedPieces[i]
+			fromCoords := getAggregatorCoords(movedPiece.FromX, movedPiece.FromY)
+			toCoords := getAggregatorCoords(movedPiece.ToX, movedPiece.ToY)
+			if fromCoords != toCoords {
+				needsUpdate = true
+				break
+			}
+		}
+	}
+
+	if !needsUpdate {
+		return
+	}
+
 	m.Lock()
 	defer m.Unlock()
-	coords := getAggregatorCoords(x, y)
-	m.updateForAggregatorCoords(coords, piece.IsWhite, true)
+
+	for i := range moveResult.Length {
+		movedPiece := moveResult.MovedPieces[i]
+		fromCoords := getAggregatorCoords(movedPiece.FromX, movedPiece.FromY)
+		toCoords := getAggregatorCoords(movedPiece.ToX, movedPiece.ToY)
+		if fromCoords != toCoords {
+			m.unsafeUpdateForAggregatorCoords(fromCoords, movedPiece.Piece.IsWhite, true)
+			m.unsafeUpdateForAggregatorCoords(toCoords, movedPiece.Piece.IsWhite, false)
+		}
+	}
+
+	if !moveResult.CapturedPiece.Piece.IsEmpty() {
+		coords := getAggregatorCoords(moveResult.CapturedPiece.X, moveResult.CapturedPiece.Y)
+		m.unsafeUpdateForAggregatorCoords(coords, moveResult.CapturedPiece.Piece.IsWhite, true)
+	}
 }
 
 func (m *MinimapAggregator) GetLastAggregation() json.RawMessage {

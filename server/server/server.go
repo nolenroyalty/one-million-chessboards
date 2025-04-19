@@ -154,14 +154,10 @@ func (s *Server) processMoves() {
 		// of your vision, but the king isn't in your vision and so we don't tell you about it
 		// I think this is fine...but I need to think about it some more.
 		go func() {
+			s.minimapAggregator.UpdateForMoveResult(moveResult)
 			capturedPiece := moveResult.CapturedPiece
 			movedPieces := make([]PieceMove, moveResult.Length)
 			for i := 0; i < int(moveResult.Length); i++ {
-				s.minimapAggregator.UpdateForMove(moveResult.MovedPieces[i].FromX,
-					moveResult.MovedPieces[i].FromY,
-					moveResult.MovedPieces[i].ToX,
-					moveResult.MovedPieces[i].ToY,
-					moveResult.MovedPieces[i].Piece)
 
 				pieceData := PieceData{
 					ID:              moveResult.MovedPieces[i].Piece.ID,
@@ -182,9 +178,6 @@ func (s *Server) processMoves() {
 
 			var pieceCapture *PieceCapture = nil
 			if !capturedPiece.Piece.IsEmpty() {
-				s.minimapAggregator.UpdateForCapture(capturedPiece.X,
-					capturedPiece.Y, capturedPiece.Piece)
-
 				pieceCapture = &PieceCapture{
 					CapturedPieceID: capturedPiece.Piece.ID,
 					Seqnum:          moveResult.Seqnum,

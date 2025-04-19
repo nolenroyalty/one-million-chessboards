@@ -400,24 +400,25 @@ function WebsocketProvider({ children }) {
       captureRequired,
       couldBeACapture,
     }) => {
-      let incrLocalMoves = true;
-      let incrLocalCaptures = false;
-      if (capturedPiece) {
-        incrLocalCaptures = true;
-      }
-      statsHandler.current.applyLocalDelta({
-        dMoves: 0,
-        dWhitePieces: 0,
-        dBlackPieces: 0,
-        dWhiteKings: 0,
-        dBlackKings: 0,
-        incrLocalMoves,
-        incrLocalCaptures,
-      });
       const moveToken = pieceHandler.current.getIncrMoveToken();
       const move = createMoveRequest({ piece, toX, toY, moveType, moveToken });
       // CR nroyalty: figure out what to do once we move to partysocket...
       if (safelySendJSON(move)) {
+        let incrLocalMoves = true;
+        let incrLocalCaptures = false;
+        if (capturedPiece) {
+          incrLocalCaptures = true;
+        }
+        statsHandler.current.applyLocalDelta({
+          dMoves: 0,
+          dWhitePieces: 0,
+          dBlackPieces: 0,
+          dWhiteKings: 0,
+          dBlackKings: 0,
+          incrLocalMoves,
+          incrLocalCaptures,
+        });
+
         pieceHandler.current.addOptimisticMove({
           moveToken,
           movedPiece: piece,
