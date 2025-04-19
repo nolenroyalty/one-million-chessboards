@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"log"
-	"math/rand"
 	"sync/atomic"
 	"time"
 
@@ -40,10 +39,10 @@ func (c *MainCounter) logStats() {
 
 func (c *MainCounter) RunClient(serverDone chan struct{}) {
 	for {
-		sleepTime := 5 + rand.Intn(13)
+		// sleepTime := 5 + rand.Intn(13)
 		// time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 		ws, _, err := websocket.DefaultDialer.Dial(getUrl(), nil)
-		timer := time.NewTimer(time.Duration(sleepTime) * time.Second)
+		// timer := time.NewTimer(time.Duration(sleepTime) * time.Second)
 		done := make(chan struct{})
 
 		if err != nil {
@@ -52,10 +51,10 @@ func (c *MainCounter) RunClient(serverDone chan struct{}) {
 			goto restart
 		}
 
-		go func() {
-			<-timer.C
-			close(done)
-		}()
+		// go func() {
+		// 	<-timer.C
+		// 	close(done)
+		// }()
 
 		for {
 			select {
