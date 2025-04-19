@@ -61,7 +61,6 @@ func (s *Server) Run() {
 	go s.sendPeriodicMinimapAggregations()
 	go s.sendPeriodicStats()
 	go s.persistentBoard.Run()
-	select {}
 }
 
 func (s *Server) sendPeriodicMinimapAggregations() {

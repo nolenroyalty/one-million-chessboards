@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"one-million-chessboards/server"
-	"unsafe"
 )
 
 var (
@@ -18,12 +17,7 @@ func main() {
 	flag.Parse()
 
 	s := server.NewServer(*stateDir)
-	piece := s.Testing_GetPiece(500, 496)
-	log.Printf("Piece at (500, 496): %v", piece)
-	log.Printf("Size of piece: %d", unsafe.Sizeof(piece))
-
-	// CR nroyalty: maybe we can block until the server is ready here.
-	go s.Run()
+	s.Run()
 
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		s.ServeWs(w, r)

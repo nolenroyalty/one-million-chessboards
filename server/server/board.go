@@ -690,15 +690,21 @@ func (b *Board) GetStateForPosition(pos Position) StateSnapshot {
 	}
 }
 
+const ACTUALLY_RANDOMIZE = false
+
 func (b *Board) InitializeRandom() {
 	log.Printf("Initializing random board")
 	startX := uint16(0)
 	startY := uint16(0)
 	for dx := range 1000 {
 		for dy := range 1000 {
-			random := rand.Intn(1500)
-			includeWhite := random > dy
-			includeBlack := random > dx
+			includeWhite := true
+			includeBlack := true
+			if ACTUALLY_RANDOMIZE {
+				random := rand.Intn(1500)
+				includeWhite = random > dy
+				includeBlack = random > dx
+			}
 			// includeWhite := true
 			// includeBlack := true
 			// includeWhite := random < 50
