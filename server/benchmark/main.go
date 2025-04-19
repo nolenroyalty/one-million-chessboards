@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -39,34 +40,20 @@ func (c *MainCounter) logStats() {
 	log.Printf("CAPTURES: %d", c.numberOfCaptures.Load())
 }
 
-func (c *MainCounter) randomlySubscribe(serverDone chan struct{}) {
+func (c *MainCounter) randomlySubscribe() {
 	for {
-		// sleepTime := 5 + rand.Intn(13)
-		// time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 		ws, _, err := websocket.DefaultDialer.Dial(getUrl(), nil)
-		// timer := time.NewTimer(time.Duration(sleepTime) * time.Second)
 		done := make(chan struct{})
 
 		if err != nil {
-			// now := time.Now()
-			// log.Printf("connection error: %v, %v", err, now)
 			goto restart
 		}
-
-		// go func() {
-		// 	<-timer.C
-		// 	close(done)
-		// }()
 
 		for {
 			select {
 			case <-done:
 				ws.Close()
 				goto restart
-			case <-serverDone:
-				log.Printf("Server done")
-				ws.Close()
-				return
 			default:
 				_, message, err := ws.ReadMessage()
 				if err != nil {
@@ -126,31 +113,48 @@ func (c *MainCounter) ConnectAndLogSizes() {
 	}
 }
 
-const NUM_RANDOM_SUBSCRIPTIONS = 20
+const NUM_RANDOM_SUBSCRIPTIONS = 200
 const NUM_RANDOM_MOVERS = 1000
 const NUMBER_OF_MOVES = 1000
 const TEST_RUN_TIME = 60 * time.Second
 
 func (c *MainCounter) runRandomSubscribe() {
-	doneChans := make([]chan struct{}, NUM_RANDOM_SUBSCRIPTIONS)
+	var wg sync.WaitGroup
+	wg.Add(NUM_RANDOM_SUBSCRIPTIONS)
+
+	// Start all the random subscription goroutines
 	for i := 0; i < NUM_RANDOM_SUBSCRIPTIONS; i++ {
-		doneChans[i] = make(chan struct{})
-		go c.randomlySubscribe(doneChans[i])
+		go func() {
+			defer wg.Done()
+			c.randomlySubscribe()
+		}()
 		time.Sleep(5 * time.Millisecond)
 	}
+
+	// Set up tickers
 	statsTicker := time.NewTicker(5 * time.Second)
 	doneTicker := time.NewTicker(TEST_RUN_TIME)
+	defer statsTicker.Stop()
+	defer doneTicker.Stop()
+
+	// Log initial stats
 	c.logStats()
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
 	for {
 		select {
 		case <-doneTicker.C:
-			log.Printf("Done ticker fired")
-			for _, doneChan := range doneChans {
-				close(doneChan)
-			}
-			statsTicker.Stop()
-			doneTicker.Stop()
-			log.Printf("Done")
+			log.Printf("Test time completed")
+			log.Printf("\n\nFINAL STATS\n")
+			c.logStats()
+			return
+		case <-done:
+			log.Printf("All goroutines completed")
 			log.Printf("\n\nFINAL STATS\n")
 			c.logStats()
 			return
@@ -254,10 +258,9 @@ func (rm *RandomMover) movePawn() {
 	}
 }
 
-func (c *MainCounter) runRandomMover(boardX int, doneChan chan struct{}) {
+func (c *MainCounter) runRandomMover(boardX int) {
 	rm := newRandomMover(boardX)
 	if rm == nil {
-		doneChan <- struct{}{}
 		return
 	}
 	rm.subscribe()
@@ -265,31 +268,32 @@ func (c *MainCounter) runRandomMover(boardX int, doneChan chan struct{}) {
 		rm.movePawn()
 		time.Sleep(2 * time.Millisecond)
 	}
-	doneChan <- struct{}{}
 }
 
 func (c *MainCounter) runAllRandomMovers() {
-	doneChan := make(chan struct{})
+	wg := sync.WaitGroup{}
+	wg.Add(NUM_RANDOM_MOVERS)
 	for boardX := 0; boardX < NUM_RANDOM_MOVERS; boardX++ {
+		go func(boardX int) {
+			defer wg.Done()
+			c.runRandomMover(boardX)
+		}(boardX)
 		time.Sleep(2 * time.Millisecond)
-		go c.runRandomMover(boardX, doneChan)
 	}
-	doneCount := 0
-	for {
-		select {
-		case <-doneChan:
-			doneCount++
-			if doneCount == NUM_RANDOM_MOVERS {
-				return
-			}
-		}
-	}
+	wg.Wait()
 }
 
 func main() {
 	counter := MainCounter{}
-	// counter.ConnectAndLogSizes()
-	// go counter.runRandomSubscribe()
-	// counter.runRandomMover(0)
-	counter.runAllRandomMovers()
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		counter.runRandomSubscribe()
+	}()
+	go func() {
+		defer wg.Done()
+		counter.runAllRandomMovers()
+	}()
+	wg.Wait()
 }

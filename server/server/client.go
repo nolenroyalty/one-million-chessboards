@@ -78,13 +78,11 @@ func (snapshot *StateSnapshot) ToSnapshotMessage() SnapshotMessage {
 	}
 
 	message := SnapshotMessage{
-		Type:           "stateSnapshot",
-		Pieces:         pieces,
-		StartingSeqnum: snapshot.StartingSeqnum,
-		EndingSeqnum:   snapshot.EndingSeqnum,
-		Seqnum:         snapshot.EndingSeqnum,
-		XCoord:         snapshot.XCoord,
-		YCoord:         snapshot.YCoord,
+		Type:   "stateSnapshot",
+		Pieces: pieces,
+		Seqnum: snapshot.Seqnum,
+		XCoord: snapshot.XCoord,
+		YCoord: snapshot.YCoord,
 	}
 
 	return message

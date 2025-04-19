@@ -15,6 +15,9 @@ import (
 	"time"
 )
 
+// CR nroyalty: we're gonna want to rework this now that we've finalized our
+// board setup.
+
 const (
 	snapshotInterval      = time.Second * 600
 	moveSerializeInterval = time.Second * 5
@@ -103,7 +106,7 @@ func (b *Board) GetBoardSnapshot() BoardSnapshot {
 	start := time.Now()
 	snapshot := BoardSnapshot{
 		NextID:              b.nextID,
-		Seqnum:              b.seqNum.Load(),
+		Seqnum:              b.seqNum,
 		TotalMoves:          b.totalMoves.Load(),
 		WhitePiecesCaptured: b.whitePiecesCaptured.Load(),
 		BlackPiecesCaptured: b.blackPiecesCaptured.Load(),
@@ -113,7 +116,7 @@ func (b *Board) GetBoardSnapshot() BoardSnapshot {
 	}
 	for y := uint16(0); y < BOARD_SIZE; y++ {
 		for x := uint16(0); x < BOARD_SIZE; x++ {
-			raw := b.pieces[y][x].Load()
+			raw := b.pieces[y][x]
 			if raw != uint64(EmptyEncodedPiece) {
 				snapshot.PiecesWithCoords = append(snapshot.PiecesWithCoords, PieceWithCoords{
 					RawPiece: EncodedPiece(raw),
@@ -175,7 +178,7 @@ func (b *Board) LoadFromSnapshotFile(filename string) error {
 		return err
 	}
 	b.nextID = header.NextID
-	b.seqNum.Store(header.Seqnum)
+	b.seqNum = header.Seqnum
 	b.totalMoves.Store(header.TotalMoves)
 	b.whitePiecesCaptured.Store(header.WhitePiecesCaptured)
 	b.blackPiecesCaptured.Store(header.BlackPiecesCaptured)
@@ -185,7 +188,7 @@ func (b *Board) LoadFromSnapshotFile(filename string) error {
 
 	for y := uint16(0); y < BOARD_SIZE; y++ {
 		for x := uint16(0); x < BOARD_SIZE; x++ {
-			b.pieces[y][x].Store(uint64(EmptyEncodedPiece))
+			b.pieces[y][x] = uint64(EmptyEncodedPiece)
 		}
 	}
 
@@ -200,7 +203,7 @@ func (b *Board) LoadFromSnapshotFile(filename string) error {
 		}
 		x := uint16(pieceWithCoords.Coords >> 16)
 		y := uint16(pieceWithCoords.Coords & 0xFFFF)
-		b.pieces[y][x].Store(uint64(pieceWithCoords.RawPiece))
+		b.pieces[y][x] = uint64(pieceWithCoords.RawPiece)
 	}
 
 	return nil
@@ -273,16 +276,16 @@ func NewPersistentBoard(stateDir string) *PersistentBoard {
 		log.Printf("No snapshot filenames found - initializing new board")
 		board.InitializeRandom()
 		snapshot := board.GetBoardSnapshot()
-		snapshot.SaveToFile(stateDir, snapshotPrefix, board.seqNum.Load())
-		pb.lastSerializedSeqnum.Store(board.seqNum.Load())
+		snapshot.SaveToFile(stateDir, snapshotPrefix, board.seqNum)
+		pb.lastSerializedSeqnum.Store(board.seqNum)
 	} else {
 		lastSnapshot := snapshotFilenames[len(snapshotFilenames)-1]
 		snapshotFilename := filepath.Join(stateDir, lastSnapshot.toFilename())
 		board.LoadFromSnapshotFile(snapshotFilename)
-		if board.seqNum.Load() != lastSnapshot.lastSeqnum {
-			log.Printf("ERROR: Last seqNum from board %d does not match last seqNum from file %d", board.seqNum.Load(), lastSnapshot.lastSeqnum)
+		if board.seqNum != lastSnapshot.lastSeqnum {
+			log.Printf("ERROR: Last seqNum from board %d does not match last seqNum from file %d", board.seqNum, lastSnapshot.lastSeqnum)
 		}
-		pb.lastSerializedSeqnum.Store(board.seqNum.Load())
+		pb.lastSerializedSeqnum.Store(board.seqNum)
 	}
 
 	moveFilenames, err := GetSortedSnapshotFilenames(stateDir, movePrefix)
@@ -340,7 +343,7 @@ func NewPersistentBoard(stateDir string) *PersistentBoard {
 func (pb *PersistentBoard) GetBoardCopy() *Board {
 	board := NewBoard()
 	board.nextID = pb.board.nextID
-	board.seqNum.Store(pb.board.seqNum.Load())
+	board.seqNum = pb.board.seqNum
 	board.totalMoves.Store(pb.board.totalMoves.Load())
 	board.whitePiecesCaptured.Store(pb.board.whitePiecesCaptured.Load())
 	board.blackPiecesCaptured.Store(pb.board.blackPiecesCaptured.Load())
@@ -348,7 +351,7 @@ func (pb *PersistentBoard) GetBoardCopy() *Board {
 	board.blackKingsCaptured.Store(pb.board.blackKingsCaptured.Load())
 	for y := uint16(0); y < BOARD_SIZE; y++ {
 		for x := uint16(0); x < BOARD_SIZE; x++ {
-			board.pieces[y][x].Store(pb.board.pieces[y][x].Load())
+			board.pieces[y][x] = pb.board.pieces[y][x]
 		}
 	}
 	return board

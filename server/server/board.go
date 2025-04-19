@@ -6,14 +6,16 @@ import (
 	"log"
 	"math"
 	"math/rand"
+	"sync"
 	"sync/atomic"
 )
 
 // Board represents the entire game state
 type Board struct {
-	pieces              [BOARD_SIZE][BOARD_SIZE]atomic.Uint64
+	sync.RWMutex
+	pieces              [BOARD_SIZE][BOARD_SIZE]uint64
 	nextID              uint32
-	seqNum              atomic.Uint64
+	seqNum              uint64
 	totalMoves          atomic.Uint64
 	whitePiecesCaptured atomic.Uint32
 	blackPiecesCaptured atomic.Uint32
@@ -34,27 +36,13 @@ type GameStats struct {
 func NewBoard() *Board {
 	return &Board{
 		nextID:              1,
-		seqNum:              atomic.Uint64{},
+		seqNum:              uint64(1),
 		totalMoves:          atomic.Uint64{},
 		whitePiecesCaptured: atomic.Uint32{},
 		blackPiecesCaptured: atomic.Uint32{},
 		whiteKingsCaptured:  atomic.Uint32{},
 		blackKingsCaptured:  atomic.Uint32{},
 	}
-}
-
-// GetPiece returns the piece at the given coordinates
-func (b *Board) GetPiece(x, y uint16) *Piece {
-	if x >= BOARD_SIZE || y >= BOARD_SIZE {
-		return nil
-	}
-
-	raw := b.pieces[y][x].Load()
-	piece := PieceOfEncodedPiece(EncodedPiece(raw))
-	if piece.IsEmpty() {
-		return nil
-	}
-	return &piece
 }
 
 type CaptureResult struct {
@@ -107,7 +95,7 @@ func (b *Board) crossedSquaresAreEmpty(fromX, fromY, toX, toY uint16) bool {
 			log.Printf("BUG: crossedSquaresAreEmpty out of bounds: %d %d %d %d", fromX, fromY, toX, toY)
 			return false
 		}
-		raw := b.pieces[y][x].Load()
+		raw := b.pieces[y][x]
 		if !EncodedIsEmpty(EncodedPiece(raw)) {
 			return false
 		}
@@ -228,8 +216,10 @@ func (b *Board) satisfiesMoveRules(movedPiece Piece, capturedPiece Piece, move M
 	return true
 }
 
+// CR nroyalty: we *probably* want to move the lock-aquisition out of this function,
+// require that users have the lock before calling this, and then let them do multiple
+// moves while holding the lock. Push this through once the basics work.
 func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
-	// Must be in bounds
 	if !move.BoundsCheck() {
 		return MoveResult{Valid: false}
 	}
@@ -243,7 +233,10 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 		return MoveResult{Valid: false}
 	}
 
-	raw := b.pieces[move.FromY][move.FromX].Load()
+	b.Lock()
+	defer b.Unlock()
+
+	raw := b.pieces[move.FromY][move.FromX]
 	movedPiece := PieceOfEncodedPiece(EncodedPiece(raw))
 
 	// can't move an empty piece
@@ -298,7 +291,7 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 			return MoveResult{Valid: false}
 		}
 
-		rookPieceRaw := b.pieces[rookFromY][rookFromX].Load()
+		rookPieceRaw := b.pieces[rookFromY][rookFromX]
 		if EncodedIsEmpty(EncodedPiece(rookPieceRaw)) {
 			return MoveResult{Valid: false}
 		}
@@ -337,15 +330,15 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 		// That's it! Apply the move
 		movedPiece.MoveCount = 1
 		rookPiece.MoveCount = 1
-		b.pieces[move.FromY][move.FromX].Store(uint64(EmptyEncodedPiece))
-		b.pieces[rookFromY][rookFromX].Store(uint64(EmptyEncodedPiece))
-		b.pieces[move.ToY][move.ToX].Store(uint64(movedPiece.Encode()))
-		b.pieces[rookToY][rookToX].Store(uint64(rookPiece.Encode()))
+		b.pieces[move.FromY][move.FromX] = uint64(EmptyEncodedPiece)
+		b.pieces[rookFromY][rookFromX] = uint64(EmptyEncodedPiece)
+		b.pieces[move.ToY][move.ToX] = uint64(movedPiece.Encode())
+		b.pieces[rookToY][rookToX] = uint64(rookPiece.Encode())
 
 		b.totalMoves.Add(1)
-		b.seqNum.Add(1)
+		b.seqNum++
 
-		seqNum := b.seqNum.Load()
+		seqNum := b.seqNum
 
 		kingMoveResult := MovedPieceResult{
 			Piece: movedPiece,
@@ -383,7 +376,7 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 		}
 
 		// There can't be a piece in the way
-		otherPiece := b.pieces[move.ToY][move.ToX].Load()
+		otherPiece := b.pieces[move.ToY][move.ToX]
 		if !EncodedIsEmpty(EncodedPiece(otherPiece)) {
 			return MoveResult{Valid: false}
 		}
@@ -391,7 +384,7 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 		// there must be a piece at dx + current x, current y
 		capturedX := move.FromX + uint16(dx)
 		capturedY := move.FromY
-		capturedRaw := b.pieces[capturedY][capturedX].Load()
+		capturedRaw := b.pieces[capturedY][capturedX]
 		capturedPiece := PieceOfEncodedPiece(EncodedPiece(capturedRaw))
 
 		if capturedPiece.IsEmpty() {
@@ -415,9 +408,9 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 
 		// That's it! Apply the move
 		movedPiece.IncrementMoveCount()
-		b.pieces[move.ToY][move.ToX].Store(uint64(movedPiece.Encode()))
-		b.pieces[move.FromY][move.FromX].Store(uint64(EmptyEncodedPiece))
-		b.pieces[capturedY][capturedX].Store(uint64(EmptyEncodedPiece))
+		b.pieces[move.ToY][move.ToX] = uint64(movedPiece.Encode())
+		b.pieces[move.FromY][move.FromX] = uint64(EmptyEncodedPiece)
+		b.pieces[capturedY][capturedX] = uint64(EmptyEncodedPiece)
 
 		if capturedPiece.IsWhite {
 			b.whitePiecesCaptured.Add(1)
@@ -425,9 +418,9 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 			b.blackPiecesCaptured.Add(1)
 		}
 		b.totalMoves.Add(1)
-		b.seqNum.Add(1)
+		b.seqNum++
 
-		seqNum := b.seqNum.Load()
+		seqNum := b.seqNum
 
 		movedPieceResult := MovedPieceResult{
 			Piece: movedPiece,
@@ -448,7 +441,7 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 		}
 
 	case MoveTypeNormal:
-		capturedRaw := b.pieces[move.ToY][move.ToX].Load()
+		capturedRaw := b.pieces[move.ToY][move.ToX]
 		capturedPiece := PieceOfEncodedPiece(EncodedPiece(capturedRaw))
 
 		if !capturedPiece.IsEmpty() {
@@ -510,13 +503,13 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 		// a duplicate piece on the board. This does mean that we potentially
 		// have a race where a piece disappears from the board, but I think that's
 		// fine since we'll send the move information to the client.
-		b.pieces[move.FromY][move.FromX].Store(uint64(EmptyEncodedPiece))
-		b.pieces[move.ToY][move.ToX].Store(uint64(movedPiece.Encode()))
+		b.pieces[move.FromY][move.FromX] = uint64(EmptyEncodedPiece)
+		b.pieces[move.ToY][move.ToX] = uint64(movedPiece.Encode())
 
 		b.totalMoves.Add(1)
-		b.seqNum.Add(1)
+		b.seqNum++
 
-		seqNum := b.seqNum.Load()
+		seqNum := b.seqNum
 		movedPieceResult := MovedPieceResult{
 			Piece: movedPiece,
 			FromX: move.FromX,
@@ -545,54 +538,98 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 	}
 }
 
-// ResetBoardSection initializes a standard 8x8 chess board at the given position
-func (b *Board) ResetBoardSection(boardX, boardY uint16, includeWhite bool, includeBlack bool) []*PieceState {
+func (b *Board) GetStats() GameStats {
+	return GameStats{
+		TotalMoves:           b.totalMoves.Load(),
+		WhitePiecesRemaining: 32000000 - b.whitePiecesCaptured.Load(),
+		BlackPiecesRemaining: 32000000 - b.blackPiecesCaptured.Load(),
+		WhiteKingsRemaining:  1000000 - b.whiteKingsCaptured.Load(),
+		BlackKingsRemaining:  1000000 - b.blackKingsCaptured.Load(),
+	}
+}
+
+func (b *Board) GetStateForPosition(pos Position) StateSnapshot {
+	minX := uint16(0)
+	minY := uint16(0)
+	maxX := uint16(BOARD_SIZE - 1)
+	maxY := uint16(BOARD_SIZE - 1)
+
+	if pos.X > VIEW_RADIUS {
+		minX = pos.X - VIEW_RADIUS
+	}
+	if pos.Y > VIEW_RADIUS {
+		minY = pos.Y - VIEW_RADIUS
+	}
+	if pos.X+VIEW_RADIUS < BOARD_SIZE {
+		maxX = pos.X + VIEW_RADIUS
+	}
+	if pos.Y+VIEW_RADIUS < BOARD_SIZE {
+		maxY = pos.Y + VIEW_RADIUS
+	}
+
+	width := maxX - minX + 1
+	height := maxY - minY + 1
+
+	pieces := make([][]uint64, height)
+	for i := range pieces {
+		pieces[i] = make([]uint64, width)
+	}
+
+	b.RLock()
+	seqnum := b.seqNum
+	for y := minY; y <= maxY; y++ {
+		copy(pieces[y-minY], b.pieces[y][minX:maxX+1])
+	}
+	b.RUnlock()
+
+	pieceStates := make([]PieceState, 0, width*height)
+	for y := uint16(0); y < height; y++ {
+		for x := uint16(0); x < width; x++ {
+			raw := pieces[y][x]
+			piece := PieceOfEncodedPiece(EncodedPiece(raw))
+			if !piece.IsEmpty() {
+				pieceStates = append(pieceStates, PieceState{
+					Piece: piece,
+					X:     minX + x,
+					Y:     minY + y,
+				})
+			}
+		}
+	}
+
+	return StateSnapshot{
+		Pieces: pieceStates,
+		Seqnum: seqnum,
+		XCoord: pos.X,
+		YCoord: pos.Y,
+	}
+}
+
+// CR nroyalty: this reset board section stuff is really gross and poorly structured,
+// and it's scary that we might call it without taking the lock. We should refactor it
+// to be inlined, but let's do that after we push through the basic refactor.
+func (b *Board) resetBoardSection(boardX, boardY uint16, includeWhite bool, includeBlack bool) []*PieceState {
 
 	if boardX >= 1000 || boardY >= 1000 {
 		log.Printf("Board section is out of bounds")
 		return nil
 	}
 
-	// Calculate base coordinates
 	baseX := boardX * 8
 	baseY := boardY * 8
-
-	// Track all new pieces for notification
 	newPieces := make([]*PieceState, 0, 32)
 
-	// Clear existing pieces in this section
-	// think about how to do this later when we care...
-	// for y := uint16(0); y < 8; y++ {
-	// 	for x := uint16(0); x < 8; x++ {
-	// 		worldX := baseX + x
-	// 		worldY := baseY + y
-
-	// 		existingPiece := b.pieces[worldY][worldX]
-	// 		if existingPiece != nil {
-	// 			// Skip pieces that shouldn't be reset based on color flags
-	// 			if (whiteOnly && !existingPiece.IsWhite) || (blackOnly && existingPiece.IsWhite) {
-	// 				continue
-	// 			}
-	// 			b.pieces[worldY][worldX] = nil
-	// 		}
-	// 	}
-	// }
-
-	// Place new pieces if we're not excluding their color
 	if includeWhite {
-		// Place white pieces
 		b.setupPiecesForColor(baseX, baseY, true, &newPieces)
 	}
 
 	if includeBlack {
-		// Place black pieces
 		b.setupPiecesForColor(baseX, baseY, false, &newPieces)
 	}
 
 	return newPieces
 }
 
-// setupPiecesForColor sets up the pieces for one color on a board section
 func (b *Board) setupPiecesForColor(baseX, baseY uint16, isWhite bool, newPieces *[]*PieceState) {
 	var pawnRow, pieceRow uint16
 
@@ -604,10 +641,9 @@ func (b *Board) setupPiecesForColor(baseX, baseY uint16, isWhite bool, newPieces
 		pawnRow = baseY + 1 // Second row for black pawns
 	}
 
-	// Place pawns
 	for x := uint16(0); x < 8; x++ {
 		piece := b.createPiece(Pawn, isWhite)
-		b.pieces[pawnRow][baseX+x].Store(uint64(piece.Encode()))
+		b.pieces[pawnRow][baseX+x] = uint64(piece.Encode())
 		*newPieces = append(*newPieces, &PieceState{
 			Piece: piece,
 			X:     baseX + x,
@@ -615,11 +651,10 @@ func (b *Board) setupPiecesForColor(baseX, baseY uint16, isWhite bool, newPieces
 		})
 	}
 
-	// Place major pieces
 	pieceTypes := []PieceType{Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook}
 	for x := uint16(0); x < 8; x++ {
 		piece := b.createPiece(pieceTypes[x], isWhite)
-		b.pieces[pieceRow][baseX+x].Store(uint64(piece.Encode()))
+		b.pieces[pieceRow][baseX+x] = uint64(piece.Encode())
 		*newPieces = append(*newPieces, &PieceState{
 			Piece: piece,
 			X:     baseX + x,
@@ -634,65 +669,11 @@ func (b *Board) createPiece(pieceType PieceType, isWhite bool) Piece {
 	return piece
 }
 
-func (b *Board) GetStats() GameStats {
-	return GameStats{
-		TotalMoves:           b.totalMoves.Load(),
-		WhitePiecesRemaining: 32000000 - b.whitePiecesCaptured.Load(),
-		BlackPiecesRemaining: 32000000 - b.blackPiecesCaptured.Load(),
-		WhiteKingsRemaining:  1000000 - b.whiteKingsCaptured.Load(),
-		BlackKingsRemaining:  1000000 - b.blackKingsCaptured.Load(),
-	}
-}
-
-func (b *Board) GetStateForPosition(pos Position) StateSnapshot {
-	startingSeqnum := b.seqNum.Load()
-	minX := uint16(0)
-	minY := uint16(0)
-	maxX := uint16(BOARD_SIZE - 1)
-	maxY := uint16(BOARD_SIZE - 1)
-
-	// Adjust for position
-	if pos.X > VIEW_RADIUS {
-		minX = pos.X - VIEW_RADIUS
-	}
-	if pos.Y > VIEW_RADIUS {
-		minY = pos.Y - VIEW_RADIUS
-	}
-	if pos.X+VIEW_RADIUS < BOARD_SIZE {
-		maxX = pos.X + VIEW_RADIUS
-	}
-	if pos.Y+VIEW_RADIUS < BOARD_SIZE {
-		maxY = pos.Y + VIEW_RADIUS
-	}
-
-	pieces := make([]PieceState, 0, 200)
-
-	for y := minY; y <= maxY; y++ {
-		for x := minX; x <= maxX; x++ {
-			raw := b.pieces[y][x].Load()
-			piece := PieceOfEncodedPiece(EncodedPiece(raw))
-			if !piece.IsEmpty() {
-				pieces = append(pieces, PieceState{
-					Piece: piece,
-					X:     x,
-					Y:     y,
-				})
-			}
-		}
-	}
-
-	return StateSnapshot{
-		Pieces:         pieces,
-		StartingSeqnum: startingSeqnum,
-		EndingSeqnum:   b.seqNum.Load(),
-		XCoord:         pos.X,
-		YCoord:         pos.Y,
-	}
-}
-
 const ACTUALLY_RANDOMIZE = false
 
 func (b *Board) InitializeRandom() {
+	b.Lock()
+	defer b.Unlock()
 	log.Printf("Initializing random board")
 	startX := uint16(0)
 	startY := uint16(0)
@@ -705,11 +686,7 @@ func (b *Board) InitializeRandom() {
 				includeWhite = random > dy
 				includeBlack = random > dx
 			}
-			// includeWhite := true
-			// includeBlack := true
-			// includeWhite := random < 50
-			// includeBlack := random >= 50
-			b.ResetBoardSection(startX+uint16(dx), startY+uint16(dy), includeWhite, includeBlack)
+			b.resetBoardSection(startX+uint16(dx), startY+uint16(dy), includeWhite, includeBlack)
 		}
 	}
 }
@@ -726,9 +703,8 @@ type Position struct {
 }
 
 type StateSnapshot struct {
-	Pieces         []PieceState
-	StartingSeqnum uint64
-	EndingSeqnum   uint64
-	XCoord         uint16
-	YCoord         uint16
+	Pieces []PieceState
+	Seqnum uint64
+	XCoord uint16
+	YCoord uint16
 }

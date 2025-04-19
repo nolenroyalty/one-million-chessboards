@@ -354,7 +354,3 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request, staticDir str
 		http.FileServer(http.Dir(staticDir)).ServeHTTP(w, r)
 	}
 }
-
-func (s *Server) Testing_GetPiece(x, y uint16) *Piece {
-	return s.board.GetPiece(x, y)
-}

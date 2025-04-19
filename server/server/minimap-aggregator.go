@@ -75,20 +75,21 @@ func getAggregatorCoords(x, y uint16) AggregatorCoords {
 
 func (m *MinimapAggregator) Initialize(board *Board) {
 	m.Lock()
+	board.RLock()
 	for i := 0; i < NUMBER_OF_CELLS; i++ {
 		for j := 0; j < NUMBER_OF_CELLS; j++ {
 			m.cells[i][j] = MinimapCell{}
 		}
 	}
 
+	// kinda gross to do raw reads here but it's at startup, whatever
 	for i := 0; i < BOARD_SIZE; i++ {
 		for j := 0; j < BOARD_SIZE; j++ {
-			// CR nroyalty: It's not a huge deal because it's at startup, but we don't really
-			// want to rely on GetPiece and should instead do...something nicer (a raw read once we can?)
-			piece := board.GetPiece(uint16(i), uint16(j))
-			if piece == nil {
+			rawPiece := EncodedPiece(board.pieces[i][j])
+			if EncodedIsEmpty(rawPiece) {
 				continue
 			}
+			piece := PieceOfEncodedPiece(rawPiece)
 			coords := getAggregatorCoords(uint16(i), uint16(j))
 			if piece.IsWhite {
 				m.cells[coords.X][coords.Y].WhiteCount++
@@ -97,6 +98,7 @@ func (m *MinimapAggregator) Initialize(board *Board) {
 			}
 		}
 	}
+	board.RUnlock()
 	m.Unlock()
 	m.createAndStoreAggregation()
 }

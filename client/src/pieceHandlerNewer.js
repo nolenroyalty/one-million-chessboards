@@ -484,7 +484,7 @@ class PieceHandler {
     this.statsHandler = statsHandler;
     this.piecesById = new Map();
     this.optimisticStateHandler = new OptimisticState();
-    this.snapshotSeqnum = { from: -2, to: -1 };
+    this.snapshotSeqnum = -1;
 
     this.moveToken = 1;
     this.subscribers = [];
@@ -1078,10 +1078,7 @@ class PieceHandler {
 
     this.activeCaptures = activeCaptures;
     this.piecesById = piecesById;
-    this.snapshotSeqnum = {
-      from: snapshot.startingSeqnum,
-      to: snapshot.endingSeqnum,
-    };
+    this.snapshotSeqnum = Math.max(this.snapshotSeqnum, snapshot.seqnum);
 
     const { processedAnimationsByPieceId } = this.processGroundTruthAnimations({
       animationsByPieceId,
@@ -1144,7 +1141,7 @@ class PieceHandler {
     // around server restarts and captures getting reverted, which we'll need to
     // figure out down the line
     captures.forEach((capture) => {
-      if (capture.seqnum <= this.snapshotSeqnum.from) {
+      if (capture.seqnum <= this.snapshotSeqnum) {
         // do nothing
       } else {
         const ourPiece = this.piecesById.get(capture.capturedPieceId);
