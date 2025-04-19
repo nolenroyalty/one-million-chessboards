@@ -45,14 +45,6 @@ type AggregationResponse struct {
 	Aggregations [NUMBER_OF_CELLS * NUMBER_OF_CELLS]packedAggregation `json:"aggregations"`
 }
 
-type AggregationRequest struct {
-	Response chan json.RawMessage
-}
-
-type CachedAggregationRequest struct {
-	Response chan json.RawMessage
-}
-
 type MinimapAggregator struct {
 	sync.Mutex
 	cells           [NUMBER_OF_CELLS][NUMBER_OF_CELLS]MinimapCell
