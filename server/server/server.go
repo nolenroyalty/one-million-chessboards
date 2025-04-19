@@ -89,7 +89,6 @@ func (s *Server) Run() {
 	go s.minimapAggregator.Run()
 	go s.sendPeriodicAggregations()
 	go s.sendPeriodicStats()
-	go s.zoneMap.Run()
 	go s.handleClientRegistrations()
 	go s.persistentBoard.Run()
 	select {}

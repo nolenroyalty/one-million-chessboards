@@ -7,35 +7,15 @@ type ZoneCoord struct {
 	Y uint16
 }
 
-type zoneAddition struct {
-	client   *Client
-	newZones map[ZoneCoord]struct{}
-}
-
-type clientRemoval struct {
-	client *Client
-}
-
-type zoneQuery struct {
-	zones    map[ZoneCoord]struct{}
-	response chan map[*Client]struct{}
-}
-
-// ZoneMap tracks which clients are interested in which zones
 type ZoneMap struct {
+	sync.RWMutex
 	clientsByZone         [ZONE_COUNT][ZONE_COUNT]map[*Client]struct{}
 	currentZonesForClient map[*Client]map[ZoneCoord]struct{}
-	additions             chan zoneAddition
-	removals              chan clientRemoval
-	queries               chan zoneQuery
 	resultPool            sync.Pool
 }
 
 func NewZoneMap() *ZoneMap {
 	zm := &ZoneMap{
-		additions:             make(chan zoneAddition, 1024),
-		removals:              make(chan clientRemoval, 1024),
-		queries:               make(chan zoneQuery, 1024),
 		currentZonesForClient: make(map[*Client]map[ZoneCoord]struct{}),
 		resultPool: sync.Pool{
 			New: func() interface{} {
@@ -53,64 +33,49 @@ func NewZoneMap() *ZoneMap {
 	return zm
 }
 
-func (zm *ZoneMap) Run() {
-	for {
-		select {
-		case op := <-zm.additions:
-			oldZones, exists := zm.currentZonesForClient[op.client]
-			if exists {
-				for zone := range oldZones {
-					delete(zm.clientsByZone[zone.X][zone.Y], op.client)
-				}
-			}
-			zm.currentZonesForClient[op.client] = op.newZones
-
-			for zone := range op.newZones {
-				zm.clientsByZone[zone.X][zone.Y][op.client] = struct{}{}
-			}
-		case op := <-zm.removals:
-			delete(zm.currentZonesForClient, op.client)
-		case query := <-zm.queries:
-			resultMap := zm.resultPool.Get().(map[*Client]struct{})
-			for k := range resultMap {
-				delete(resultMap, k)
-			}
-			for zone := range query.zones {
-				for client := range zm.clientsByZone[zone.X][zone.Y] {
-					resultMap[client] = struct{}{}
-				}
-			}
-			query.response <- resultMap
-		}
-	}
-}
-
 func (zm *ZoneMap) AddClientToZones(client *Client, pos Position) {
 	newZones := GetRelevantZones(pos)
-	op := zoneAddition{
-		client:   client,
-		newZones: newZones,
+
+	zm.Lock()
+	defer zm.Unlock()
+	oldZones, exists := zm.currentZonesForClient[client]
+	if exists {
+		for zone := range oldZones {
+			delete(zm.clientsByZone[zone.X][zone.Y], client)
+		}
 	}
-	zm.additions <- op
+	zm.currentZonesForClient[client] = newZones
+
+	for zone := range newZones {
+		zm.clientsByZone[zone.X][zone.Y][client] = struct{}{}
+	}
 }
 
 func (zm *ZoneMap) RemoveClient(client *Client) {
-	op := clientRemoval{
-		client: client,
+	zm.Lock()
+	defer zm.Unlock()
+	oldZones, exists := zm.currentZonesForClient[client]
+	if exists {
+		for zone := range oldZones {
+			delete(zm.clientsByZone[zone.X][zone.Y], client)
+		}
 	}
-	zm.removals <- op
+	delete(zm.currentZonesForClient, client)
 }
 
 func (zm *ZoneMap) GetClientsForZones(zones map[ZoneCoord]struct{}) map[*Client]struct{} {
-	response := make(chan map[*Client]struct{}, 1)
-	query := zoneQuery{
-		zones:    zones,
-		response: response,
+	zm.RLock()
+	defer zm.RUnlock()
+	resultMap := zm.resultPool.Get().(map[*Client]struct{})
+	for k := range resultMap {
+		delete(resultMap, k)
 	}
-	zm.queries <- query
-	result := <-response
-
-	return result
+	for zone := range zones {
+		for client := range zm.clientsByZone[zone.X][zone.Y] {
+			resultMap[client] = struct{}{}
+		}
+	}
+	return resultMap
 }
 
 func (zm *ZoneMap) ReturnClientMap(m map[*Client]struct{}) {

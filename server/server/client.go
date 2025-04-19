@@ -30,10 +30,11 @@ const (
 	PeriodicUpdateInterval = time.Second * 120
 	activityThreshold      = time.Second * 20
 	// CR nroyalty: remove before release
-	simulatedLatency  = 1 * time.Millisecond
-	simulatedJitterMs = 1
-	moveBufferSize    = 200
-	captureBufferSize = 100
+	simulatedLatency          = 1 * time.Millisecond
+	simulatedJitterMs         = 1
+	moveBufferSize            = 200
+	captureBufferSize         = 100
+	maxWaitBeforeSendingMoves = 150 * time.Millisecond
 )
 
 func getSimulatedLatency() time.Duration {
@@ -391,7 +392,7 @@ func (c *Client) SendPeriodicUpdates() {
 }
 
 func (c *Client) ProcessMoveUpdates() {
-	ticker := time.NewTicker(150 * time.Millisecond)
+	ticker := time.NewTicker(maxWaitBeforeSendingMoves)
 	defer ticker.Stop()
 
 	for {
