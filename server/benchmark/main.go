@@ -24,15 +24,17 @@ func getUrl() string {
 }
 
 type MainCounter struct {
-	numberOfSnapshots atomic.Int64
-	numberOfMoves     atomic.Int64
-	numberOfCaptures  atomic.Int64
-	receivedBytes     atomic.Int64
+	numberOfSnapshots   atomic.Int64
+	numberOfMoveUpdates atomic.Int64
+	numberOfMoves       atomic.Int64
+	numberOfCaptures    atomic.Int64
+	receivedBytes       atomic.Int64
 }
 
 func (c *MainCounter) logStats() {
 	log.Printf("BYTES: %s", humanize.Bytes(uint64(c.receivedBytes.Load())))
 	log.Printf("SNAPSHOTS: %d", c.numberOfSnapshots.Load())
+	log.Printf("MOVE UPDATES: %d", c.numberOfMoveUpdates.Load())
 	log.Printf("MOVES: %d", c.numberOfMoves.Load())
 	log.Printf("CAPTURES: %d", c.numberOfCaptures.Load())
 }
@@ -79,12 +81,13 @@ func (c *MainCounter) RunClient(serverDone chan struct{}) {
 				}
 				if parsed["type"] == "initialState" {
 					c.numberOfSnapshots.Add(1)
-					// position := parsed["position"].(map[string]any)
-					// x := int(position["x"].(float64))
-					// y := int(position["y"].(float64))
-					// log.Printf("Initial position: %d, %d", x, y)
+					position := parsed["position"].(map[string]any)
+					x := int(position["x"].(float64))
+					y := int(position["y"].(float64))
+					log.Printf("Initial position: %d, %d", x, y)
 				}
 				if parsed["type"] == "moveUpdates" {
+					c.numberOfMoveUpdates.Add(1)
 					numberOfMoves := len(parsed["moves"].([]any))
 					c.numberOfMoves.Add(int64(numberOfMoves))
 					numberOfCaptures := len(parsed["captures"].([]any))

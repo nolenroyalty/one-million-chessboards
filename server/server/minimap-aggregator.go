@@ -7,6 +7,8 @@ package server
 import (
 	"encoding/json"
 	"log"
+	"sync"
+	"sync/atomic"
 )
 
 const CELL_SIZE = 5
@@ -15,20 +17,6 @@ const NUMBER_OF_CELLS = 1000 / CELL_SIZE
 type MinimapCell struct {
 	WhiteCount uint16
 	BlackCount uint16
-}
-
-type minimapMoveUpdate struct {
-	FromX uint16
-	FromY uint16
-	ToX   uint16
-	ToY   uint16
-	Piece Piece
-}
-
-type minimapCaptureUpdate struct {
-	X     uint16
-	Y     uint16
-	Piece Piece
 }
 
 type packedAggregation uint8
@@ -57,31 +45,16 @@ type AggregationResponse struct {
 	Aggregations [NUMBER_OF_CELLS * NUMBER_OF_CELLS]packedAggregation `json:"aggregations"`
 }
 
-type AggregationRequest struct {
-	Response chan json.RawMessage
-}
-
-type CachedAggregationRequest struct {
-	Response chan json.RawMessage
-}
-
 type MinimapAggregator struct {
-	cells                     [NUMBER_OF_CELLS][NUMBER_OF_CELLS]MinimapCell
-	moveUpdates               chan minimapMoveUpdate
-	captureUpdates            chan minimapCaptureUpdate
-	aggregationRequests       chan AggregationRequest
-	cachedAggregationRequests chan CachedAggregationRequest
-	lastAggregation           json.RawMessage
+	sync.Mutex
+	cells           [NUMBER_OF_CELLS][NUMBER_OF_CELLS]MinimapCell
+	lastAggregation atomic.Value
 }
 
 func NewMinimapAggregator() *MinimapAggregator {
-	return &MinimapAggregator{
-		moveUpdates:               make(chan minimapMoveUpdate, 1024),
-		captureUpdates:            make(chan minimapCaptureUpdate, 1024),
-		aggregationRequests:       make(chan AggregationRequest, 1024),
-		cachedAggregationRequests: make(chan CachedAggregationRequest, 1024),
-		lastAggregation:           json.RawMessage{},
-	}
+	ret := &MinimapAggregator{}
+	ret.lastAggregation.Store([]byte{})
+	return ret
 }
 
 type AggregatorCoords struct {
@@ -101,6 +74,7 @@ func getAggregatorCoords(x, y uint16) AggregatorCoords {
 }
 
 func (m *MinimapAggregator) Initialize(board *Board) {
+	m.Lock()
 	for i := 0; i < NUMBER_OF_CELLS; i++ {
 		for j := 0; j < NUMBER_OF_CELLS; j++ {
 			m.cells[i][j] = MinimapCell{}
@@ -109,6 +83,8 @@ func (m *MinimapAggregator) Initialize(board *Board) {
 
 	for i := 0; i < BOARD_SIZE; i++ {
 		for j := 0; j < BOARD_SIZE; j++ {
+			// CR nroyalty: It's not a huge deal because it's at startup, but we don't really
+			// want to rely on GetPiece and should instead do...something nicer (a raw read once we can?)
 			piece := board.GetPiece(uint16(i), uint16(j))
 			if piece == nil {
 				continue
@@ -121,51 +97,23 @@ func (m *MinimapAggregator) Initialize(board *Board) {
 			}
 		}
 	}
-	// just make sure we always have an initial aggregation
-	aggregationRequest := AggregationRequest{Response: make(chan json.RawMessage, 1)}
-	m.handleAggregationRequest(aggregationRequest)
-	m.lastAggregation = <-aggregationRequest.Response
+	m.Unlock()
+	m.createAndStoreAggregation()
 }
 
-func (m *MinimapAggregator) updateForAggregatorCoords(coords AggregatorCoords, isWhite bool, decr bool) {
-	if isWhite {
-		if decr && m.cells[coords.X][coords.Y].WhiteCount > 0 {
-			m.cells[coords.X][coords.Y].WhiteCount--
-		} else if !decr {
-			m.cells[coords.X][coords.Y].WhiteCount++
-		}
-	} else {
-		if decr && m.cells[coords.X][coords.Y].BlackCount > 0 {
-			m.cells[coords.X][coords.Y].BlackCount--
-		} else if !decr {
-			m.cells[coords.X][coords.Y].BlackCount++
-		}
-	}
-}
+func (m *MinimapAggregator) createAndStoreAggregation() json.RawMessage {
+	m.Lock()
+	snapshot := m.cells
+	m.Unlock()
 
-func (m *MinimapAggregator) processMoveUpdate(moveUpdate minimapMoveUpdate) {
-	fromCoords := getAggregatorCoords(moveUpdate.FromX, moveUpdate.FromY)
-	toCoords := getAggregatorCoords(moveUpdate.ToX, moveUpdate.ToY)
-	if fromCoords != toCoords {
-		m.updateForAggregatorCoords(fromCoords, moveUpdate.Piece.IsWhite, true)
-		m.updateForAggregatorCoords(toCoords, moveUpdate.Piece.IsWhite, false)
-	}
-}
-
-func (m *MinimapAggregator) processCaptureUpdate(captureUpdate minimapCaptureUpdate) {
-	coords := getAggregatorCoords(captureUpdate.X, captureUpdate.Y)
-	m.updateForAggregatorCoords(coords, captureUpdate.Piece.IsWhite, true)
-}
-
-func (m *MinimapAggregator) handleAggregationRequest(request AggregationRequest) {
 	response := AggregationResponse{
 		Type: "minimapUpdate",
 	}
 	for i := 0; i < NUMBER_OF_CELLS*NUMBER_OF_CELLS; i++ {
 		x := i % NUMBER_OF_CELLS
 		y := i / NUMBER_OF_CELLS
-		whiteCount := m.cells[x][y].WhiteCount
-		blackCount := m.cells[x][y].BlackCount
+		whiteCount := snapshot[x][y].WhiteCount
+		blackCount := snapshot[x][y].BlackCount
 		diff := max(whiteCount, blackCount) - min(whiteCount, blackCount)
 		percentage := float64(diff) / float64(whiteCount+blackCount)
 		amount := 0
@@ -182,48 +130,68 @@ func (m *MinimapAggregator) handleAggregationRequest(request AggregationRequest)
 	jsonResponse, err := json.Marshal(response)
 	if err != nil {
 		log.Printf("Error marshalling aggregation response: %v", err)
-		request.Response <- nil
-		return
+		return nil
 	}
-	m.lastAggregation = jsonResponse
-	request.Response <- jsonResponse
+	m.lastAggregation.Store(jsonResponse)
+	return jsonResponse
 }
 
-func (m *MinimapAggregator) Run() {
-	for {
-		select {
-		case request := <-m.aggregationRequests:
-			m.handleAggregationRequest(request)
-		case moveUpdate := <-m.moveUpdates:
-			m.processMoveUpdate(moveUpdate)
-		case captureUpdate := <-m.captureUpdates:
-			m.processCaptureUpdate(captureUpdate)
-		case request := <-m.cachedAggregationRequests:
-			m.handleCachedAggregationRequest(request)
+// assumes that the lock is already held!
+func (m *MinimapAggregator) unsafeUpdateForAggregatorCoords(coords AggregatorCoords, isWhite bool, decr bool) {
+	if isWhite {
+		if decr && m.cells[coords.X][coords.Y].WhiteCount > 0 {
+			m.cells[coords.X][coords.Y].WhiteCount--
+		} else if !decr {
+			m.cells[coords.X][coords.Y].WhiteCount++
+		}
+	} else {
+		if decr && m.cells[coords.X][coords.Y].BlackCount > 0 {
+			m.cells[coords.X][coords.Y].BlackCount--
+		} else if !decr {
+			m.cells[coords.X][coords.Y].BlackCount++
 		}
 	}
 }
 
-func (m *MinimapAggregator) RequestAggregation() <-chan json.RawMessage {
-	response := make(chan json.RawMessage, 1)
-	m.aggregationRequests <- AggregationRequest{Response: response}
-	return response
+func (m *MinimapAggregator) UpdateForMoveResult(moveResult MoveResult) {
+	needsUpdate := false
+	if !moveResult.CapturedPiece.Piece.IsEmpty() {
+		needsUpdate = true
+	} else {
+		for i := range moveResult.Length {
+			movedPiece := moveResult.MovedPieces[i]
+			fromCoords := getAggregatorCoords(movedPiece.FromX, movedPiece.FromY)
+			toCoords := getAggregatorCoords(movedPiece.ToX, movedPiece.ToY)
+			if fromCoords != toCoords {
+				needsUpdate = true
+				break
+			}
+		}
+	}
+
+	if !needsUpdate {
+		return
+	}
+
+	m.Lock()
+	defer m.Unlock()
+
+	for i := range moveResult.Length {
+		movedPiece := moveResult.MovedPieces[i]
+		fromCoords := getAggregatorCoords(movedPiece.FromX, movedPiece.FromY)
+		toCoords := getAggregatorCoords(movedPiece.ToX, movedPiece.ToY)
+		if fromCoords != toCoords {
+			m.unsafeUpdateForAggregatorCoords(fromCoords, movedPiece.Piece.IsWhite, true)
+			m.unsafeUpdateForAggregatorCoords(toCoords, movedPiece.Piece.IsWhite, false)
+		}
+	}
+
+	if !moveResult.CapturedPiece.Piece.IsEmpty() {
+		coords := getAggregatorCoords(moveResult.CapturedPiece.X, moveResult.CapturedPiece.Y)
+		m.unsafeUpdateForAggregatorCoords(coords, moveResult.CapturedPiece.Piece.IsWhite, true)
+	}
 }
 
-func (m *MinimapAggregator) UpdateForMove(fromX uint16, fromY uint16, toX uint16, toY uint16, piece Piece) {
-	m.moveUpdates <- minimapMoveUpdate{FromX: fromX, FromY: fromY, ToX: toX, ToY: toY, Piece: piece}
-}
-
-func (m *MinimapAggregator) UpdateForCapture(x uint16, y uint16, piece Piece) {
-	m.captureUpdates <- minimapCaptureUpdate{X: x, Y: y, Piece: piece}
-}
-
-func (m *MinimapAggregator) GetCachedAggregation() json.RawMessage {
-	response := make(chan json.RawMessage, 1)
-	m.cachedAggregationRequests <- CachedAggregationRequest{Response: response}
-	return <-response
-}
-
-func (m *MinimapAggregator) handleCachedAggregationRequest(request CachedAggregationRequest) {
-	request.Response <- m.lastAggregation
+func (m *MinimapAggregator) GetLastAggregation() json.RawMessage {
+	return json.RawMessage(m.lastAggregation.Load().([]byte))
 }

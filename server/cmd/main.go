@@ -22,6 +22,7 @@ func main() {
 	log.Printf("Piece at (500, 496): %v", piece)
 	log.Printf("Size of piece: %d", unsafe.Sizeof(piece))
 
+	// CR nroyalty: maybe we can block until the server is ready here.
 	go s.Run()
 
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {

@@ -34,7 +34,7 @@ const (
 	simulatedJitterMs         = 1
 	moveBufferSize            = 200
 	captureBufferSize         = 100
-	maxWaitBeforeSendingMoves = 150 * time.Millisecond
+	maxWaitBeforeSendingMoves = 200 * time.Millisecond
 )
 
 func getSimulatedLatency() time.Duration {
@@ -130,7 +130,7 @@ func (c *Client) Run(playingWhite bool, pos Position) {
 	c.playingWhite.Store(playingWhite)
 	c.position.Store(pos)
 	c.lastSnapshotPosition.Store(pos)
-	c.server.zoneMap.AddClientToZones(c, pos)
+	// c.server.clientManager.AddClientToZones(c, pos)
 	go c.ReadPump()
 	go c.WritePump()
 	go c.SendPeriodicUpdates()
@@ -151,14 +151,14 @@ type InitialInfo struct {
 }
 
 func (c *Client) sendInitialState() {
-	aggregation := c.server.RequestStaleAggregation()
+	aggregation := c.server.minimapAggregator.GetLastAggregation()
 	stats := c.server.RequestStatsSnapshot()
 	currentPosition := c.position.Load().(Position)
 	snapshot := c.server.board.GetStateForPosition(currentPosition)
 
 	initialInfo := InitialInfo{
 		Type:               "initialState",
-		ConnectedUsers:     c.server.connectedUsers.Load(),
+		ConnectedUsers:     uint32(c.server.clientManager.GetClientCount()),
 		MinimapAggregation: aggregation,
 		GlobalStats:        stats,
 		Position:           currentPosition,
@@ -175,7 +175,7 @@ func (c *Client) sendInitialState() {
 	case <-c.done:
 		return
 	default:
-		c.server.unregister <- c
+		c.Close()
 	}
 }
 
@@ -201,7 +201,7 @@ func shouldSendSnapshot(lastSnapshotPosition Position, currentPosition Position)
 
 func (c *Client) UpdatePositionAndMaybeSnapshot(pos Position) {
 	c.position.Store(pos)
-	c.server.zoneMap.AddClientToZones(c, pos)
+	c.server.clientManager.UpdateClientPosition(c, pos)
 	lastSnapshotPosition := c.lastSnapshotPosition.Load().(Position)
 	if shouldSendSnapshot(lastSnapshotPosition, pos) {
 		snapshot := c.server.board.GetStateForPosition(pos)
@@ -212,7 +212,6 @@ func (c *Client) UpdatePositionAndMaybeSnapshot(pos Position) {
 
 func (c *Client) ReadPump() {
 	defer func() {
-		c.server.unregister <- c
 		c.conn.Close()
 	}()
 
@@ -227,10 +226,10 @@ func (c *Client) ReadPump() {
 		_, message, err := c.conn.ReadMessage()
 		c.conn.SetReadDeadline(time.Now().Add(120 * time.Second))
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err) {
-				now := time.Now().UnixNano()
-				log.Printf("client disconnected: %v, %d", err, now)
-			}
+			// if websocket.IsUnexpectedCloseError(err) {
+			// 	now := time.Now().UnixNano()
+			// 	log.Printf("client disconnected: %v, %d", err, now)
+			// }
 			break
 		}
 
@@ -242,6 +241,7 @@ func CoordInBounds(coord float64) bool {
 	return coord >= 0 && uint16(coord) < BOARD_SIZE
 }
 
+// CR nroyalty: RATE LIMITS HERE!!
 func (c *Client) handleMessage(message []byte) {
 	var msg map[string]interface{}
 	if err := json.Unmarshal(message, &msg); err != nil {
@@ -249,7 +249,6 @@ func (c *Client) handleMessage(message []byte) {
 		return
 	}
 
-	// Get the message type
 	msgType, ok := msg["type"].(string)
 	if !ok {
 		c.SendError("Missing message type")
@@ -258,7 +257,6 @@ func (c *Client) handleMessage(message []byte) {
 
 	switch msgType {
 	case "move":
-		// Extract move parameters
 		pieceID, _ := msg["pieceId"].(float64)
 		fromX, _ := msg["fromX"].(float64)
 		fromY, _ := msg["fromY"].(float64)
@@ -287,13 +285,14 @@ func (c *Client) handleMessage(message []byte) {
 			ClientIsPlayingWhite: c.playingWhite.Load(),
 		}
 
+		// CR nroyalty: maybe we don't want to block here? We could just
+		// reject the move
 		c.server.moveRequests <- MoveRequest{
 			Move:   move,
 			Client: c,
 		}
 
 	case "subscribe":
-		// Extract subscription parameters
 		centerX, ok := msg["centerX"].(float64)
 		if !ok {
 			c.SendError("Invalid coordinates")
@@ -423,6 +422,9 @@ func (c *Client) ProcessMoveUpdates() {
 }
 
 func (c *Client) AddMovesToBuffer(moves []PieceMove, capture *PieceCapture) {
+	if c.isClosed.Load() {
+		return
+	}
 	c.bufferMu.Lock()
 	defer c.bufferMu.Unlock()
 
@@ -460,7 +462,7 @@ func (c *Client) SendStateSnapshot(snapshot StateSnapshot) {
 			return
 		case c.send <- data:
 		default:
-			c.server.unregister <- c
+			c.Close()
 		}
 	}()
 }
@@ -497,7 +499,7 @@ func (c *Client) SendMoveUpdates(moves []PieceMove, captures []PieceCapture) {
 			return
 		case c.send <- data:
 		default:
-			c.server.unregister <- c
+			c.Close()
 		}
 	}()
 }
@@ -524,7 +526,7 @@ func (c *Client) SendInvalidMove(moveToken uint32) {
 			return
 		case c.send <- data:
 		default:
-			c.server.unregister <- c
+			c.Close()
 		}
 	}()
 }
@@ -555,7 +557,7 @@ func (c *Client) SendValidMove(moveToken uint32, asOfSeqnum uint64, capturedPiec
 			return
 		case c.send <- data:
 		default:
-			c.server.unregister <- c
+			c.Close()
 		}
 	}()
 }
@@ -584,7 +586,7 @@ func (c *Client) SendError(errorMessage string) {
 		return
 	case c.send <- data:
 	default:
-		c.server.unregister <- c
+		c.Close()
 	}
 }
 
@@ -594,7 +596,7 @@ func (c *Client) SendMinimapUpdate(aggregation json.RawMessage) {
 		return
 	case c.send <- aggregation:
 	default:
-		c.server.unregister <- c
+		c.Close()
 	}
 }
 
@@ -604,16 +606,16 @@ func (c *Client) SendGlobalStats(stats json.RawMessage) {
 		return
 	case c.send <- stats:
 	default:
-		c.server.unregister <- c
+		c.Close()
 	}
 }
 
 func (c *Client) Close() {
-	if c.isClosed.Load() {
+	if !c.isClosed.CompareAndSwap(false, true) {
 		return
 	}
 
 	close(c.done)
+	c.server.clientManager.UnregisterClient(c)
 	c.conn.Close()
-	c.isClosed.Store(true)
 }
