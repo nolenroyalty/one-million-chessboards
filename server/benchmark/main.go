@@ -158,6 +158,6 @@ func (c *MainCounter) runRandomSubscribe() {
 
 func main() {
 	counter := MainCounter{}
-	counter.ConnectAndLogSizes()
-	// counter.runRandomSubscribe()
+	// counter.ConnectAndLogSizes()
+	counter.runRandomSubscribe()
 }
