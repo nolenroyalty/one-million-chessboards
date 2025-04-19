@@ -27,7 +27,7 @@ import (
 
 const (
 	// CR nroyalty: MAKE SURE THIS IS NOT BELOW 60 AND MAYBE MAKE IT HIGHER
-	PeriodicUpdateInterval = time.Second * 120
+	PeriodicUpdateInterval = time.Second * 60
 	activityThreshold      = time.Second * 20
 	// CR nroyalty: remove before release
 	simulatedLatency          = 1 * time.Millisecond
@@ -105,11 +105,14 @@ type Client struct {
 	playingWhite         atomic.Bool
 }
 
+// CR nroyalty: think HARD about your send channel and how big it should be.
+// it should probably be smaller than 2048, but it's nice for it to be this size
+// for benchmarking purposes.
 func NewClient(conn *websocket.Conn, server *Server) *Client {
 	c := &Client{
 		conn:           conn,
 		server:         server,
-		send:           make(chan []byte, 64),
+		send:           make(chan []byte, 2048),
 		position:       atomic.Value{},
 		moveBuffer:     make([]PieceMove, 0, moveBufferSize),
 		captureBuffer:  make([]PieceCapture, 0, captureBufferSize),
@@ -175,7 +178,7 @@ func (c *Client) sendInitialState() {
 	case <-c.done:
 		return
 	default:
-		c.Close()
+		c.Close("send full: sendInitialState")
 	}
 }
 
@@ -212,7 +215,7 @@ func (c *Client) UpdatePositionAndMaybeSnapshot(pos Position) {
 
 func (c *Client) ReadPump() {
 	defer func() {
-		c.conn.Close()
+		c.Close("ReadPump")
 	}()
 
 	c.conn.SetReadLimit(8192) // 8KB max message size
@@ -344,7 +347,7 @@ func (c *Client) handleMessage(message []byte) {
 // WritePump handles sending messages to the client
 func (c *Client) WritePump() {
 	defer func() {
-		c.conn.Close()
+		c.Close("WritePump")
 	}()
 
 	pingTicker := time.NewTicker(time.Second * 10)
@@ -455,16 +458,13 @@ func (c *Client) SendStateSnapshot(snapshot StateSnapshot) {
 		return
 	}
 
-	go func() {
-		sleepSimulatedLatency()
-		select {
-		case <-c.done:
-			return
-		case c.send <- data:
-		default:
-			c.Close()
-		}
-	}()
+	select {
+	case <-c.done:
+		return
+	case c.send <- data:
+	default:
+		c.Close("send full: SendStateSnapshot")
+	}
 }
 
 // PERFORMANCE nroyalty: To avoid the cost of sending information about each piece
@@ -492,16 +492,13 @@ func (c *Client) SendMoveUpdates(moves []PieceMove, captures []PieceCapture) {
 		return
 	}
 
-	go func() {
-		sleepSimulatedLatency()
-		select {
-		case <-c.done:
-			return
-		case c.send <- data:
-		default:
-			c.Close()
-		}
-	}()
+	select {
+	case <-c.done:
+		return
+	case c.send <- data:
+	default:
+		c.Close("send full: SendMoveUpdates")
+	}
 }
 
 func (c *Client) SendInvalidMove(moveToken uint32) {
@@ -519,16 +516,13 @@ func (c *Client) SendInvalidMove(moveToken uint32) {
 		return
 	}
 
-	go func() {
-		sleepSimulatedLatency()
-		select {
-		case <-c.done:
-			return
-		case c.send <- data:
-		default:
-			c.Close()
-		}
-	}()
+	select {
+	case <-c.done:
+		return
+	case c.send <- data:
+	default:
+		c.Close("send full: SendInvalidMove")
+	}
 }
 
 func (c *Client) SendValidMove(moveToken uint32, asOfSeqnum uint64, capturedPieceId uint32) {
@@ -550,16 +544,13 @@ func (c *Client) SendValidMove(moveToken uint32, asOfSeqnum uint64, capturedPiec
 		return
 	}
 
-	go func() {
-		sleepSimulatedLatency()
-		select {
-		case <-c.done:
-			return
-		case c.send <- data:
-		default:
-			c.Close()
-		}
-	}()
+	select {
+	case <-c.done:
+		return
+	case c.send <- data:
+	default:
+		c.Close("send full: SendValidMove")
+	}
 }
 
 func (c *Client) SendError(errorMessage string) {
@@ -586,7 +577,7 @@ func (c *Client) SendError(errorMessage string) {
 		return
 	case c.send <- data:
 	default:
-		c.Close()
+		c.Close("send full: SendError")
 	}
 }
 
@@ -596,7 +587,7 @@ func (c *Client) SendMinimapUpdate(aggregation json.RawMessage) {
 		return
 	case c.send <- aggregation:
 	default:
-		c.Close()
+		c.Close("send full: SendMinimapUpdate")
 	}
 }
 
@@ -606,14 +597,15 @@ func (c *Client) SendGlobalStats(stats json.RawMessage) {
 		return
 	case c.send <- stats:
 	default:
-		c.Close()
+		c.Close("send full: SendGlobalStats")
 	}
 }
 
-func (c *Client) Close() {
+func (c *Client) Close(why string) {
 	if !c.isClosed.CompareAndSwap(false, true) {
 		return
 	}
+	log.Printf("Closing client: %s", why)
 
 	close(c.done)
 	c.server.clientManager.UnregisterClient(c)

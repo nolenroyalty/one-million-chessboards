@@ -477,6 +477,8 @@ class OptimisticState {
   }
 }
 
+// CR nroyalty: BUG HANDLE SEQNUM RESET ON DISC
+
 class PieceHandler {
   constructor({ statsHandler }) {
     this.statsHandler = statsHandler;

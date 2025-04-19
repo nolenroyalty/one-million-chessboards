@@ -39,7 +39,7 @@ func (c *MainCounter) logStats() {
 	log.Printf("CAPTURES: %d", c.numberOfCaptures.Load())
 }
 
-func (c *MainCounter) RunClient(serverDone chan struct{}) {
+func (c *MainCounter) randomlySubscribe(serverDone chan struct{}) {
 	for {
 		// sleepTime := 5 + rand.Intn(13)
 		// time.Sleep(time.Duration(sleepTime) * time.Millisecond)
@@ -126,14 +126,16 @@ func (c *MainCounter) ConnectAndLogSizes() {
 	}
 }
 
-const NUM_CLIENTS = 250
+const NUM_RANDOM_SUBSCRIPTIONS = 20
+const NUM_RANDOM_MOVERS = 1000
+const NUMBER_OF_MOVES = 1000
 const TEST_RUN_TIME = 60 * time.Second
 
 func (c *MainCounter) runRandomSubscribe() {
-	doneChans := make([]chan struct{}, NUM_CLIENTS)
-	for i := 0; i < NUM_CLIENTS; i++ {
+	doneChans := make([]chan struct{}, NUM_RANDOM_SUBSCRIPTIONS)
+	for i := 0; i < NUM_RANDOM_SUBSCRIPTIONS; i++ {
 		doneChans[i] = make(chan struct{})
-		go c.RunClient(doneChans[i])
+		go c.randomlySubscribe(doneChans[i])
 		time.Sleep(5 * time.Millisecond)
 	}
 	statsTicker := time.NewTicker(5 * time.Second)
@@ -158,8 +160,136 @@ func (c *MainCounter) runRandomSubscribe() {
 	}
 }
 
+type RandomMover struct {
+	ws           *websocket.Conn
+	boardX       int
+	boardY       int
+	pawnCount    int
+	playingWhite bool
+}
+
+func newRandomMover(boardX int) *RandomMover {
+	ws, _, err := websocket.DefaultDialer.Dial(getUrl(), nil)
+	if err != nil {
+		log.Printf("Error dialing: %v", err)
+		return nil
+	}
+	rm := &RandomMover{
+		ws:           ws,
+		boardX:       boardX,
+		boardY:       0,
+		pawnCount:    0,
+		playingWhite: false,
+	}
+	ready := make(chan struct{})
+	go func() {
+		_, message, err := rm.ws.ReadMessage()
+		if err != nil {
+			log.Printf("Error reading message: %v", err)
+			return
+		}
+		var parsed map[string]any
+		err = json.Unmarshal(message, &parsed)
+		if err != nil {
+			log.Printf("Error unmarshalling: %v", err)
+			return
+		}
+		if parsed["type"] == "initialState" {
+			log.Printf("Initial state")
+			playingWhite := parsed["playingWhite"].(bool)
+			log.Printf("Playing white: %v", playingWhite)
+			rm.playingWhite = playingWhite
+			close(ready)
+		} else if parsed["type"] == "stateSnapshot" {
+			log.Printf("State snapshot")
+		}
+	}()
+	<-ready
+	return rm
+}
+
+func (rm *RandomMover) subscribe() {
+	err := rm.ws.WriteJSON(map[string]any{
+		"type":    "subscribe",
+		"centerX": 4 + rm.boardX*8,
+		"centerY": 4 + rm.boardY*8,
+	})
+	if err != nil {
+		log.Printf("Error subscribing: %v", err)
+	}
+}
+
+func (rm *RandomMover) movePawn() {
+	idOffset := 17
+	yOffset := 1
+	if rm.playingWhite {
+		idOffset = 1
+		yOffset = 6
+	}
+	pawnX := 8*rm.boardX + (rm.pawnCount % 8)
+	pawnY := 8*rm.boardY + yOffset
+
+	targetY := pawnY + 2
+	if rm.playingWhite {
+		targetY = pawnY - 2
+	}
+
+	pawnID := rm.boardX*32000 + 32*rm.boardY + (rm.pawnCount % 8) + idOffset
+	err := rm.ws.WriteJSON(map[string]any{
+		"type":      "move",
+		"pieceId":   pawnID,
+		"fromX":     pawnX,
+		"fromY":     pawnY,
+		"toX":       pawnX,
+		"toY":       targetY,
+		"moveType":  0,
+		"moveToken": rm.pawnCount + 1,
+	})
+	if err != nil {
+		log.Printf("Error moving pawn: %v", err)
+	}
+	rm.pawnCount++
+	if (rm.pawnCount % 8) == 0 {
+		rm.boardY++
+	}
+}
+
+func (c *MainCounter) runRandomMover(boardX int, doneChan chan struct{}) {
+	rm := newRandomMover(boardX)
+	if rm == nil {
+		doneChan <- struct{}{}
+		return
+	}
+	rm.subscribe()
+	for i := 0; i < NUMBER_OF_MOVES; i++ {
+		rm.movePawn()
+		time.Sleep(5 * time.Millisecond)
+	}
+	doneChan <- struct{}{}
+}
+
+func (c *MainCounter) runAllRandomMovers() {
+	doneChan := make(chan struct{})
+	for boardX := 0; boardX < NUM_RANDOM_MOVERS; boardX++ {
+		time.Sleep(2 * time.Millisecond)
+		go c.runRandomMover(boardX, doneChan)
+	}
+	doneCount := 0
+	for {
+		select {
+		case <-doneChan:
+			doneCount++
+			if doneCount == NUM_RANDOM_MOVERS {
+				return
+			}
+		}
+	}
+}
+
 func main() {
 	counter := MainCounter{}
 	// counter.ConnectAndLogSizes()
-	counter.runRandomSubscribe()
+	// go counter.runRandomSubscribe()
+	// counter.runRandomMover(0)
+	counter.runAllRandomMovers()
 }
