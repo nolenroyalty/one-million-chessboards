@@ -57,24 +57,23 @@ func NewServer(stateDir string) *Server {
 func (s *Server) Run() {
 	s.minimapAggregator.Initialize(s.board)
 	go s.processMoves()
-	go s.minimapAggregator.Run()
-	go s.sendPeriodicAggregations()
+	// go s.minimapAggregator.Run()
+	go s.sendPeriodicMinimapAggregations()
 	go s.sendPeriodicStats()
 	go s.persistentBoard.Run()
 	select {}
 }
 
-func (s *Server) sendPeriodicAggregations() {
+func (s *Server) sendPeriodicMinimapAggregations() {
 	log.Printf("beginning periodic aggregations")
 	ticker := time.NewTicker(aggregationInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		aggregation := s.minimapAggregator.RequestAggregation()
-		response := <-aggregation
+		aggregation := s.minimapAggregator.createAndStoreAggregation()
 		clients := s.clientManager.GetAllClients()
 		for client := range clients {
-			client.SendMinimapUpdate(response)
+			client.SendMinimapUpdate(aggregation)
 		}
 	}
 }
@@ -129,11 +128,6 @@ func (s *Server) RequestStatsSnapshot() json.RawMessage {
 		return nil
 	}
 	return statsJson
-}
-
-func (s *Server) RequestStaleAggregation() json.RawMessage {
-	resp := s.minimapAggregator.GetCachedAggregation()
-	return resp
 }
 
 func (s *Server) processMoves() {

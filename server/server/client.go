@@ -151,7 +151,7 @@ type InitialInfo struct {
 }
 
 func (c *Client) sendInitialState() {
-	aggregation := c.server.RequestStaleAggregation()
+	aggregation := c.server.minimapAggregator.GetLastAggregation()
 	stats := c.server.RequestStatsSnapshot()
 	currentPosition := c.position.Load().(Position)
 	snapshot := c.server.board.GetStateForPosition(currentPosition)
