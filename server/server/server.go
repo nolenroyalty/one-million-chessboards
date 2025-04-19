@@ -58,7 +58,6 @@ func NewServer(stateDir string) *Server {
 func (s *Server) Run() {
 	s.minimapAggregator.Initialize(s.board)
 	go s.processMoves()
-	// go s.minimapAggregator.Run()
 	go s.sendPeriodicMinimapAggregations()
 	go s.sendPeriodicStats()
 	go s.persistentBoard.Run()

@@ -34,7 +34,7 @@ const (
 	simulatedJitterMs         = 1
 	moveBufferSize            = 200
 	captureBufferSize         = 100
-	maxWaitBeforeSendingMoves = 150 * time.Millisecond
+	maxWaitBeforeSendingMoves = 200 * time.Millisecond
 )
 
 func getSimulatedLatency() time.Duration {
