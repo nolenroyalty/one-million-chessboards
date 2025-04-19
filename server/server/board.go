@@ -254,7 +254,7 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 
 	if move.ClientIsPlayingWhite != movedPiece.IsWhite {
 		if RESPECT_COLOR_REQUIREMENT {
-			log.Printf("Invalid move: Piece is not the correct color")
+			// log.Printf("Invalid move: Piece is not the correct color")
 			return MoveResult{Valid: false}
 		}
 	}
