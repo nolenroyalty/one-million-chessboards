@@ -25,9 +25,7 @@ const (
 	ColorPreferenceRandom
 )
 
-// Server is the main game server coordinator
 type Server struct {
-	// Game state
 	board             *Board
 	persistentBoard   *PersistentBoard
 	clientManager     *ClientManager
@@ -44,11 +42,7 @@ func NewServer(stateDir string) *Server {
 		persistentBoard:   persistentBoard,
 		clientManager:     NewClientManager(),
 		minimapAggregator: NewMinimapAggregator(),
-		// clients:           make(map[*Client]struct{}),
-		// register:   make(chan *RegistrationRequest, 512),
-		// unregister: make(chan *Client, 512),
-		// getClients:        make(chan CurrentClients, 128),
-		moveRequests: make(chan MoveRequest, 1024),
+		moveRequests:      make(chan MoveRequest, 1024),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,

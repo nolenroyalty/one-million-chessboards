@@ -40,7 +40,6 @@ func NewClientManager() *ClientManager {
 }
 
 func (cm *ClientManager) RegisterClient(client *Client, pos Position, playingWhite bool) {
-	log.Printf("Registering client")
 	if playingWhite {
 		cm.whiteCount.Add(1)
 	} else {
