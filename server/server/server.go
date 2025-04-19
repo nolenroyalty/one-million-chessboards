@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"net/http/pprof"
 	"strconv"
 	"time"
 
@@ -137,62 +138,66 @@ func (s *Server) processMoves() {
 			moveReq.Client.SendInvalidMove(moveReq.Move.MoveToken)
 			continue
 		}
+		s.persistentBoard.ApplyMove(moveReq.Move, moveResult.Seqnum)
+
 		if moveResult.CapturedPiece.Piece.IsEmpty() {
 			moveReq.Client.SendValidMove(moveReq.Move.MoveToken, moveResult.Seqnum, 0)
 		} else {
 			moveReq.Client.SendValidMove(moveReq.Move.MoveToken, moveResult.Seqnum, moveResult.CapturedPiece.Piece.ID)
 		}
 
-		capturedPiece := moveResult.CapturedPiece
-		movedPieces := make([]PieceMove, moveResult.Length)
-		for i := 0; i < int(moveResult.Length); i++ {
-			s.minimapAggregator.UpdateForMove(moveResult.MovedPieces[i].FromX,
-				moveResult.MovedPieces[i].FromY,
-				moveResult.MovedPieces[i].ToX,
-				moveResult.MovedPieces[i].ToY,
-				moveResult.MovedPieces[i].Piece)
-
-			pieceData := PieceData{
-				ID:              moveResult.MovedPieces[i].Piece.ID,
-				X:               moveResult.MovedPieces[i].ToX,
-				Y:               moveResult.MovedPieces[i].ToY,
-				Type:            moveResult.MovedPieces[i].Piece.Type,
-				JustDoubleMoved: moveResult.MovedPieces[i].Piece.JustDoubleMoved,
-				IsWhite:         moveResult.MovedPieces[i].Piece.IsWhite,
-				MoveCount:       moveResult.MovedPieces[i].Piece.MoveCount,
-				CaptureCount:    moveResult.MovedPieces[i].Piece.CaptureCount,
-			}
-
-			movedPieces[i] = PieceMove{
-				Piece:  pieceData,
-				Seqnum: moveResult.Seqnum,
-			}
-		}
-
-		var captureMove *PieceCapture = nil
-		if !capturedPiece.Piece.IsEmpty() {
-			s.minimapAggregator.UpdateForCapture(capturedPiece.X,
-				capturedPiece.Y, capturedPiece.Piece)
-
-			captureMove = &PieceCapture{
-				CapturedPieceID: capturedPiece.Piece.ID,
-				Seqnum:          moveResult.Seqnum,
-			}
-		}
-
-		s.persistentBoard.ApplyMove(moveReq.Move, moveResult.Seqnum)
-
 		// CR nroyalty: is there a way we can avoid the overhead of re-serializing a move
 		// for each client here? It's annoying that we might end up doing the same serialization
 		// for 100 different clients if they're looking at the same zones.
-		go func(moves []PieceMove, capture *PieceCapture) {
+		//
+		// CR nroyalty: I THINK this can't actually matter, but there's a bug here where
+		// you castle queenside and that results in us moving a rook that's on the edge
+		// of your vision, but the king isn't in your vision and so we don't tell you about it
+		// I think this is fine...but I need to think about it some more.
+		go func() {
+			capturedPiece := moveResult.CapturedPiece
+			movedPieces := make([]PieceMove, moveResult.Length)
+			for i := 0; i < int(moveResult.Length); i++ {
+				s.minimapAggregator.UpdateForMove(moveResult.MovedPieces[i].FromX,
+					moveResult.MovedPieces[i].FromY,
+					moveResult.MovedPieces[i].ToX,
+					moveResult.MovedPieces[i].ToY,
+					moveResult.MovedPieces[i].Piece)
+
+				pieceData := PieceData{
+					ID:              moveResult.MovedPieces[i].Piece.ID,
+					X:               moveResult.MovedPieces[i].ToX,
+					Y:               moveResult.MovedPieces[i].ToY,
+					Type:            moveResult.MovedPieces[i].Piece.Type,
+					JustDoubleMoved: moveResult.MovedPieces[i].Piece.JustDoubleMoved,
+					IsWhite:         moveResult.MovedPieces[i].Piece.IsWhite,
+					MoveCount:       moveResult.MovedPieces[i].Piece.MoveCount,
+					CaptureCount:    moveResult.MovedPieces[i].Piece.CaptureCount,
+				}
+
+				movedPieces[i] = PieceMove{
+					Piece:  pieceData,
+					Seqnum: moveResult.Seqnum,
+				}
+			}
+
+			var pieceCapture *PieceCapture = nil
+			if !capturedPiece.Piece.IsEmpty() {
+				s.minimapAggregator.UpdateForCapture(capturedPiece.X,
+					capturedPiece.Y, capturedPiece.Piece)
+
+				pieceCapture = &PieceCapture{
+					CapturedPieceID: capturedPiece.Piece.ID,
+					Seqnum:          moveResult.Seqnum,
+				}
+			}
 			affectedZones := s.clientManager.GetAffectedZones(moveReq.Move)
 			interestedClients := s.clientManager.GetClientsForZones(affectedZones)
 			for client := range interestedClients {
-				client.AddMovesToBuffer(moves, capture)
+				client.AddMovesToBuffer(movedPieces, pieceCapture)
 			}
 			s.clientManager.ReturnClientMap(interestedClients)
-		}(movedPieces, captureMove)
+		}()
 	}
 }
 
@@ -342,7 +347,21 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request, staticDir str
 		return
 	}
 
-	http.FileServer(http.Dir(staticDir)).ServeHTTP(w, r)
+	// CR nroyalty: remove later
+	switch r.URL.Path {
+	case "/debug/pprof/":
+		pprof.Index(w, r)
+	case "/debug/pprof/cmdline":
+		pprof.Cmdline(w, r)
+	case "/debug/pprof/profile":
+		pprof.Profile(w, r)
+	case "/debug/pprof/symbol":
+		pprof.Symbol(w, r)
+	case "/debug/pprof/trace":
+		pprof.Trace(w, r)
+	default:
+		http.FileServer(http.Dir(staticDir)).ServeHTTP(w, r)
+	}
 }
 
 func (s *Server) Testing_GetPiece(x, y uint16) *Piece {

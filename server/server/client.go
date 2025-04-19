@@ -226,10 +226,10 @@ func (c *Client) ReadPump() {
 		_, message, err := c.conn.ReadMessage()
 		c.conn.SetReadDeadline(time.Now().Add(120 * time.Second))
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err) {
-				now := time.Now().UnixNano()
-				log.Printf("client disconnected: %v, %d", err, now)
-			}
+			// if websocket.IsUnexpectedCloseError(err) {
+			// 	now := time.Now().UnixNano()
+			// 	log.Printf("client disconnected: %v, %d", err, now)
+			// }
 			break
 		}
 
