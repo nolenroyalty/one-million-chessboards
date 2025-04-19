@@ -263,7 +263,7 @@ func (c *MainCounter) runRandomMover(boardX int, doneChan chan struct{}) {
 	rm.subscribe()
 	for i := 0; i < NUMBER_OF_MOVES; i++ {
 		rm.movePawn()
-		time.Sleep(5 * time.Millisecond)
+		time.Sleep(2 * time.Millisecond)
 	}
 	doneChan <- struct{}{}
 }
