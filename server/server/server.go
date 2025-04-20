@@ -289,6 +289,7 @@ func (s *Server) GetMaybeRequestedCoords(requestedXCoord int16, requestedYCoord 
 }
 
 func (s *Server) ServeWs(w http.ResponseWriter, r *http.Request) {
+	// CR nroyalty: rate-limit by IP
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
