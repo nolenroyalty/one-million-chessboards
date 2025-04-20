@@ -216,10 +216,16 @@ func (b *Board) satisfiesMoveRules(movedPiece Piece, capturedPiece Piece, move M
 	return true
 }
 
-// CR nroyalty: we *probably* want to move the lock-aquisition out of this function,
-// require that users have the lock before calling this, and then let them do multiple
-// moves while holding the lock. Push this through once the basics work.
-func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
+// this can't handle multiple writers because it releases its read lock before
+// acquiring the write lock, which means that if you have multiple writers
+// you may apply an invalid move.
+//
+// Fortunately that's totally fine for us, we just use a single writer :)
+//
+// we do this because it lets us do validation without holding the write lock,
+// which (should?) increase throughput on the whole (our validation is substantially
+// more expensive than our move application, which is just a few writes).
+func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 	if !move.BoundsCheck() {
 		return MoveResult{Valid: false}
 	}
@@ -233,11 +239,15 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 		return MoveResult{Valid: false}
 	}
 
-	b.Lock()
-	defer b.Unlock()
-
+	b.RLock()
 	raw := b.pieces[move.FromY][move.FromX]
 	movedPiece := PieceOfEncodedPiece(EncodedPiece(raw))
+	haveReadLock := true
+	defer func() {
+		if haveReadLock {
+			b.RUnlock()
+		}
+	}()
 
 	// can't move an empty piece
 	if movedPiece.IsEmpty() {
@@ -247,7 +257,6 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 
 	if move.ClientIsPlayingWhite != movedPiece.IsWhite {
 		if RESPECT_COLOR_REQUIREMENT {
-			// log.Printf("Invalid move: Piece is not the correct color")
 			return MoveResult{Valid: false}
 		}
 	}
@@ -330,15 +339,17 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 		// That's it! Apply the move
 		movedPiece.MoveCount = 1
 		rookPiece.MoveCount = 1
+		haveReadLock = false
+		b.RUnlock()
+		b.Lock()
 		b.pieces[move.FromY][move.FromX] = uint64(EmptyEncodedPiece)
 		b.pieces[rookFromY][rookFromX] = uint64(EmptyEncodedPiece)
 		b.pieces[move.ToY][move.ToX] = uint64(movedPiece.Encode())
 		b.pieces[rookToY][rookToX] = uint64(rookPiece.Encode())
-
 		b.totalMoves.Add(1)
 		b.seqNum++
-
 		seqNum := b.seqNum
+		b.Unlock()
 
 		kingMoveResult := MovedPieceResult{
 			Piece: movedPiece,
@@ -363,6 +374,7 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 		if movedPiece.Type != Pawn {
 			return MoveResult{Valid: false}
 		}
+
 		// dy must be 1 (black) or -1 (white)
 		dy := int32(move.ToY) - int32(move.FromY)
 		if movedPiece.IsWhite && dy != -1 || !movedPiece.IsWhite && dy != 1 {
@@ -408,9 +420,16 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 
 		// That's it! Apply the move
 		movedPiece.IncrementMoveCount()
+		movedPiece.IncrementCaptureCount()
+		haveReadLock = false
+		b.RUnlock()
+		b.Lock()
 		b.pieces[move.ToY][move.ToX] = uint64(movedPiece.Encode())
 		b.pieces[move.FromY][move.FromX] = uint64(EmptyEncodedPiece)
 		b.pieces[capturedY][capturedX] = uint64(EmptyEncodedPiece)
+		b.seqNum++
+		seqNum := b.seqNum
+		b.Unlock()
 
 		if capturedPiece.IsWhite {
 			b.whitePiecesCaptured.Add(1)
@@ -418,9 +437,6 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 			b.blackPiecesCaptured.Add(1)
 		}
 		b.totalMoves.Add(1)
-		b.seqNum++
-
-		seqNum := b.seqNum
 
 		movedPieceResult := MovedPieceResult{
 			Piece: movedPiece,
@@ -499,17 +515,16 @@ func (b *Board) ValidateAndApplyMove(move Move) MoveResult {
 		}
 
 		// Actually apply the move!
-		// Do the store before the swap so that if we have a race, we don't have
-		// a duplicate piece on the board. This does mean that we potentially
-		// have a race where a piece disappears from the board, but I think that's
-		// fine since we'll send the move information to the client.
+		haveReadLock = false
+		b.RUnlock()
+		b.Lock()
 		b.pieces[move.FromY][move.FromX] = uint64(EmptyEncodedPiece)
 		b.pieces[move.ToY][move.ToX] = uint64(movedPiece.Encode())
+		b.seqNum++
+		seqNum := b.seqNum
+		b.Unlock()
 
 		b.totalMoves.Add(1)
-		b.seqNum++
-
-		seqNum := b.seqNum
 		movedPieceResult := MovedPieceResult{
 			Piece: movedPiece,
 			FromX: move.FromX,

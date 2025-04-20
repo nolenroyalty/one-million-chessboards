@@ -119,9 +119,8 @@ func (cm *ClientManager) GetClientsForZones(zones map[ZoneCoord]struct{}) map[*C
 }
 
 func (cm *ClientManager) GetAllClients() map[*Client]struct{} {
-	result := make(map[*Client]struct{}, len(cm.currentZonesForClient))
-
 	cm.RLock()
+	result := make(map[*Client]struct{}, len(cm.currentZonesForClient))
 	defer cm.RUnlock()
 	for client := range cm.currentZonesForClient {
 		result[client] = struct{}{}

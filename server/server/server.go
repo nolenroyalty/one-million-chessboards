@@ -131,7 +131,7 @@ func (s *Server) RequestStatsSnapshot() json.RawMessage {
 
 func (s *Server) processMoves() {
 	for moveReq := range s.moveRequests {
-		moveResult := s.board.ValidateAndApplyMove(moveReq.Move)
+		moveResult := s.board.ValidateAndApplyMove__NOTTHREADSAFE(moveReq.Move)
 		if !moveResult.Valid {
 			moveReq.Client.SendInvalidMove(moveReq.Move.MoveToken)
 			continue

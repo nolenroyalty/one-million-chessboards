@@ -322,7 +322,7 @@ func NewPersistentBoard(stateDir string) *PersistentBoard {
 					log.Print(s)
 					panic(s)
 				}
-				res := pb.board.ValidateAndApplyMove(move)
+				res := pb.board.ValidateAndApplyMove__NOTTHREADSAFE(move)
 				if !res.Valid {
 					s := fmt.Sprintf("Invalid move (file: %s, move: %v)", moveFilename.toFilename(), move)
 					log.Print(s)
@@ -399,7 +399,7 @@ func (pb *PersistentBoard) Run() {
 			if disabled {
 				continue
 			}
-			res := pb.board.ValidateAndApplyMove(move)
+			res := pb.board.ValidateAndApplyMove__NOTTHREADSAFE(move)
 			if !res.Valid {
 				log.Printf("TRIED TO APPLY INVALID MOVE: %v", move)
 				continue
