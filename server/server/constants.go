@@ -1,5 +1,7 @@
 package server
 
+import "time"
+
 const (
 	BOARD_SIZE        = 8000
 	SINGLE_BOARD_SIZE = 8
@@ -12,4 +14,5 @@ const (
 	RESPECT_COLOR_REQUIREMENT = true
 	MOVE_BUFFER_SIZE          = 200
 	CAPTURE_BUFFER_SIZE       = 100
+	MINIMAP_REFRESH_INTERVAL  = time.Second * 30
 )

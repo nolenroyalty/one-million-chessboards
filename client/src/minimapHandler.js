@@ -1,7 +1,36 @@
+const MINIMAP_REFRESH_INTERVAL = 30 * 1000;
+
 class MinimapHandler {
   constructor() {
-    this.state = [];
+    this.state = { initialized: false, aggregations: [] };
     this.subscribers = [];
+    this.pollPeriodically();
+  }
+
+  pollOnce() {
+    console.log("polling minimap data");
+    fetch("/minimap")
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+      })
+      .then((data) => {
+        console.log("refreshed minimap data");
+        this.setState({
+          initialized: true,
+          aggregations: data.aggregations,
+        });
+      })
+      .catch((error) => {
+        console.error("Error fetching minimap data:", error);
+      });
+  }
+
+  pollPeriodically() {
+    this.pollOnce();
+    setInterval(this.pollOnce.bind(this), MINIMAP_REFRESH_INTERVAL);
   }
 
   subscribe({ id, callback }) {
@@ -14,10 +43,9 @@ class MinimapHandler {
     );
   }
 
-  broadcast({ state }) {
-    this.state = state;
+  broadcast() {
     this.subscribers.forEach(({ callback }) => {
-      callback({ state });
+      callback({ state: this.state });
     });
   }
 
@@ -25,9 +53,9 @@ class MinimapHandler {
     return this.state;
   }
 
-  setState({ state }) {
+  setState(state) {
     this.state = state;
-    this.broadcast({ state });
+    this.broadcast();
   }
 }
 

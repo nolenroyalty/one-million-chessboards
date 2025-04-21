@@ -16,7 +16,6 @@ import (
 var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 const (
-	aggregationInterval = time.Second * 60
 	statsUpdateInterval = time.Second * 5
 )
 
@@ -60,24 +59,17 @@ func NewServer(stateDir string) *Server {
 func (s *Server) Run() {
 	s.minimapAggregator.Initialize(s.board)
 	go s.processMoves()
-	go s.sendPeriodicMinimapAggregations()
+	go s.refreshMinimapPeriodically()
 	go s.sendPeriodicStats()
 	go s.persistentBoard.Run()
 }
 
-// CR nroyalty: instead of pushing these over the websocket, just have clients
-// poll a /minimap GET endpoint that we cache :)
-func (s *Server) sendPeriodicMinimapAggregations() {
-	log.Printf("beginning periodic aggregations")
-	ticker := time.NewTicker(aggregationInterval)
+func (s *Server) refreshMinimapPeriodically() {
+	ticker := time.NewTicker(MINIMAP_REFRESH_INTERVAL)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		aggregation := s.minimapAggregator.createAndStoreAggregation()
-		clients := s.clientManager.GetAllClients()
-		for client := range clients {
-			client.SendMinimapUpdate(aggregation)
-		}
+		s.minimapAggregator.createAndStoreAggregation()
 	}
 }
 
@@ -339,9 +331,21 @@ func (s *Server) ServeWs(w http.ResponseWriter, r *http.Request) {
 	go client.Run(playingWhite, pos)
 }
 
+func (s *Server) ServeMinimap(w http.ResponseWriter, r *http.Request) {
+	log.Printf("serving minimap")
+	aggregation := s.minimapAggregator.GetLastAggregation()
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "public, max-age=30")
+
+	w.Write(aggregation)
+}
+
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request, staticDir string) {
 	if r.URL.Path == "/ws" {
 		s.ServeWs(w, r)
+		return
+	} else if r.URL.Path == "/minimap" {
+		s.ServeMinimap(w, r)
 		return
 	}
 

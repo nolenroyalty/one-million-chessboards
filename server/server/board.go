@@ -679,7 +679,7 @@ func (b *Board) createPiece(pieceType PieceType, isWhite bool) Piece {
 	return piece
 }
 
-const ACTUALLY_RANDOMIZE = false
+const ACTUALLY_RANDOMIZE = true
 
 func (b *Board) InitializeRandom() {
 	b.Lock()

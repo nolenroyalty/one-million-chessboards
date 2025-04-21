@@ -94,7 +94,6 @@ func (c *Client) Run(playingWhite bool, pos Position) {
 	c.playingWhite.Store(playingWhite)
 	c.position.Store(pos)
 	c.lastSnapshotPosition.Store(pos)
-	// c.server.clientManager.AddClientToZones(c, pos)
 	go c.ReadPump()
 	go c.WritePump()
 	go c.SendPeriodicUpdates()
@@ -105,29 +104,26 @@ func (c *Client) Run(playingWhite bool, pos Position) {
 }
 
 type InitialInfo struct {
-	Type               string              `json:"type"`
-	MinimapAggregation jsoniter.RawMessage `json:"minimapAggregation"`
-	GlobalStats        jsoniter.RawMessage `json:"globalStats"`
-	Position           Position            `json:"position"`
-	PlayingWhite       bool                `json:"playingWhite"`
-	Snapshot           *StateSnapshot      `json:"snapshot"`
-	ConnectedUsers     uint32              `json:"connectedUsers"`
+	Type           string              `json:"type"`
+	GlobalStats    jsoniter.RawMessage `json:"globalStats"`
+	Position       Position            `json:"position"`
+	PlayingWhite   bool                `json:"playingWhite"`
+	Snapshot       *StateSnapshot      `json:"snapshot"`
+	ConnectedUsers uint32              `json:"connectedUsers"`
 }
 
 func (c *Client) sendInitialState() {
-	aggregation := c.server.minimapAggregator.GetLastAggregation()
 	stats := c.server.GetCurrentStats()
 	currentPosition := c.position.Load().(Position)
 	snapshot := c.server.board.GetBoardSnapshot(currentPosition)
 
 	initialInfo := InitialInfo{
-		Type:               "initialState",
-		ConnectedUsers:     uint32(c.server.clientManager.GetClientCount()),
-		MinimapAggregation: aggregation,
-		GlobalStats:        stats,
-		Position:           currentPosition,
-		PlayingWhite:       c.playingWhite.Load(),
-		Snapshot:           snapshot,
+		Type:           "initialState",
+		ConnectedUsers: uint32(c.server.clientManager.GetClientCount()),
+		GlobalStats:    stats,
+		Position:       currentPosition,
+		PlayingWhite:   c.playingWhite.Load(),
+		Snapshot:       snapshot,
 	}
 	data, err := json.Marshal(&initialInfo)
 	if err != nil {
@@ -536,16 +532,6 @@ func (c *Client) SendError(errorMessage string) {
 	case c.send <- data:
 	default:
 		c.Close("send full: SendError")
-	}
-}
-
-func (c *Client) SendMinimapUpdate(aggregation jsoniter.RawMessage) {
-	select {
-	case <-c.done:
-		return
-	case c.send <- aggregation:
-	default:
-		c.Close("send full: SendMinimapUpdate")
 	}
 }
 

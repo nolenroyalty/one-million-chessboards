@@ -94,6 +94,8 @@ const DrawingCanvas = styled.canvas`
   left: 0;
   width: 100%;
   height: 100%;
+  transition: opacity 0.5s ease-in-out;
+  opacity: var(--minimap-opacity);
 `;
 
 const MINIMAP_DOT_SIZE = 10;
@@ -107,6 +109,8 @@ function MinimapCanvas({ coords, setCoords }) {
   const [minimapState, setMinimapState] = React.useState(
     minimapHandler.current.getState()
   );
+
+  console.log(minimapState);
 
   React.useEffect(() => {
     let minimap = minimapHandler.current;
@@ -124,14 +128,18 @@ function MinimapCanvas({ coords, setCoords }) {
   }, [minimapHandler]);
 
   React.useEffect(() => {
+    if (!minimapState.initialized) {
+      return;
+    }
     const minimapDataCanvas = minimapDataCanvasRef.current;
     const ctx = minimapDataCanvas.getContext("2d");
     ctx.clearRect(0, 0, minimapDataCanvas.width, minimapDataCanvas.height);
     const imageData = ctx.createImageData(MINIMAP_WIDTH, MINIMAP_HEIGHT);
     const data = imageData.data;
+    const aggregations = minimapState.aggregations;
 
-    for (let i = 0; i < minimapState.length; i++) {
-      const cell = minimapState[i];
+    for (let i = 0; i < aggregations.length; i++) {
+      const cell = aggregations[i];
       const index = i * 4;
       let amount = cell & 0x7;
       const whiteAhead = ((cell >> 3) & 1) === 1;
@@ -194,6 +202,7 @@ function MinimapCanvas({ coords, setCoords }) {
         ref={minimapDataCanvasRef}
         width={MINIMAP_WIDTH}
         height={MINIMAP_HEIGHT}
+        style={{ "--minimap-opacity": minimapState.initialized ? 1 : 0 }}
       />
       <CoordsCanvas
         ref={coordsCanvasRef}

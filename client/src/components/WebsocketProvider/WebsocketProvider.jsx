@@ -128,7 +128,6 @@ function useWebsocket({
   setConnected,
   pieceHandler,
   statsHandler,
-  minimapHandler,
   websocketRef,
 }) {
   const failedReconnections = React.useRef(0);
@@ -192,16 +191,11 @@ function useWebsocket({
             moves: data.moves,
             captures: data.captures,
           });
-        } else if (data.type === "minimapUpdate") {
-          minimapHandler.current.setState({ state: data.aggregations });
         } else if (data.type === "globalStats") {
           statsHandler.current.setGlobalStats({ stats: data });
         } else if (data.type === "initialState") {
           pieceHandler.current.handleSnapshot({ snapshot: data.snapshot });
           setCoords({ x: data.position.x, y: data.position.y });
-          minimapHandler.current.setState({
-            state: data.minimapAggregation.aggregations,
-          });
           statsHandler.current.setGlobalStats({ stats: data.globalStats });
           setCurrentColor({ playingWhite: data.playingWhite });
         } else if (data.type === "validMove") {
@@ -303,7 +297,6 @@ function useWebsocket({
       websocketRef.current = null;
     };
   }, [
-    minimapHandler,
     pieceHandler,
     setConnected,
     setCoords,
@@ -350,8 +343,7 @@ export const WebsocketContext = React.createContext();
 function WebsocketProvider({ children }) {
   const websocketRef = React.useRef(null);
   const [connected, _setConnected] = React.useState(false);
-  const { pieceHandler, statsHandler, minimapHandler } =
-    React.useContext(HandlersContext);
+  const { pieceHandler, statsHandler } = React.useContext(HandlersContext);
 
   const setConnected = React.useCallback(
     (valueOrFunction) => {
@@ -386,7 +378,6 @@ function WebsocketProvider({ children }) {
     setConnected,
     pieceHandler,
     statsHandler,
-    minimapHandler,
   });
 
   useUpdateCoords({ connected, safelySendJSON });
