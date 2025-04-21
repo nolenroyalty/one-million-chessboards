@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"log"
 	"math"
 	"math/rand"
@@ -11,7 +10,10 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	jsoniter "github.com/json-iterator/go"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 const (
 	aggregationInterval = time.Second * 60
@@ -63,6 +65,8 @@ func (s *Server) Run() {
 	go s.persistentBoard.Run()
 }
 
+// CR nroyalty: instead of pushing these over the websocket, just have clients
+// poll a /minimap GET endpoint that we cache :)
 func (s *Server) sendPeriodicMinimapAggregations() {
 	log.Printf("beginning periodic aggregations")
 	ticker := time.NewTicker(aggregationInterval)
@@ -87,6 +91,8 @@ type StatsUpdate struct {
 	ConnectedUsers       uint32 `json:"connectedUsers"`
 }
 
+// CR nroyalty: instead of pushing this over a websocket, have clients poll a
+// /stats endpoint that we cache in cloudflare :)
 func (s *Server) createStatsUpdate() StatsUpdate {
 	stats := s.board.GetStats()
 	return StatsUpdate{
@@ -119,7 +125,7 @@ func (s *Server) sendPeriodicStats() {
 	}
 }
 
-func (s *Server) GetCurrentStats() json.RawMessage {
+func (s *Server) GetCurrentStats() jsoniter.RawMessage {
 	stats := s.createStatsUpdate()
 	statsJson, err := json.Marshal(stats)
 	if err != nil {
@@ -158,7 +164,7 @@ func (s *Server) processMoves() {
 			movedPieces := make([]PieceMove, moveResult.Length)
 			for i := 0; i < int(moveResult.Length); i++ {
 
-				pieceData := PieceData{
+				pieceDataForMove := PieceDataForMove{
 					ID:              moveResult.MovedPieces[i].Piece.ID,
 					X:               moveResult.MovedPieces[i].ToX,
 					Y:               moveResult.MovedPieces[i].ToY,
@@ -170,7 +176,7 @@ func (s *Server) processMoves() {
 				}
 
 				movedPieces[i] = PieceMove{
-					Piece:  pieceData,
+					Piece:  pieceDataForMove,
 					Seqnum: moveResult.Seqnum,
 				}
 			}

@@ -1007,6 +1007,8 @@ class PieceHandler {
 
     snapshot.pieces.forEach((piece) => {
       piece.seqnum = snapshot.seqnum;
+      piece.x = snapshot.xCoord + piece.dx;
+      piece.y = snapshot.yCoord + piece.dy;
       piecesById.set(piece.id, piece);
     });
 
