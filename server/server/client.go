@@ -490,7 +490,7 @@ func (c *Client) SendMoveUpdates(moves []PieceMove, captures []PieceCapture) {
 		Captures: captures,
 	}
 
-	data, err := json.Marshal(message)
+	data, err := json.Marshal(&message)
 	if err != nil {
 		log.Printf("Error marshaling move updates: %v", err)
 		return
