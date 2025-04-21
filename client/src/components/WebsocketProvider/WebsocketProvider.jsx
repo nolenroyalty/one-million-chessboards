@@ -179,10 +179,6 @@ function useWebsocket({
         if (killed) {
           return;
         }
-        // CR nroyalty: handle movement error / cancelation
-        // CR nroyalty: move error handling is like "keep recent moves clientside
-        // and send a move ID to the server; use that to figure out what to cancel"
-        // CR nroyalty: handle other updates...
         const data = JSON.parse(event.data);
         if (data.type === "stateSnapshot") {
           pieceHandler.current.handleSnapshot({ snapshot: data });
@@ -191,12 +187,9 @@ function useWebsocket({
             moves: data.moves,
             captures: data.captures,
           });
-        } else if (data.type === "globalStats") {
-          statsHandler.current.setGlobalStats({ stats: data });
         } else if (data.type === "initialState") {
           pieceHandler.current.handleSnapshot({ snapshot: data.snapshot });
           setCoords({ x: data.position.x, y: data.position.y });
-          statsHandler.current.setGlobalStats({ stats: data.globalStats });
           setCurrentColor({ playingWhite: data.playingWhite });
         } else if (data.type === "validMove") {
           pieceHandler.current.confirmOptimisticMove({

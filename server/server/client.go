@@ -17,8 +17,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	jsoniter "github.com/json-iterator/go"
-
 	"github.com/gorilla/websocket"
 )
 
@@ -104,26 +102,21 @@ func (c *Client) Run(playingWhite bool, pos Position) {
 }
 
 type InitialInfo struct {
-	Type           string              `json:"type"`
-	GlobalStats    jsoniter.RawMessage `json:"globalStats"`
-	Position       Position            `json:"position"`
-	PlayingWhite   bool                `json:"playingWhite"`
-	Snapshot       *StateSnapshot      `json:"snapshot"`
-	ConnectedUsers uint32              `json:"connectedUsers"`
+	Type         string         `json:"type"`
+	Position     Position       `json:"position"`
+	PlayingWhite bool           `json:"playingWhite"`
+	Snapshot     *StateSnapshot `json:"snapshot"`
 }
 
 func (c *Client) sendInitialState() {
-	stats := c.server.GetCurrentStats()
 	currentPosition := c.position.Load().(Position)
 	snapshot := c.server.board.GetBoardSnapshot(currentPosition)
 
 	initialInfo := InitialInfo{
-		Type:           "initialState",
-		ConnectedUsers: uint32(c.server.clientManager.GetClientCount()),
-		GlobalStats:    stats,
-		Position:       currentPosition,
-		PlayingWhite:   c.playingWhite.Load(),
-		Snapshot:       snapshot,
+		Type:         "initialState",
+		Position:     currentPosition,
+		PlayingWhite: c.playingWhite.Load(),
+		Snapshot:     snapshot,
 	}
 	data, err := json.Marshal(&initialInfo)
 	if err != nil {
@@ -532,16 +525,6 @@ func (c *Client) SendError(errorMessage string) {
 	case c.send <- data:
 	default:
 		c.Close("send full: SendError")
-	}
-}
-
-func (c *Client) SendGlobalStats(stats jsoniter.RawMessage) {
-	select {
-	case <-c.done:
-		return
-	case c.send <- stats:
-	default:
-		c.Close("send full: SendGlobalStats")
 	}
 }
 

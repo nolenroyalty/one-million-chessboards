@@ -15,4 +15,5 @@ const (
 	MOVE_BUFFER_SIZE          = 200
 	CAPTURE_BUFFER_SIZE       = 100
 	MINIMAP_REFRESH_INTERVAL  = time.Second * 30
+	STATS_REFRESH_INTERVAL    = time.Second * 3
 )

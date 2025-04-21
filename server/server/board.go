@@ -30,6 +30,7 @@ type GameStats struct {
 	BlackPiecesRemaining uint32
 	WhiteKingsRemaining  uint32
 	BlackKingsRemaining  uint32
+	SeqNum               uint64
 }
 
 func NewBoard() *Board {
@@ -563,16 +564,23 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 }
 
 func (b *Board) GetStats() GameStats {
+	b.RLock()
+	seqnum := b.seqNum
+	b.RUnlock()
 	return GameStats{
 		TotalMoves:           b.totalMoves.Load(),
 		WhitePiecesRemaining: 32000000 - b.whitePiecesCaptured.Load(),
 		BlackPiecesRemaining: 32000000 - b.blackPiecesCaptured.Load(),
 		WhiteKingsRemaining:  1000000 - b.whiteKingsCaptured.Load(),
 		BlackKingsRemaining:  1000000 - b.blackKingsCaptured.Load(),
+		SeqNum:               seqnum,
 	}
 }
 
 // CR nroyalty: LRU cache for a very small period of time??
+// CR nroyalty: we could pass in a function that returns the current position
+// and use that to figure out the client's position at lock-aquisition time,
+// not lock-request time. Not a huge deal in practice probably.
 func (b *Board) GetBoardSnapshot(pos Position) *StateSnapshot {
 	minX := uint16(0)
 	minY := uint16(0)

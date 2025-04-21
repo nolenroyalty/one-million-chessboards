@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -14,10 +15,6 @@ import (
 )
 
 var json = jsoniter.ConfigCompatibleWithStandardLibrary
-
-const (
-	statsUpdateInterval = time.Second * 5
-)
 
 type ColorPreference int
 
@@ -34,6 +31,8 @@ type Server struct {
 	minimapAggregator *MinimapAggregator
 	moveRequests      chan MoveRequest
 	upgrader          websocket.Upgrader
+	currentStats      jsoniter.RawMessage
+	currentStatsMutex sync.RWMutex
 }
 
 func NewServer(stateDir string) *Server {
@@ -60,7 +59,7 @@ func (s *Server) Run() {
 	s.minimapAggregator.Initialize(s.board)
 	go s.processMoves()
 	go s.refreshMinimapPeriodically()
-	go s.sendPeriodicStats()
+	go s.refreshStatsPeriodically()
 	go s.persistentBoard.Run()
 }
 
@@ -73,58 +72,46 @@ func (s *Server) refreshMinimapPeriodically() {
 	}
 }
 
-type StatsUpdate struct {
-	Type                 string `json:"type"`
-	TotalMoves           uint64 `json:"totalMoves"`
-	WhitePiecesRemaining uint32 `json:"whitePiecesRemaining"`
-	BlackPiecesRemaining uint32 `json:"blackPiecesRemaining"`
-	WhiteKingsRemaining  uint32 `json:"whiteKingsRemaining"`
-	BlackKingsRemaining  uint32 `json:"blackKingsRemaining"`
-	ConnectedUsers       uint32 `json:"connectedUsers"`
-}
-
-// CR nroyalty: instead of pushing this over a websocket, have clients poll a
-// /stats endpoint that we cache in cloudflare :)
-func (s *Server) createStatsUpdate() StatsUpdate {
-	stats := s.board.GetStats()
-	return StatsUpdate{
-		Type:                 "globalStats",
-		TotalMoves:           stats.TotalMoves,
-		WhitePiecesRemaining: stats.WhitePiecesRemaining,
-		BlackPiecesRemaining: stats.BlackPiecesRemaining,
-		WhiteKingsRemaining:  stats.WhiteKingsRemaining,
-		BlackKingsRemaining:  stats.BlackKingsRemaining,
-		ConnectedUsers:       uint32(s.clientManager.GetClientCount()),
+func (s *Server) refreshStatsOnce() {
+	type StatsUpdate struct {
+		Type                 string `json:"type"`
+		TotalMoves           uint64 `json:"totalMoves"`
+		WhitePiecesRemaining uint32 `json:"whitePiecesRemaining"`
+		BlackPiecesRemaining uint32 `json:"blackPiecesRemaining"`
+		WhiteKingsRemaining  uint32 `json:"whiteKingsRemaining"`
+		BlackKingsRemaining  uint32 `json:"blackKingsRemaining"`
+		ConnectedUsers       uint32 `json:"connectedUsers"`
+		SeqNum               uint64 `json:"seqNum"`
 	}
+	boardStats := s.board.GetStats()
+	allStats := StatsUpdate{
+		Type:                 "globalStats",
+		TotalMoves:           boardStats.TotalMoves,
+		WhitePiecesRemaining: boardStats.WhitePiecesRemaining,
+		BlackPiecesRemaining: boardStats.BlackPiecesRemaining,
+		WhiteKingsRemaining:  boardStats.WhiteKingsRemaining,
+		BlackKingsRemaining:  boardStats.BlackKingsRemaining,
+		ConnectedUsers:       uint32(s.clientManager.GetClientCount()),
+		SeqNum:               boardStats.SeqNum,
+	}
+	serialized, err := json.Marshal(allStats)
+	if err != nil {
+		log.Printf("Error marshalling stats: %v", err)
+		return
+	}
+	s.currentStatsMutex.Lock()
+	s.currentStats = serialized
+	s.currentStatsMutex.Unlock()
 }
 
-func (s *Server) sendPeriodicStats() {
-	log.Printf("beginning periodic stats")
-	ticker := time.NewTicker(statsUpdateInterval)
+func (s *Server) refreshStatsPeriodically() {
+	s.refreshStatsOnce()
+	ticker := time.NewTicker(STATS_REFRESH_INTERVAL)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		statsUpdate := s.createStatsUpdate()
-		statsJson, err := json.Marshal(statsUpdate)
-		if err != nil {
-			log.Printf("Error marshalling stats: %v", err)
-			continue
-		}
-		clients := s.clientManager.GetAllClients()
-		for client := range clients {
-			client.SendGlobalStats(statsJson)
-		}
+		s.refreshStatsOnce()
 	}
-}
-
-func (s *Server) GetCurrentStats() jsoniter.RawMessage {
-	stats := s.createStatsUpdate()
-	statsJson, err := json.Marshal(stats)
-	if err != nil {
-		log.Printf("Error marshalling stats: %v", err)
-		return nil
-	}
-	return statsJson
 }
 
 func (s *Server) processMoves() {
@@ -340,12 +327,24 @@ func (s *Server) ServeMinimap(w http.ResponseWriter, r *http.Request) {
 	w.Write(aggregation)
 }
 
+func (s *Server) ServeGlobalStats(w http.ResponseWriter, r *http.Request) {
+	log.Printf("serving global stats")
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "public, max-age=4")
+	s.currentStatsMutex.RLock()
+	defer s.currentStatsMutex.RUnlock()
+	w.Write(s.currentStats)
+}
+
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request, staticDir string) {
 	if r.URL.Path == "/ws" {
 		s.ServeWs(w, r)
 		return
 	} else if r.URL.Path == "/minimap" {
 		s.ServeMinimap(w, r)
+		return
+	} else if r.URL.Path == "/global-game-stats" {
+		s.ServeGlobalStats(w, r)
 		return
 	}
 

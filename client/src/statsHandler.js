@@ -1,5 +1,6 @@
 const YOUR_MOVES_KEY = "yourMoves";
 const YOUR_CAPTURES_KEY = "yourCaptures";
+const STATS_REFRESH_INTERVAL = 4 * 1000;
 
 class StatsHandler {
   constructor() {
@@ -9,6 +10,7 @@ class StatsHandler {
     this.whiteKingsRemaining = 0;
     this.blackKingsRemaining = 0;
     this.connectedUsers = 0;
+    this.seqNum = 0;
     try {
       const yourMoves = localStorage.getItem(YOUR_MOVES_KEY);
       this.yourMoves = yourMoves ? parseInt(yourMoves) : 0;
@@ -29,6 +31,28 @@ class StatsHandler {
     this.resetPieceHandlerDelta();
 
     this.subscribers = [];
+    this.pollPeriodically();
+  }
+
+  pollOnce() {
+    fetch("/global-game-stats")
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+      })
+      .then((stats) => {
+        this.setGlobalStats(stats);
+      })
+      .catch((error) => {
+        console.error("Error fetching global game stats:", error);
+      });
+  }
+
+  pollPeriodically() {
+    this.pollOnce();
+    setInterval(this.pollOnce.bind(this), STATS_REFRESH_INTERVAL);
   }
 
   resetLocalDelta() {
@@ -156,7 +180,7 @@ class StatsHandler {
     });
   }
 
-  setGlobalStats({ stats }) {
+  setGlobalStats(stats) {
     this.totalMoves = stats.totalMoves;
     this.whitePiecesRemaining = stats.whitePiecesRemaining;
     this.blackPiecesRemaining = stats.blackPiecesRemaining;
