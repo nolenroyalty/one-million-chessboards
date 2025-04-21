@@ -10,7 +10,7 @@ class StatsHandler {
     this.whiteKingsRemaining = 0;
     this.blackKingsRemaining = 0;
     this.connectedUsers = 0;
-    this.movesToApply = [];
+    this.moveSeqnumsToApply = [];
     this.capturesToApply = [];
     this.seqnum = 0;
     try {
