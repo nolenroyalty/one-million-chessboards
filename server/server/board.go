@@ -30,7 +30,7 @@ type GameStats struct {
 	BlackPiecesRemaining uint32
 	WhiteKingsRemaining  uint32
 	BlackKingsRemaining  uint32
-	SeqNum               uint64
+	Seqnum               uint64
 }
 
 func NewBoard() *Board {
@@ -573,7 +573,7 @@ func (b *Board) GetStats() GameStats {
 		BlackPiecesRemaining: 32000000 - b.blackPiecesCaptured.Load(),
 		WhiteKingsRemaining:  1000000 - b.whiteKingsCaptured.Load(),
 		BlackKingsRemaining:  1000000 - b.blackKingsCaptured.Load(),
-		SeqNum:               seqnum,
+		Seqnum:               seqnum,
 	}
 }
 

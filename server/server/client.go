@@ -415,12 +415,12 @@ func (c *Client) MaybeSendMoveUpdates() {
 	// which means managing state inside our send goroutine
 	moves := make([]PieceMove, len(c.moveBuffer))
 	captures := make([]PieceCapture, len(c.captureBuffer))
+	copy(moves, c.moveBuffer)
 	copy(captures, c.captureBuffer)
 	c.moveBuffer = c.moveBuffer[:0]
 	c.captureBuffer = c.captureBuffer[:0]
 	c.bufferMu.Unlock()
 
-	// Create a proper JSON message structure
 	type MoveUpdateMessage struct {
 		Type     string         `json:"type"`
 		Moves    []PieceMove    `json:"moves"`

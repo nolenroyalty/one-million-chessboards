@@ -395,12 +395,7 @@ function WebsocketProvider({ children }) {
         if (capturedPiece) {
           incrLocalCaptures = true;
         }
-        statsHandler.current.applyLocalDelta({
-          dMoves: 0,
-          dWhitePieces: 0,
-          dBlackPieces: 0,
-          dWhiteKings: 0,
-          dBlackKings: 0,
+        statsHandler.current.updateLocalStats({
           incrLocalMoves,
           incrLocalCaptures,
         });

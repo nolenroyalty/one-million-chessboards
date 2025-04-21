@@ -1099,19 +1099,16 @@ class PieceHandler {
   }
 
   handleMoves({ moves, captures }) {
-    let dTotalMoves = 0;
-    let dWhitePieces = 0;
-    let dBlackPieces = 0;
-    let dWhiteKings = 0;
-    let dBlackKings = 0;
     const receivedAt = performance.now();
-
     const animationsByPieceId = new Map();
+    const movesForStatsHandler = [];
+    const capturesForStatsHandler = [];
 
     moves.forEach((move) => {
       const { piece, seqnum } = move;
       piece.seqnum = seqnum;
       const currentPiece = this.piecesById.get(piece.id);
+      movesForStatsHandler.push({ seqnum });
       if (!currentPiece) {
         // CR nroyalty: soon - only add move if it's somewhat close to where
         // we're looking!
@@ -1125,7 +1122,6 @@ class PieceHandler {
         if (currentPiece.x === piece.x && currentPiece.y === piece.y) {
           // Weird, but nothing to do
         } else {
-          dTotalMoves++;
           const animation = animateMove({
             fromX: currentPiece.x,
             fromY: currentPiece.y,
@@ -1143,10 +1139,23 @@ class PieceHandler {
     // around server restarts and captures getting reverted, which we'll need to
     // figure out down the line
     captures.forEach((capture) => {
+      const ourPiece = this.piecesById.get(capture.capturedPieceId);
+      let wasKing = null;
+      let wasWhite = null;
+      if (ourPiece) {
+        const pieceType = TYPE_TO_NAME[ourPiece.type];
+        wasKing = pieceType === "king";
+        wasWhite = ourPiece.isWhite;
+        capturesForStatsHandler.push({
+          seqnum: capture.seqnum,
+          wasWhite,
+          wasKing,
+        });
+      }
+
       if (capture.seqnum <= this.snapshotSeqnum) {
         // do nothing
       } else {
-        const ourPiece = this.piecesById.get(capture.capturedPieceId);
         if (ourPiece === undefined) {
           // probably a capture for somewhere we're not looking anymore?
         } else {
@@ -1155,32 +1164,15 @@ class PieceHandler {
             seqnum: capture.seqnum,
           });
           this.piecesById.delete(ourPiece.id);
-          const pieceType = TYPE_TO_NAME[ourPiece.type];
-          const wasWhite = ourPiece.isWhite;
-          const wasKing = pieceType === "king";
           const animation = animateCapture({ piece: ourPiece, receivedAt });
           animationsByPieceId.set(ourPiece.id, animation);
-          if (wasWhite) {
-            dWhitePieces--;
-            if (wasKing) {
-              dWhiteKings--;
-            }
-          } else {
-            dBlackPieces--;
-            if (wasKing) {
-              dBlackKings--;
-            }
-          }
         }
       }
     });
 
-    this.statsHandler.applyPieceHandlerDelta({
-      dTotalMoves,
-      dWhitePieces,
-      dBlackPieces,
-      dWhiteKings,
-      dBlackKings,
+    this.statsHandler.addNewMovesAndCaptures({
+      moves: movesForStatsHandler,
+      captures: capturesForStatsHandler,
     });
 
     const { processedAnimationsByPieceId } = this.processGroundTruthAnimations({

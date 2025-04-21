@@ -110,8 +110,6 @@ function MinimapCanvas({ coords, setCoords }) {
     minimapHandler.current.getState()
   );
 
-  console.log(minimapState);
-
   React.useEffect(() => {
     let minimap = minimapHandler.current;
     minimap.subscribe({

@@ -81,7 +81,7 @@ func (s *Server) refreshStatsOnce() {
 		WhiteKingsRemaining  uint32 `json:"whiteKingsRemaining"`
 		BlackKingsRemaining  uint32 `json:"blackKingsRemaining"`
 		ConnectedUsers       uint32 `json:"connectedUsers"`
-		SeqNum               uint64 `json:"seqNum"`
+		Seqnum               uint64 `json:"seqnum"`
 	}
 	boardStats := s.board.GetStats()
 	allStats := StatsUpdate{
@@ -92,7 +92,7 @@ func (s *Server) refreshStatsOnce() {
 		WhiteKingsRemaining:  boardStats.WhiteKingsRemaining,
 		BlackKingsRemaining:  boardStats.BlackKingsRemaining,
 		ConnectedUsers:       uint32(s.clientManager.GetClientCount()),
-		SeqNum:               boardStats.SeqNum,
+		Seqnum:               boardStats.Seqnum,
 	}
 	serialized, err := json.Marshal(allStats)
 	if err != nil {
