@@ -214,6 +214,8 @@ function useWebsocket({
           pieceHandler.current.rejectOptimisticMove({
             moveToken: data.moveToken,
           });
+        } else {
+          console.log("unknown message type", data);
         }
       };
 

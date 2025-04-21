@@ -216,11 +216,16 @@ func newRandomMover(boardX int) *RandomMover {
 }
 
 func (rm *RandomMover) subscribe() {
-	err := rm.ws.WriteJSON(map[string]any{
+	message, err := json.Marshal(map[string]any{
 		"type":    "subscribe",
 		"centerX": 4 + rm.boardX*8,
 		"centerY": 4 + rm.boardY*8,
 	})
+	if err != nil {
+		log.Printf("Error marshalling subscribe: %v", err)
+		return
+	}
+	err = rm.ws.WriteMessage(websocket.TextMessage, message)
 	if err != nil {
 		log.Printf("Error subscribing: %v", err)
 	}
@@ -242,7 +247,7 @@ func (rm *RandomMover) movePawn() {
 	}
 
 	pawnID := rm.boardX*32000 + 32*rm.boardY + (rm.pawnCount % 8) + idOffset
-	err := rm.ws.WriteJSON(map[string]any{
+	message, err := json.Marshal(map[string]any{
 		"type":      "move",
 		"pieceId":   pawnID,
 		"fromX":     pawnX,
@@ -252,6 +257,11 @@ func (rm *RandomMover) movePawn() {
 		"moveType":  0,
 		"moveToken": rm.pawnCount + 1,
 	})
+	if err != nil {
+		log.Printf("Error marshalling move: %v", err)
+		return
+	}
+	err = rm.ws.WriteMessage(websocket.TextMessage, message)
 	if err != nil {
 		log.Printf("Error moving pawn: %v", err)
 	}
@@ -269,7 +279,7 @@ func (c *MainCounter) runRandomMover(boardX int) {
 	rm.subscribe()
 	for i := 0; i < NUMBER_OF_MOVES; i++ {
 		rm.movePawn()
-		time.Sleep(2 * time.Millisecond)
+		time.Sleep(4 * time.Millisecond)
 	}
 }
 

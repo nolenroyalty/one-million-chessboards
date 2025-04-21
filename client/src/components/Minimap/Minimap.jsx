@@ -132,11 +132,9 @@ function MinimapCanvas({ coords, setCoords }) {
 
     for (let i = 0; i < minimapState.length; i++) {
       const cell = minimapState[i];
-      const x = i % MINIMAP_WIDTH;
-      const y = Math.floor(i / MINIMAP_WIDTH);
-      const index = (y * MINIMAP_WIDTH + x) * 4;
+      const index = i * 4;
       let amount = cell & 0x7;
-      const whiteAhead = (cell >> 3) & 1;
+      const whiteAhead = ((cell >> 3) & 1) === 1;
       if (amount > 0) {
         amount = clamp(amount, 1, 3);
         let rgb;

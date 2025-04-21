@@ -1,9 +1,5 @@
 package server
 
-// CR nroyalty: swap this out - no channels, single goroutine with a pointer swap,
-// maybe a mutex, and just raw reads to the cached data
-// when you do this, consider where else you need to do it.
-
 import (
 	"log"
 	"sync"
@@ -11,6 +7,14 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 )
+
+// The original intention here was to do substantially more aggressive packing of this
+// data so that we could send it over the websocket as efficiently as possible.
+// However, this data is the same for all clients and we don't need to refresh it that
+// often. So it's a good candidate for caching inside of cloudflare and just having
+// clients poll it with GETs every 30s or so.
+//
+// Given that, it's kind of a funny half-optimized format. But I think that's fine.
 
 const CELL_SIZE = 5
 const NUMBER_OF_CELLS = 1000 / CELL_SIZE
@@ -22,7 +26,6 @@ type MinimapCell struct {
 
 type packedAggregation uint8
 
-// CR nroyalty: we can pack two of these into a byte and get some real savings...
 const (
 	amountShift     = 0
 	whiteAheadShift = 3
@@ -84,18 +87,18 @@ func (m *MinimapAggregator) Initialize(board *Board) {
 	}
 
 	// kinda gross to do raw reads here but it's at startup, whatever
-	for i := 0; i < BOARD_SIZE; i++ {
-		for j := 0; j < BOARD_SIZE; j++ {
-			rawPiece := EncodedPiece(board.pieces[i][j])
+	for y := 0; y < BOARD_SIZE; y++ {
+		for x := 0; x < BOARD_SIZE; x++ {
+			rawPiece := EncodedPiece(board.pieces[y][x])
 			if EncodedIsEmpty(rawPiece) {
 				continue
 			}
 			piece := PieceOfEncodedPiece(rawPiece)
-			coords := getAggregatorCoords(uint16(i), uint16(j))
+			coords := getAggregatorCoords(uint16(x), uint16(y))
 			if piece.IsWhite {
-				m.cells[coords.X][coords.Y].WhiteCount++
+				m.cells[coords.Y][coords.X].WhiteCount++
 			} else {
-				m.cells[coords.X][coords.Y].BlackCount++
+				m.cells[coords.Y][coords.X].BlackCount++
 			}
 		}
 	}
@@ -115,8 +118,8 @@ func (m *MinimapAggregator) createAndStoreAggregation() jsoniter.RawMessage {
 	for i := 0; i < NUMBER_OF_CELLS*NUMBER_OF_CELLS; i++ {
 		x := i % NUMBER_OF_CELLS
 		y := i / NUMBER_OF_CELLS
-		whiteCount := snapshot[x][y].WhiteCount
-		blackCount := snapshot[x][y].BlackCount
+		whiteCount := snapshot[y][x].WhiteCount
+		blackCount := snapshot[y][x].BlackCount
 		diff := max(whiteCount, blackCount) - min(whiteCount, blackCount)
 		percentage := float64(diff) / float64(whiteCount+blackCount)
 		amount := 0
@@ -129,6 +132,7 @@ func (m *MinimapAggregator) createAndStoreAggregation() jsoniter.RawMessage {
 		}
 
 		response.Aggregations[i] = makePackedAggregation(whiteCount > blackCount, uint8(amount))
+
 	}
 	jsonResponse, err := json.Marshal(response)
 	if err != nil {
@@ -142,16 +146,16 @@ func (m *MinimapAggregator) createAndStoreAggregation() jsoniter.RawMessage {
 // assumes that the lock is already held!
 func (m *MinimapAggregator) unsafeUpdateForAggregatorCoords(coords AggregatorCoords, isWhite bool, decr bool) {
 	if isWhite {
-		if decr && m.cells[coords.X][coords.Y].WhiteCount > 0 {
-			m.cells[coords.X][coords.Y].WhiteCount--
+		if decr && m.cells[coords.Y][coords.X].WhiteCount > 0 {
+			m.cells[coords.Y][coords.X].WhiteCount--
 		} else if !decr {
-			m.cells[coords.X][coords.Y].WhiteCount++
+			m.cells[coords.Y][coords.X].WhiteCount++
 		}
 	} else {
-		if decr && m.cells[coords.X][coords.Y].BlackCount > 0 {
-			m.cells[coords.X][coords.Y].BlackCount--
+		if decr && m.cells[coords.Y][coords.X].BlackCount > 0 {
+			m.cells[coords.Y][coords.X].BlackCount--
 		} else if !decr {
-			m.cells[coords.X][coords.Y].BlackCount++
+			m.cells[coords.Y][coords.X].BlackCount++
 		}
 	}
 }

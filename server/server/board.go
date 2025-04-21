@@ -573,7 +573,7 @@ func (b *Board) GetStats() GameStats {
 }
 
 // CR nroyalty: LRU cache for a very small period of time??
-func (b *Board) GetBoardSnapshot(pos Position) StateSnapshot {
+func (b *Board) GetBoardSnapshot(pos Position) *StateSnapshot {
 	minX := uint16(0)
 	minY := uint16(0)
 	maxX := uint16(BOARD_SIZE - 1)
@@ -607,16 +607,24 @@ func (b *Board) GetBoardSnapshot(pos Position) StateSnapshot {
 	}
 	b.RUnlock()
 
-	pieceStates := make([]PieceState, 0, width*height)
+	// estimate that the slice is half-full?
+	pieceStates := make([]PieceDataForSnapshot, 0, (width*height)/2)
+	startingDx := int8(int16(minX) - int16(pos.X))
+	startingDy := int8(int16(minY) - int16(pos.Y))
 	for y := uint16(0); y < height; y++ {
 		for x := uint16(0); x < width; x++ {
 			raw := pieces[y][x]
 			piece := PieceOfEncodedPiece(EncodedPiece(raw))
 			if !piece.IsEmpty() {
-				pieceStates = append(pieceStates, PieceState{
-					Piece: piece,
-					X:     minX + x,
-					Y:     minY + y,
+				pieceStates = append(pieceStates, PieceDataForSnapshot{
+					ID:              piece.ID,
+					Type:            piece.Type,
+					IsWhite:         piece.IsWhite,
+					JustDoubleMoved: piece.JustDoubleMoved,
+					MoveCount:       piece.MoveCount,
+					CaptureCount:    piece.CaptureCount,
+					Dx:              startingDx + int8(x),
+					Dy:              startingDy + int8(y),
 				})
 			}
 		}
@@ -624,40 +632,25 @@ func (b *Board) GetBoardSnapshot(pos Position) StateSnapshot {
 
 	b.rawRowsPool.Put(piecesPtr)
 
-	return StateSnapshot{
+	snapshot := &StateSnapshot{
+		Type:   "stateSnapshot",
 		Pieces: pieceStates,
 		Seqnum: seqnum,
 		XCoord: pos.X,
 		YCoord: pos.Y,
 	}
+
+	return snapshot
 }
 
-// CR nroyalty: this reset board section stuff is really gross and poorly structured,
-// and it's scary that we might call it without taking the lock. We should refactor it
-// to be inlined, but let's do that after we push through the basic refactor.
-func (b *Board) resetBoardSection(boardX, boardY uint16, includeWhite bool, includeBlack bool) []*PieceState {
-
-	if boardX >= 1000 || boardY >= 1000 {
-		log.Printf("Board section is out of bounds")
-		return nil
+func (b *Board) setupPiecesForColor(boardX, boardY uint16, isWhite bool) {
+	baseX := boardX * SINGLE_BOARD_SIZE
+	baseY := boardY * SINGLE_BOARD_SIZE
+	if baseX > BOARD_SIZE-SINGLE_BOARD_SIZE || baseY > BOARD_SIZE-SINGLE_BOARD_SIZE {
+		log.Printf("Board section is out of bounds: %d, %d", baseX, baseY)
+		return
 	}
 
-	baseX := boardX * 8
-	baseY := boardY * 8
-	newPieces := make([]*PieceState, 0, 32)
-
-	if includeWhite {
-		b.setupPiecesForColor(baseX, baseY, true, &newPieces)
-	}
-
-	if includeBlack {
-		b.setupPiecesForColor(baseX, baseY, false, &newPieces)
-	}
-
-	return newPieces
-}
-
-func (b *Board) setupPiecesForColor(baseX, baseY uint16, isWhite bool, newPieces *[]*PieceState) {
 	var pawnRow, pieceRow uint16
 
 	if isWhite {
@@ -671,22 +664,12 @@ func (b *Board) setupPiecesForColor(baseX, baseY uint16, isWhite bool, newPieces
 	for x := uint16(0); x < 8; x++ {
 		piece := b.createPiece(Pawn, isWhite)
 		b.pieces[pawnRow][baseX+x] = uint64(piece.Encode())
-		*newPieces = append(*newPieces, &PieceState{
-			Piece: piece,
-			X:     baseX + x,
-			Y:     pawnRow,
-		})
 	}
 
 	pieceTypes := []PieceType{Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook}
 	for x := uint16(0); x < 8; x++ {
 		piece := b.createPiece(pieceTypes[x], isWhite)
 		b.pieces[pieceRow][baseX+x] = uint64(piece.Encode())
-		*newPieces = append(*newPieces, &PieceState{
-			Piece: piece,
-			X:     baseX + x,
-			Y:     pieceRow,
-		})
 	}
 }
 
@@ -696,7 +679,7 @@ func (b *Board) createPiece(pieceType PieceType, isWhite bool) Piece {
 	return piece
 }
 
-const ACTUALLY_RANDOMIZE = false
+const ACTUALLY_RANDOMIZE = true
 
 func (b *Board) InitializeRandom() {
 	b.Lock()
@@ -713,15 +696,14 @@ func (b *Board) InitializeRandom() {
 				includeWhite = random > dy
 				includeBlack = random > dx
 			}
-			b.resetBoardSection(startX+uint16(dx), startY+uint16(dy), includeWhite, includeBlack)
+			if includeWhite {
+				b.setupPiecesForColor(startX+uint16(dx), startY+uint16(dy), true)
+			}
+			if includeBlack {
+				b.setupPiecesForColor(startX+uint16(dx), startY+uint16(dy), false)
+			}
 		}
 	}
-}
-
-type PieceState struct {
-	Piece Piece
-	X     uint16
-	Y     uint16
 }
 
 type Position struct {
@@ -730,8 +712,9 @@ type Position struct {
 }
 
 type StateSnapshot struct {
-	Pieces []PieceState
-	Seqnum uint64
-	XCoord uint16
-	YCoord uint16
+	Type   string                 `json:"type"`
+	Pieces []PieceDataForSnapshot `json:"pieces"`
+	Seqnum uint64                 `json:"seqnum"`
+	XCoord uint16                 `json:"xCoord"`
+	YCoord uint16                 `json:"yCoord"`
 }

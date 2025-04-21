@@ -34,8 +34,6 @@ const (
 	// CR nroyalty: remove before release
 	simulatedLatency          = 1 * time.Millisecond
 	simulatedJitterMs         = 1
-	moveBufferSize            = 200
-	captureBufferSize         = 100
 	maxWaitBeforeSendingMoves = 200 * time.Millisecond
 )
 
@@ -51,43 +49,6 @@ func getSimulatedLatency() time.Duration {
 
 func sleepSimulatedLatency() {
 	time.Sleep(getSimulatedLatency())
-}
-
-// CR nroyalty: removing starting and ending seqnum (we'll use a mutex to make this safe)
-type SnapshotMessage struct {
-	Type           string      `json:"type"`
-	Pieces         []PieceData `json:"pieces"`
-	StartingSeqnum uint64      `json:"startingSeqnum"`
-	EndingSeqnum   uint64      `json:"endingSeqnum"`
-	Seqnum         uint64      `json:"seqnum"`
-	XCoord         uint16      `json:"xCoord"`
-	YCoord         uint16      `json:"yCoord"`
-}
-
-func (snapshot *StateSnapshot) ToSnapshotMessage() SnapshotMessage {
-	pieces := make([]PieceData, len(snapshot.Pieces))
-	for i, piece := range snapshot.Pieces {
-		pieces[i] = PieceData{
-			ID:              piece.Piece.ID,
-			X:               piece.X,
-			Y:               piece.Y,
-			Type:            piece.Piece.Type,
-			IsWhite:         piece.Piece.IsWhite,
-			JustDoubleMoved: piece.Piece.JustDoubleMoved,
-			MoveCount:       piece.Piece.MoveCount,
-			CaptureCount:    piece.Piece.CaptureCount,
-		}
-	}
-
-	message := SnapshotMessage{
-		Type:   "stateSnapshot",
-		Pieces: pieces,
-		Seqnum: snapshot.Seqnum,
-		XCoord: snapshot.XCoord,
-		YCoord: snapshot.YCoord,
-	}
-
-	return message
 }
 
 type Client struct {
@@ -114,8 +75,8 @@ func NewClient(conn *websocket.Conn, server *Server) *Client {
 		server:         server,
 		send:           make(chan []byte, 2048),
 		position:       atomic.Value{},
-		moveBuffer:     make([]PieceMove, 0, moveBufferSize),
-		captureBuffer:  make([]PieceCapture, 0, captureBufferSize),
+		moveBuffer:     make([]PieceMove, 0, MOVE_BUFFER_SIZE),
+		captureBuffer:  make([]PieceCapture, 0, CAPTURE_BUFFER_SIZE),
 		done:           make(chan struct{}),
 		isClosed:       atomic.Bool{},
 		bufferMu:       sync.Mutex{},
@@ -149,7 +110,7 @@ type InitialInfo struct {
 	GlobalStats        jsoniter.RawMessage `json:"globalStats"`
 	Position           Position            `json:"position"`
 	PlayingWhite       bool                `json:"playingWhite"`
-	Snapshot           SnapshotMessage     `json:"snapshot"`
+	Snapshot           *StateSnapshot      `json:"snapshot"`
 	ConnectedUsers     uint32              `json:"connectedUsers"`
 }
 
@@ -166,9 +127,9 @@ func (c *Client) sendInitialState() {
 		GlobalStats:        stats,
 		Position:           currentPosition,
 		PlayingWhite:       c.playingWhite.Load(),
-		Snapshot:           snapshot.ToSnapshotMessage(),
+		Snapshot:           snapshot,
 	}
-	data, err := json.Marshal(initialInfo)
+	data, err := json.Marshal(&initialInfo)
 	if err != nil {
 		log.Printf("Error marshaling initial info: %v", err)
 		return
@@ -207,9 +168,7 @@ func (c *Client) UpdatePositionAndMaybeSnapshot(pos Position) {
 	c.server.clientManager.UpdateClientPosition(c, pos)
 	lastSnapshotPosition := c.lastSnapshotPosition.Load().(Position)
 	if shouldSendSnapshot(lastSnapshotPosition, pos) {
-		snapshot := c.server.board.GetBoardSnapshot(pos)
-		c.SendStateSnapshot(snapshot)
-		c.lastSnapshotPosition.Store(pos)
+		c.SendStateSnapshot()
 	}
 }
 
@@ -229,6 +188,7 @@ func (c *Client) ReadPump() {
 		_, message, err := c.conn.ReadMessage()
 		c.conn.SetReadDeadline(time.Now().Add(120 * time.Second))
 		if err != nil {
+			log.Printf("Error reading message: %v", err)
 			// if websocket.IsUnexpectedCloseError(err) {
 			// 	now := time.Now().UnixNano()
 			// 	log.Printf("client disconnected: %v, %d", err, now)
@@ -260,6 +220,8 @@ func (c *Client) handleMessage(message []byte) {
 
 	switch msgType {
 	case "move":
+		// CR nroyalty: validate that the move is somewhere that the player
+		// is currently looking at
 		pieceID, _ := msg["pieceId"].(float64)
 		fromX, _ := msg["fromX"].(float64)
 		fromY, _ := msg["fromY"].(float64)
@@ -385,8 +347,7 @@ func (c *Client) SendPeriodicUpdates() {
 		select {
 		case <-ticker.C:
 			// log.Printf("Sending periodic update for position: %v", c.position.Load().(Position))
-			snapshot := c.server.board.GetBoardSnapshot(c.position.Load().(Position))
-			c.SendStateSnapshot(snapshot)
+			c.SendStateSnapshot()
 		case <-c.done:
 			return
 		}
@@ -400,24 +361,7 @@ func (c *Client) ProcessMoveUpdates() {
 	for {
 		select {
 		case <-ticker.C:
-			c.bufferMu.Lock()
-			if len(c.moveBuffer) > 0 || len(c.captureBuffer) > 0 {
-				moves := make([]PieceMove, len(c.moveBuffer))
-				captures := make([]PieceCapture, len(c.captureBuffer))
-
-				copy(moves, c.moveBuffer)
-				copy(captures, c.captureBuffer)
-
-				c.moveBuffer = c.moveBuffer[:0]
-				c.captureBuffer = c.captureBuffer[:0]
-
-				c.bufferMu.Unlock()
-
-				c.SendMoveUpdates(moves, captures)
-			} else {
-				c.bufferMu.Unlock()
-			}
-
+			c.MaybeSendMoveUpdates()
 		case <-c.done:
 			return
 		}
@@ -437,16 +381,8 @@ func (c *Client) AddMovesToBuffer(moves []PieceMove, capture *PieceCapture) {
 	}
 
 	// Send immediately if buffer gets large
-	if len(c.moveBuffer) >= moveBufferSize || len(c.captureBuffer) >= captureBufferSize {
-		moves := make([]PieceMove, len(c.moveBuffer))
-		copy(moves, c.moveBuffer)
-		c.moveBuffer = c.moveBuffer[:0]
-
-		captures := make([]PieceCapture, len(c.captureBuffer))
-		copy(captures, c.captureBuffer)
-		c.captureBuffer = c.captureBuffer[:0]
-
-		go c.SendMoveUpdates(moves, captures)
+	if len(c.moveBuffer) >= MOVE_BUFFER_SIZE || len(c.captureBuffer) >= CAPTURE_BUFFER_SIZE {
+		go c.MaybeSendMoveUpdates()
 	}
 }
 
@@ -454,13 +390,15 @@ func (c *Client) AddMovesToBuffer(moves []PieceMove, capture *PieceCapture) {
 // CR nroyalty: also, this code can do the allocation of the slice, pass it to
 // getboardsnapshot, and then return the slice to the pool after parsing it. No need
 // to do that work in board I think.
-func (c *Client) SendStateSnapshot(snapshot StateSnapshot) {
-	message := snapshot.ToSnapshotMessage()
-	data, err := json.Marshal(message)
+func (c *Client) SendStateSnapshot() {
+	pos := c.position.Load().(Position)
+	snapshot := c.server.board.GetBoardSnapshot(pos)
+	data, err := json.Marshal(snapshot)
 	if err != nil {
 		log.Printf("Error marshaling snapshot: %v", err)
 		return
 	}
+	c.lastSnapshotPosition.Store(pos)
 
 	select {
 	case <-c.done:
@@ -476,7 +414,23 @@ func (c *Client) SendStateSnapshot(snapshot StateSnapshot) {
 // view and send it as a separate "Annotated Move" with the additional info.
 // This probably doesn't save us that much (a few bytes) but it could add up
 // SendMoveUpdates sends move and capture updates to the client
-func (c *Client) SendMoveUpdates(moves []PieceMove, captures []PieceCapture) {
+func (c *Client) MaybeSendMoveUpdates() {
+	c.bufferMu.Lock()
+	if len(c.moveBuffer) == 0 && len(c.captureBuffer) == 0 {
+		c.bufferMu.Unlock()
+		return
+	}
+	// nroyalty: it'd be nice to pool these slices, but it's
+	// a pain in the ass because we need to wait until they're
+	// actually sent to the client before we can return them
+	// which means managing state inside our send goroutine
+	moves := make([]PieceMove, len(c.moveBuffer))
+	captures := make([]PieceCapture, len(c.captureBuffer))
+	copy(captures, c.captureBuffer)
+	c.moveBuffer = c.moveBuffer[:0]
+	c.captureBuffer = c.captureBuffer[:0]
+	c.bufferMu.Unlock()
+
 	// Create a proper JSON message structure
 	type MoveUpdateMessage struct {
 		Type     string         `json:"type"`
