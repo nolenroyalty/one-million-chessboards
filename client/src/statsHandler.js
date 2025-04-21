@@ -36,7 +36,7 @@ class StatsHandler {
   }
 
   pollOnce() {
-    fetch("/global-game-stats")
+    fetch("/api/global-game-stats")
       .then((res) => {
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);

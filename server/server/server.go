@@ -324,7 +324,7 @@ func (s *Server) ServeMinimap(w http.ResponseWriter, r *http.Request) {
 	log.Printf("serving minimap")
 	aggregation := s.minimapAggregator.GetLastAggregation()
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=30")
+	w.Header().Set("Cache-Control", "public, max-age=30, s-maxage=30")
 
 	w.Write(aggregation)
 }
@@ -332,7 +332,7 @@ func (s *Server) ServeMinimap(w http.ResponseWriter, r *http.Request) {
 func (s *Server) ServeGlobalStats(w http.ResponseWriter, r *http.Request) {
 	log.Printf("serving global stats")
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=4")
+	w.Header().Set("Cache-Control", "public, max-age=4, s-maxage=4")
 	s.currentStatsMutex.RLock()
 	defer s.currentStatsMutex.RUnlock()
 	w.Write(s.currentStats)
@@ -342,10 +342,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request, staticDir str
 	if r.URL.Path == "/ws" {
 		s.ServeWs(w, r)
 		return
-	} else if r.URL.Path == "/minimap" {
+	} else if r.URL.Path == "/api/minimap" {
 		s.ServeMinimap(w, r)
 		return
-	} else if r.URL.Path == "/global-game-stats" {
+	} else if r.URL.Path == "/api/global-game-stats" {
 		s.ServeGlobalStats(w, r)
 		return
 	}
