@@ -1101,14 +1101,14 @@ class PieceHandler {
   handleMoves({ moves, captures }) {
     const receivedAt = performance.now();
     const animationsByPieceId = new Map();
-    const movesForStatsHandler = [];
+    const moveSeqnumsForStatsHandler = [];
     const capturesForStatsHandler = [];
 
     moves.forEach((move) => {
       const { piece, seqnum } = move;
       piece.seqnum = seqnum;
       const currentPiece = this.piecesById.get(piece.id);
-      movesForStatsHandler.push({ seqnum });
+      moveSeqnumsForStatsHandler.push(seqnum);
       if (!currentPiece) {
         // CR nroyalty: soon - only add move if it's somewhat close to where
         // we're looking!
@@ -1171,7 +1171,7 @@ class PieceHandler {
     });
 
     this.statsHandler.addNewMovesAndCaptures({
-      moves: movesForStatsHandler,
+      moveSeqnums: moveSeqnumsForStatsHandler,
       captures: capturesForStatsHandler,
     });
 

@@ -104,10 +104,10 @@ class StatsHandler {
     this.broadcast();
   }
 
-  addNewMovesAndCaptures({ moves, captures }) {
-    for (const move of moves) {
-      if (move.seqnum > this.seqnum) {
-        this.movesToApply.push(move);
+  addNewMovesAndCaptures({ moveSeqnums, captures }) {
+    for (const moveSeqnum of moveSeqnums) {
+      if (moveSeqnum > this.seqnum) {
+        this.moveSeqnumsToApply.push(moveSeqnum);
         this.pieceHandlerDelta.totalMoves++;
       }
     }
@@ -158,12 +158,12 @@ class StatsHandler {
     this.hasReceivedUpdate = true;
     this.seqnum = stats.seqnum;
     this.resetPieceHandlerDelta();
-    const movesToApply = [];
+    const moveSeqnumsToApply = [];
     const capturesToApply = [];
-    for (const move of this.movesToApply) {
-      if (move.seqnum > this.seqnum) {
+    for (const moveSeqnum of this.moveSeqnumsToApply) {
+      if (moveSeqnum > this.seqnum) {
         this.pieceHandlerDelta.totalMoves++;
-        movesToApply.push(move);
+        moveSeqnumsToApply.push(moveSeqnum);
       }
     }
 
@@ -183,7 +183,7 @@ class StatsHandler {
         }
       }
     }
-    this.movesToApply = movesToApply;
+    this.moveSeqnumsToApply = moveSeqnumsToApply;
     this.capturesToApply = capturesToApply;
 
     this.broadcast();
