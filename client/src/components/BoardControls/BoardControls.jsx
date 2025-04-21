@@ -4,7 +4,7 @@ import IconButton from "../IconButton/IconButton";
 import {
   CirclePlus,
   CircleMinus,
-  Flame,
+  Skull,
   ArrowDownUp,
   Axe,
   CircleArrowDown,
@@ -91,7 +91,7 @@ const AllBoardButtonsWrapper = styled(BoardControlsPanel)`
   grid-template-areas:
     "zoomout up zoomin"
     "left . right"
-    "hot down .";
+    ". down alert";
   align-self: start;
   justify-self: end;
   max-width: fit-content;
@@ -332,8 +332,8 @@ function AllBoardButtons() {
       >
         <CirclePlus />
       </IconButton>
-      <IconButton style={{ gridArea: "hot" }}>
-        <Flame />
+      <IconButton style={{ gridArea: "alert" }}>
+        <Skull />
       </IconButton>
       <IconButton
         onClick={() => {

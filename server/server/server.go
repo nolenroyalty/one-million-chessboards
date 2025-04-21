@@ -25,14 +25,18 @@ const (
 )
 
 type Server struct {
-	board             *Board
-	persistentBoard   *PersistentBoard
-	clientManager     *ClientManager
-	minimapAggregator *MinimapAggregator
-	moveRequests      chan MoveRequest
-	upgrader          websocket.Upgrader
-	currentStats      jsoniter.RawMessage
-	currentStatsMutex sync.RWMutex
+	board                     *Board
+	persistentBoard           *PersistentBoard
+	clientManager             *ClientManager
+	minimapAggregator         *MinimapAggregator
+	moveRequests              chan MoveRequest
+	upgrader                  websocket.Upgrader
+	currentStats              jsoniter.RawMessage
+	currentStatsMutex         sync.RWMutex
+	recentCaptures            *RecentCaptures
+	recentWhiteCapturesResult jsoniter.RawMessage
+	recentBlackCapturesResult jsoniter.RawMessage
+	recentCapturesMutex       sync.RWMutex
 }
 
 func NewServer(stateDir string) *Server {
@@ -44,6 +48,7 @@ func NewServer(stateDir string) *Server {
 		clientManager:     NewClientManager(),
 		minimapAggregator: NewMinimapAggregator(),
 		moveRequests:      make(chan MoveRequest, 1024),
+		recentCaptures:    NewRecentCaptures(),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -60,7 +65,43 @@ func (s *Server) Run() {
 	go s.processMoves()
 	go s.refreshMinimapPeriodically()
 	s.refreshStatsPeriodically()
+	s.refreshRecentCapturesPeriodically()
 	go s.persistentBoard.Run()
+}
+
+func (s *Server) refreshRecentCapturesOnce() {
+	type res struct {
+		Captures []Position `json:"captures"`
+	}
+	recentCapturesResult := s.recentCaptures.GetRecentCaptures()
+	s.recentCapturesMutex.Lock()
+	whiteSerialized, err := json.Marshal(res{Captures: recentCapturesResult.WhiteCaptures})
+	if err != nil {
+		log.Printf("Error marshalling recent captures: %v", err)
+		return
+	} else {
+		s.recentWhiteCapturesResult = whiteSerialized
+	}
+	blackSerialized, err := json.Marshal(res{Captures: recentCapturesResult.BlackCaptures})
+	if err != nil {
+		log.Printf("Error marshalling recent captures: %v", err)
+		return
+	} else {
+		s.recentBlackCapturesResult = blackSerialized
+	}
+	s.recentCapturesMutex.Unlock()
+}
+
+func (s *Server) refreshRecentCapturesPeriodically() {
+	s.refreshRecentCapturesOnce()
+	go func() {
+		ticker := time.NewTicker(CAPTURE_REFRESH_INTERVAL)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			s.refreshRecentCapturesOnce()
+		}
+	}()
 }
 
 func (s *Server) refreshMinimapPeriodically() {
@@ -164,6 +205,7 @@ func (s *Server) processMoves() {
 
 			var pieceCapture *PieceCapture = nil
 			if !capturedPiece.Piece.IsEmpty() {
+				s.recentCaptures.AddCapture(&moveResult.CapturedPiece)
 				pieceCapture = &PieceCapture{
 					CapturedPieceID: capturedPiece.Piece.ID,
 					Seqnum:          moveResult.Seqnum,
@@ -338,6 +380,17 @@ func (s *Server) ServeGlobalStats(w http.ResponseWriter, r *http.Request) {
 	w.Write(s.currentStats)
 }
 
+func (s *Server) ServeRecentCaptures(w http.ResponseWriter, r *http.Request, white bool) {
+	log.Printf("serving recent captures")
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "public, max-age=5, s-maxage=5")
+	if white {
+		w.Write(s.recentWhiteCapturesResult)
+	} else {
+		w.Write(s.recentBlackCapturesResult)
+	}
+}
+
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request, staticDir string) {
 	if r.URL.Path == "/ws" {
 		s.ServeWs(w, r)
@@ -347,6 +400,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request, staticDir str
 		return
 	} else if r.URL.Path == "/api/global-game-stats" {
 		s.ServeGlobalStats(w, r)
+		return
+	} else if r.URL.Path == "/api/recently-captured/white" {
+		s.ServeRecentCaptures(w, r, true)
+		return
+	} else if r.URL.Path == "/api/recently-captured/black" {
+		s.ServeRecentCaptures(w, r, false)
 		return
 	}
 
