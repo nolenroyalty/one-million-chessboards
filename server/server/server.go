@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	aggregationInterval = time.Second * 30
+	aggregationInterval = time.Second * 60
 	statsUpdateInterval = time.Second * 5
 )
 
@@ -119,7 +119,7 @@ func (s *Server) sendPeriodicStats() {
 	}
 }
 
-func (s *Server) RequestStatsSnapshot() json.RawMessage {
+func (s *Server) GetCurrentStats() json.RawMessage {
 	stats := s.createStatsUpdate()
 	statsJson, err := json.Marshal(stats)
 	if err != nil {

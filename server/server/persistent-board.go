@@ -102,7 +102,7 @@ func (f *FileWithSeqnumAndTimestamp) ofFilename(filename string, expectedPrefix 
 	return nil
 }
 
-func (b *Board) GetBoardSnapshot() BoardSnapshot {
+func (b *Board) getFullSnapshot() BoardSnapshot {
 	start := time.Now()
 	snapshot := BoardSnapshot{
 		NextID:              b.nextID,
@@ -275,7 +275,7 @@ func NewPersistentBoard(stateDir string) *PersistentBoard {
 	if len(snapshotFilenames) == 0 {
 		log.Printf("No snapshot filenames found - initializing new board")
 		board.InitializeRandom()
-		snapshot := board.GetBoardSnapshot()
+		snapshot := board.getFullSnapshot()
 		snapshot.SaveToFile(stateDir, snapshotPrefix, board.seqNum)
 		pb.lastSerializedSeqnum.Store(board.seqNum)
 	} else {
@@ -416,7 +416,7 @@ func (pb *PersistentBoard) Run() {
 			if disabled {
 				continue
 			}
-			snapshot := pb.board.GetBoardSnapshot()
+			snapshot := pb.board.getFullSnapshot()
 			pb.lastSerializedSeqnum.Store(snapshot.Seqnum)
 			go func() {
 				snapshot.SaveToFile(pb.stateDir, "board", snapshot.Seqnum)

@@ -10,10 +10,10 @@ import (
 	"sync/atomic"
 )
 
-// Board represents the entire game state
 type Board struct {
 	sync.RWMutex
 	pieces              [BOARD_SIZE][BOARD_SIZE]uint64
+	rawRowsPool         sync.Pool
 	nextID              uint32
 	seqNum              uint64
 	totalMoves          atomic.Uint64
@@ -23,7 +23,7 @@ type Board struct {
 	blackKingsCaptured  atomic.Uint32
 }
 
-// GameStats tracks global game statistics
+// CR nroyalty: make these uint64s
 type GameStats struct {
 	TotalMoves           uint64
 	WhitePiecesRemaining uint32
@@ -32,7 +32,6 @@ type GameStats struct {
 	BlackKingsRemaining  uint32
 }
 
-// NewBoard creates a new empty board
 func NewBoard() *Board {
 	return &Board{
 		nextID:              1,
@@ -42,6 +41,15 @@ func NewBoard() *Board {
 		blackPiecesCaptured: atomic.Uint32{},
 		whiteKingsCaptured:  atomic.Uint32{},
 		blackKingsCaptured:  atomic.Uint32{},
+		rawRowsPool: sync.Pool{
+			New: func() any {
+				rows := make([][]uint64, VIEW_DIAMETER)
+				for i := range rows {
+					rows[i] = make([]uint64, VIEW_DIAMETER)
+				}
+				return &rows
+			},
+		},
 	}
 }
 
@@ -421,6 +429,7 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 		// That's it! Apply the move
 		movedPiece.IncrementMoveCount()
 		movedPiece.IncrementCaptureCount()
+		movedPiece.JustDoubleMoved = false
 		haveReadLock = false
 		b.RUnlock()
 		b.Lock()
@@ -563,7 +572,8 @@ func (b *Board) GetStats() GameStats {
 	}
 }
 
-func (b *Board) GetStateForPosition(pos Position) StateSnapshot {
+// CR nroyalty: LRU cache for a very small period of time??
+func (b *Board) GetBoardSnapshot(pos Position) StateSnapshot {
 	minX := uint16(0)
 	minY := uint16(0)
 	maxX := uint16(BOARD_SIZE - 1)
@@ -585,10 +595,10 @@ func (b *Board) GetStateForPosition(pos Position) StateSnapshot {
 	width := maxX - minX + 1
 	height := maxY - minY + 1
 
-	pieces := make([][]uint64, height)
-	for i := range pieces {
-		pieces[i] = make([]uint64, width)
-	}
+	// we don't zero this out when we get it, but that should be fine
+	// since we're writing over every value that we read
+	piecesPtr := b.rawRowsPool.Get().(*[][]uint64)
+	pieces := *piecesPtr
 
 	b.RLock()
 	seqnum := b.seqNum
@@ -611,6 +621,8 @@ func (b *Board) GetStateForPosition(pos Position) StateSnapshot {
 			}
 		}
 	}
+
+	b.rawRowsPool.Put(piecesPtr)
 
 	return StateSnapshot{
 		Pieces: pieceStates,
@@ -684,7 +696,7 @@ func (b *Board) createPiece(pieceType PieceType, isWhite bool) Piece {
 	return piece
 }
 
-const ACTUALLY_RANDOMIZE = false
+const ACTUALLY_RANDOMIZE = true
 
 func (b *Board) InitializeRandom() {
 	b.Lock()

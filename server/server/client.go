@@ -24,6 +24,7 @@ import (
 // CR nroyalty: send seqnum with global stats and then updating global stats is
 // pretty easy.
 // CR nroyalty: standardize on a function for sending a message to the client or unsubbing
+// CR nroyalty: look for places where we can pass pointers for serialization instead of copying
 
 const (
 	// CR nroyalty: MAKE SURE THIS IS NOT BELOW 60 AND MAYBE MAKE IT HIGHER
@@ -153,9 +154,9 @@ type InitialInfo struct {
 
 func (c *Client) sendInitialState() {
 	aggregation := c.server.minimapAggregator.GetLastAggregation()
-	stats := c.server.RequestStatsSnapshot()
+	stats := c.server.GetCurrentStats()
 	currentPosition := c.position.Load().(Position)
-	snapshot := c.server.board.GetStateForPosition(currentPosition)
+	snapshot := c.server.board.GetBoardSnapshot(currentPosition)
 
 	initialInfo := InitialInfo{
 		Type:               "initialState",
@@ -205,7 +206,7 @@ func (c *Client) UpdatePositionAndMaybeSnapshot(pos Position) {
 	c.server.clientManager.UpdateClientPosition(c, pos)
 	lastSnapshotPosition := c.lastSnapshotPosition.Load().(Position)
 	if shouldSendSnapshot(lastSnapshotPosition, pos) {
-		snapshot := c.server.board.GetStateForPosition(pos)
+		snapshot := c.server.board.GetBoardSnapshot(pos)
 		c.SendStateSnapshot(snapshot)
 		c.lastSnapshotPosition.Store(pos)
 	}
@@ -383,7 +384,7 @@ func (c *Client) SendPeriodicUpdates() {
 		select {
 		case <-ticker.C:
 			// log.Printf("Sending periodic update for position: %v", c.position.Load().(Position))
-			snapshot := c.server.board.GetStateForPosition(c.position.Load().(Position))
+			snapshot := c.server.board.GetBoardSnapshot(c.position.Load().(Position))
 			c.SendStateSnapshot(snapshot)
 		case <-c.done:
 			return
@@ -448,6 +449,10 @@ func (c *Client) AddMovesToBuffer(moves []PieceMove, capture *PieceCapture) {
 	}
 }
 
+// CR nroyalty: rework this code to avoid so much copying!!!!!
+// CR nroyalty: also, this code can do the allocation of the slice, pass it to
+// getboardsnapshot, and then return the slice to the pool after parsing it. No need
+// to do that work in board I think.
 func (c *Client) SendStateSnapshot(snapshot StateSnapshot) {
 	message := snapshot.ToSnapshotMessage()
 	data, err := json.Marshal(message)
