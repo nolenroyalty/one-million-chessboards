@@ -5,10 +5,11 @@ package server
 // when you do this, consider where else you need to do it.
 
 import (
-	"encoding/json"
 	"log"
 	"sync"
 	"sync/atomic"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 const CELL_SIZE = 5
@@ -103,7 +104,7 @@ func (m *MinimapAggregator) Initialize(board *Board) {
 	m.createAndStoreAggregation()
 }
 
-func (m *MinimapAggregator) createAndStoreAggregation() json.RawMessage {
+func (m *MinimapAggregator) createAndStoreAggregation() jsoniter.RawMessage {
 	m.Lock()
 	snapshot := m.cells
 	m.Unlock()
@@ -194,6 +195,6 @@ func (m *MinimapAggregator) UpdateForMoveResult(moveResult MoveResult) {
 	}
 }
 
-func (m *MinimapAggregator) GetLastAggregation() json.RawMessage {
-	return json.RawMessage(m.lastAggregation.Load().([]byte))
+func (m *MinimapAggregator) GetLastAggregation() jsoniter.RawMessage {
+	return jsoniter.RawMessage(m.lastAggregation.Load().([]byte))
 }

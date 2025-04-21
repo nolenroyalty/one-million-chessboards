@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"log"
 	"math"
 	"math/rand"
@@ -11,7 +10,10 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	jsoniter "github.com/json-iterator/go"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 const (
 	aggregationInterval = time.Second * 60
@@ -119,7 +121,7 @@ func (s *Server) sendPeriodicStats() {
 	}
 }
 
-func (s *Server) GetCurrentStats() json.RawMessage {
+func (s *Server) GetCurrentStats() jsoniter.RawMessage {
 	stats := s.createStatsUpdate()
 	statsJson, err := json.Marshal(stats)
 	if err != nil {

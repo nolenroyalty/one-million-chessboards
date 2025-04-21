@@ -1,15 +1,18 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
+
 	"github.com/dustin/go-humanize"
 	"github.com/gorilla/websocket"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 const (
 	localURL = "ws://localhost:8080/ws"

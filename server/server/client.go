@@ -10,13 +10,14 @@ package server
 // CR nroyalty: we need to specify whether the client is playing white or black
 // and then use that to determine which pieces they can move.
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"math"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	jsoniter "github.com/json-iterator/go"
 
 	"github.com/gorilla/websocket"
 )
@@ -143,13 +144,13 @@ func (c *Client) Run(playingWhite bool, pos Position) {
 }
 
 type InitialInfo struct {
-	Type               string          `json:"type"`
-	MinimapAggregation json.RawMessage `json:"minimapAggregation"`
-	GlobalStats        json.RawMessage `json:"globalStats"`
-	Position           Position        `json:"position"`
-	PlayingWhite       bool            `json:"playingWhite"`
-	Snapshot           SnapshotMessage `json:"snapshot"`
-	ConnectedUsers     uint32          `json:"connectedUsers"`
+	Type               string              `json:"type"`
+	MinimapAggregation jsoniter.RawMessage `json:"minimapAggregation"`
+	GlobalStats        jsoniter.RawMessage `json:"globalStats"`
+	Position           Position            `json:"position"`
+	PlayingWhite       bool                `json:"playingWhite"`
+	Snapshot           SnapshotMessage     `json:"snapshot"`
+	ConnectedUsers     uint32              `json:"connectedUsers"`
 }
 
 func (c *Client) sendInitialState() {
@@ -584,7 +585,7 @@ func (c *Client) SendError(errorMessage string) {
 	}
 }
 
-func (c *Client) SendMinimapUpdate(aggregation json.RawMessage) {
+func (c *Client) SendMinimapUpdate(aggregation jsoniter.RawMessage) {
 	select {
 	case <-c.done:
 		return
@@ -594,7 +595,7 @@ func (c *Client) SendMinimapUpdate(aggregation json.RawMessage) {
 	}
 }
 
-func (c *Client) SendGlobalStats(stats json.RawMessage) {
+func (c *Client) SendGlobalStats(stats jsoniter.RawMessage) {
 	select {
 	case <-c.done:
 		return
