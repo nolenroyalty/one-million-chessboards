@@ -59,7 +59,7 @@ func (s *Server) Run() {
 	s.minimapAggregator.Initialize(s.board)
 	go s.processMoves()
 	go s.refreshMinimapPeriodically()
-	go s.refreshStatsPeriodically()
+	s.refreshStatsPeriodically()
 	go s.persistentBoard.Run()
 }
 
@@ -106,12 +106,14 @@ func (s *Server) refreshStatsOnce() {
 
 func (s *Server) refreshStatsPeriodically() {
 	s.refreshStatsOnce()
-	ticker := time.NewTicker(STATS_REFRESH_INTERVAL)
-	defer ticker.Stop()
+	go func() {
+		ticker := time.NewTicker(STATS_REFRESH_INTERVAL)
+		defer ticker.Stop()
 
-	for range ticker.C {
-		s.refreshStatsOnce()
-	}
+		for range ticker.C {
+			s.refreshStatsOnce()
+		}
+	}()
 }
 
 func (s *Server) processMoves() {

@@ -23,7 +23,6 @@ type Board struct {
 	blackKingsCaptured  atomic.Uint32
 }
 
-// CR nroyalty: make these uint64s
 type GameStats struct {
 	TotalMoves           uint64
 	WhitePiecesRemaining uint32
@@ -687,7 +686,7 @@ func (b *Board) createPiece(pieceType PieceType, isWhite bool) Piece {
 	return piece
 }
 
-const ACTUALLY_RANDOMIZE = true
+const ACTUALLY_RANDOMIZE = false
 
 func (b *Board) InitializeRandom() {
 	b.Lock()
