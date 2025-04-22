@@ -55,20 +55,6 @@ export function getStartingAndEndingCoords({ coords, width, height }) {
   return { startingX, startingY, endingX, endingY };
 }
 
-const DARK_COLOR_OLD = "#6f8d51";
-const LIGHT_COLOR_OLD = "#eeeed2";
-const DARK_COLOR_NEW = "#334155";
-const LIGHT_COLOR_NEW = "#A1A1AA";
-const DARK_COLOR = DARK_COLOR_NEW;
-const LIGHT_COLOR = LIGHT_COLOR_NEW;
-
-export function getSquareColor(x, y) {
-  if (x % 2 === 0) {
-    return y % 2 === 0 ? LIGHT_COLOR : DARK_COLOR;
-  }
-  return y % 2 === 0 ? DARK_COLOR : LIGHT_COLOR;
-}
-
 export function getScreenRelativeCoords({ x, y, startingX, startingY }) {
   return {
     x: x - startingX,
@@ -142,7 +128,7 @@ export function imageForPieceType({ pieceType, isWhite }) {
   if (name === "promotedPawn") {
     name = "queen";
   }
-  return `/pieces/${isWhite ? "white" : "black"}/${name}.png`;
+  return `/pieces/${isWhite ? "white" : "black"}-processed/${name}.png`;
 }
 
 // const defaultWhiteColor = "#3B82F6";

@@ -6,7 +6,6 @@ import {
   getScreenRelativeCoords,
   getZoomedInScreenAbsoluteCoords,
   pieceKey,
-  getSquareColor,
 } from "../../utils";
 import SelectedPieceAndSquaresContext from "../SelectedPieceAndSquaresContext/SelectedPieceAndSquaresContext";
 const Canvas = styled.canvas`
@@ -19,11 +18,55 @@ const Canvas = styled.canvas`
   height: 100%;
 `;
 
+function adjustHexColor(hex, amount) {
+  hex = hex.replace(/^#/, "");
+
+  let r = parseInt(hex.substring(0, 2), 16);
+  let g = parseInt(hex.substring(2, 4), 16);
+  let b = parseInt(hex.substring(4, 6), 16);
+
+  r = Math.min(255, Math.max(0, r + amount));
+  g = Math.min(255, Math.max(0, g + amount));
+  b = Math.min(255, Math.max(0, b + amount));
+
+  return (
+    "#" +
+    r.toString(16).padStart(2, "0") +
+    g.toString(16).padStart(2, "0") +
+    b.toString(16).padStart(2, "0")
+  );
+}
+
 const BOARD_BACKGROUND_COLOR = "#0a0a0a";
 // const BOARD_BACKGROUND_COLOR = "transparent";
 const BOARD_BORDER_COLOR = "#171717";
 const MOVEABLE_SQUARE_COLOR = "#3b82f6";
 const SELECTED_PIECE_COLOR = "#fbbf24";
+const DARK_COLOR_OLD = "#6f8d51";
+const LIGHT_COLOR_OLD = "#eeeed2";
+const DARK_COLOR_NEW = "#334155";
+const LIGHT_COLOR_NEW = "#A1A1AA";
+const DARK_COLOR = DARK_COLOR_NEW;
+const LIGHT_COLOR = LIGHT_COLOR_NEW;
+const DARKENED_DARK_COLOR = adjustHexColor(DARK_COLOR, -4);
+const DARKENED_LIGHT_COLOR = adjustHexColor(LIGHT_COLOR, -4);
+const LIGHTENED_DARK_COLOR = adjustHexColor(DARK_COLOR, 10);
+const LIGHTENED_LIGHT_COLOR = adjustHexColor(LIGHT_COLOR, 10);
+
+function getSquareColor(x, y) {
+  const boardX = Math.floor(x / 8);
+  const boardY = Math.floor(y / 8);
+  let targetLight = LIGHTENED_LIGHT_COLOR;
+  let targetDark = LIGHTENED_DARK_COLOR;
+  if (boardX % 2 === boardY % 2) {
+    targetLight = DARKENED_LIGHT_COLOR;
+    targetDark = DARKENED_DARK_COLOR;
+  }
+  if (x % 2 === y % 2) {
+    return targetLight;
+  }
+  return targetDark;
+}
 
 function BoardCanvas({ pxWidth, pxHeight, boardSizeParams, opacity }) {
   const ref = React.useRef(null);

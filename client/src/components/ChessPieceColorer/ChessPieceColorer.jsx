@@ -46,8 +46,8 @@ const Title = styled.h3`
 `;
 
 const CanvasChessColorer = () => {
-  const [blackColor, setBlackColor] = useState("#0A0A0A");
-  const [whiteColor, setWhiteColor] = useState("#E0F2FE");
+  const [blackColor, setBlackColor] = useState("#020617");
+  const [whiteColor, setWhiteColor] = useState("#f4f4f5");
   const canvasRef = useRef(null);
 
   // Helper functions for color handling
