@@ -192,6 +192,8 @@ func (s *Server) processMoves() {
 					Y:               moveResult.MovedPieces[i].ToY,
 					Type:            moveResult.MovedPieces[i].Piece.Type,
 					JustDoubleMoved: moveResult.MovedPieces[i].Piece.JustDoubleMoved,
+					KingKiller:      moveResult.MovedPieces[i].Piece.KingKiller,
+					KingPawner:      moveResult.MovedPieces[i].Piece.KingPawner,
 					IsWhite:         moveResult.MovedPieces[i].Piece.IsWhite,
 					MoveCount:       moveResult.MovedPieces[i].Piece.MoveCount,
 					CaptureCount:    moveResult.MovedPieces[i].Piece.CaptureCount,

@@ -248,8 +248,6 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 	}
 
 	b.RLock()
-	raw := b.pieces[move.FromY][move.FromX]
-	movedPiece := PieceOfEncodedPiece(EncodedPiece(raw))
 	haveReadLock := true
 	defer func() {
 		if haveReadLock {
@@ -257,12 +255,17 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 		}
 	}()
 
-	// can't move an empty piece
-	if movedPiece.IsEmpty() {
+	raw := b.pieces[move.FromY][move.FromX]
+
+	// Can't move an empty piece
+	if EncodedIsEmpty(EncodedPiece(raw)) {
 		log.Printf("Invalid move: No piece at from position (expected id %d)", move.PieceID)
 		return MoveResult{Valid: false}
 	}
 
+	movedPiece := PieceOfEncodedPiece(EncodedPiece(raw))
+
+	// Can't move an opponent's piece
 	if move.ClientIsPlayingWhite != movedPiece.IsWhite {
 		if RESPECT_COLOR_REQUIREMENT {
 			return MoveResult{Valid: false}
@@ -405,11 +408,12 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 		capturedX := move.FromX + uint16(dx)
 		capturedY := move.FromY
 		capturedRaw := b.pieces[capturedY][capturedX]
-		capturedPiece := PieceOfEncodedPiece(EncodedPiece(capturedRaw))
 
-		if capturedPiece.IsEmpty() {
+		if EncodedIsEmpty(EncodedPiece(capturedRaw)) {
 			return MoveResult{Valid: false}
 		}
+
+		capturedPiece := PieceOfEncodedPiece(EncodedPiece(capturedRaw))
 
 		// must be a pawn of the opposite color
 		if capturedPiece.IsWhite == movedPiece.IsWhite {
@@ -514,11 +518,19 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 				b.whitePiecesCaptured.Add(1)
 				if capturedPiece.Type == King {
 					b.whiteKingsCaptured.Add(1)
+					movedPiece.KingKiller = true
+					if movedPiece.Type == Pawn {
+						movedPiece.KingPawner = true
+					}
 				}
 			} else {
 				b.blackPiecesCaptured.Add(1)
 				if capturedPiece.Type == King {
 					b.blackKingsCaptured.Add(1)
+					movedPiece.KingKiller = true
+					if movedPiece.Type == Pawn {
+						movedPiece.KingPawner = true
+					}
 				}
 			}
 		}
@@ -621,19 +633,23 @@ func (b *Board) GetBoardSnapshot(pos Position) *StateSnapshot {
 	for y := uint16(0); y < height; y++ {
 		for x := uint16(0); x < width; x++ {
 			raw := pieces[y][x]
-			piece := PieceOfEncodedPiece(EncodedPiece(raw))
-			if !piece.IsEmpty() {
-				pieceStates = append(pieceStates, PieceDataForSnapshot{
-					ID:              piece.ID,
-					Type:            piece.Type,
-					IsWhite:         piece.IsWhite,
-					JustDoubleMoved: piece.JustDoubleMoved,
-					MoveCount:       piece.MoveCount,
-					CaptureCount:    piece.CaptureCount,
-					Dx:              startingDx + int8(x),
-					Dy:              startingDy + int8(y),
-				})
+			encodedPiece := EncodedPiece(raw)
+			if EncodedIsEmpty(encodedPiece) {
+				continue
 			}
+			piece := PieceOfEncodedPiece(encodedPiece)
+			pieceStates = append(pieceStates, PieceDataForSnapshot{
+				ID:              piece.ID,
+				Type:            piece.Type,
+				IsWhite:         piece.IsWhite,
+				JustDoubleMoved: piece.JustDoubleMoved,
+				KingKiller:      piece.KingKiller,
+				KingPawner:      piece.KingPawner,
+				MoveCount:       piece.MoveCount,
+				CaptureCount:    piece.CaptureCount,
+				Dx:              startingDx + int8(x),
+				Dy:              startingDy + int8(y),
+			})
 		}
 	}
 

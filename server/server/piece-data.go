@@ -10,8 +10,10 @@ type PieceDataForSnapshot struct {
 	Type            PieceType `json:"type"`
 	JustDoubleMoved bool      `json:"justDoubleMoved"`
 	IsWhite         bool      `json:"isWhite"`
-	MoveCount       uint8     `json:"moveCount"`
-	CaptureCount    uint8     `json:"captureCount"`
+	KingKiller      bool      `json:"kingKiller"`
+	KingPawner      bool      `json:"kingPawner"`
+	MoveCount       uint16    `json:"moveCount"`
+	CaptureCount    uint16    `json:"captureCount"`
 }
 
 // Using dx/dy for moves is a pain in the ass because we need to know the actual
@@ -33,6 +35,8 @@ type PieceDataForMove struct {
 	Type            PieceType `json:"type"`
 	JustDoubleMoved bool      `json:"justDoubleMoved"`
 	IsWhite         bool      `json:"isWhite"`
-	MoveCount       uint8     `json:"moveCount"`
-	CaptureCount    uint8     `json:"captureCount"`
+	KingKiller      bool      `json:"kingKiller"`
+	KingPawner      bool      `json:"kingPawner"`
+	MoveCount       uint16    `json:"moveCount"`
+	CaptureCount    uint16    `json:"captureCount"`
 }
