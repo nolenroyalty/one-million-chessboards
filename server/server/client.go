@@ -185,7 +185,7 @@ func (c *Client) ReadPump() {
 		c.Close("ReadPump")
 	}()
 
-	c.conn.SetReadLimit(8192) // 8KB max message size
+	c.conn.SetReadLimit(4096) // 4KB max message size
 	c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 	c.conn.SetPongHandler(func(string) error {
 		c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
@@ -196,7 +196,7 @@ func (c *Client) ReadPump() {
 		_, message, err := c.conn.ReadMessage()
 		c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 		if err != nil {
-			log.Printf("Error reading message: %v", err)
+			// log.Printf("Error reading message: %v", err)
 			// if websocket.IsUnexpectedCloseError(err) {
 			// 	now := time.Now().UnixNano()
 			// 	log.Printf("client disconnected: %v, %d", err, now)
@@ -216,13 +216,11 @@ func CoordInBounds(coord float64) bool {
 func (c *Client) handleMessage(message []byte) {
 	var msg map[string]interface{}
 	if err := json.Unmarshal(message, &msg); err != nil {
-		c.SendError("Invalid message format")
 		return
 	}
 
 	msgType, ok := msg["type"].(string)
 	if !ok {
-		c.SendError("Missing message type")
 		return
 	}
 
@@ -242,7 +240,6 @@ func (c *Client) handleMessage(message []byte) {
 		// Basic bounds checking
 		if !CoordInBounds(fromX) || !CoordInBounds(fromY) ||
 			!CoordInBounds(toX) || !CoordInBounds(toY) {
-			c.SendError("Invalid coordinates")
 			return
 		}
 		c.BumpActive()
@@ -268,18 +265,15 @@ func (c *Client) handleMessage(message []byte) {
 	case "subscribe":
 		centerX, ok := msg["centerX"].(float64)
 		if !ok {
-			c.SendError("Invalid coordinates")
 			return
 		}
 		centerY, ok := msg["centerY"].(float64)
 		if !ok {
-			c.SendError("Invalid coordinates")
 			return
 		}
 
 		// Basic bounds checking
 		if !CoordInBounds(centerX) || !CoordInBounds(centerY) {
-			c.SendError("Invalid coordinates")
 			return
 		}
 		centerXInt := uint16(centerX)
@@ -334,7 +328,6 @@ func (c *Client) WritePump() {
 				return
 			}
 		case <-pingTicker.C:
-			// pingData := []byte(fmt.Sprintf("ping-%d", time.Now().UnixNano()))
 			c.conn.WriteMessage(websocket.PingMessage, nil)
 		case <-c.done:
 			return
@@ -349,7 +342,8 @@ func (c *Client) SendPeriodicUpdates() {
 	for {
 		select {
 		case <-ticker.C:
-			// log.Printf("Sending periodic update for position: %v", c.position.Load().(Position))
+			// CR nroyalty: we could avoid sending the periodic snapshot if
+			// we've recently sent one due to them moving around.
 			c.SendStateSnapshot()
 		case <-c.done:
 			return
@@ -389,10 +383,6 @@ func (c *Client) AddMovesToBuffer(moves []PieceMove, capture *PieceCapture) {
 	}
 }
 
-// CR nroyalty: rework this code to avoid so much copying!!!!!
-// CR nroyalty: also, this code can do the allocation of the slice, pass it to
-// getboardsnapshot, and then return the slice to the pool after parsing it. No need
-// to do that work in board I think.
 func (c *Client) SendStateSnapshot() {
 	pos := c.position.Load().(Position)
 	snapshot := c.server.board.GetBoardSnapshot(pos)
@@ -405,11 +395,6 @@ func (c *Client) SendStateSnapshot() {
 	c.compresAndSend(data, "SendStateSnapshot")
 }
 
-// PERFORMANCE nroyalty: To avoid the cost of sending information about each piece
-// with our move data, we could compute whether a move JUST entered a client's
-// view and send it as a separate "Annotated Move" with the additional info.
-// This probably doesn't save us that much (a few bytes) but it could add up
-// SendMoveUpdates sends move and capture updates to the client
 func (c *Client) MaybeSendMoveUpdates() {
 	c.bufferMu.Lock()
 	if len(c.moveBuffer) == 0 && len(c.captureBuffer) == 0 {
@@ -487,28 +472,6 @@ func (c *Client) SendValidMove(moveToken uint32, asOfSeqnum uint64, capturedPiec
 	}
 
 	c.compresAndSend(data, "SendValidMove")
-}
-
-func (c *Client) SendError(errorMessage string) {
-	message := struct {
-		Type    string `json:"type"`
-		Message string `json:"message"`
-		Code    int    `json:"code"`
-	}{
-		Type:    "error",
-		Message: errorMessage,
-		Code:    1, // Generic error code
-	}
-
-	log.Printf("Sending error: %v", message)
-
-	data, err := json.Marshal(message)
-	if err != nil {
-		log.Printf("Error marshaling error message: %v", err)
-		return
-	}
-
-	c.compresAndSend(data, "SendError")
 }
 
 func (c *Client) Close(why string) {

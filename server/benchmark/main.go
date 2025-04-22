@@ -159,7 +159,7 @@ func (c *MainCounter) ConnectAndLogSizes() {
 	}
 }
 
-const NUM_RANDOM_SUBSCRIPTIONS = 50
+const NUM_RANDOM_SUBSCRIPTIONS = 200
 const NUM_RANDOM_MOVERS = 1000
 const NUMBER_OF_MOVES = 1000
 const TEST_RUN_TIME = 60 * time.Second
@@ -339,8 +339,8 @@ func (c *MainCounter) runAllRandomMovers() {
 }
 
 const DO_SUBSCRIBE = true
-const DO_MOVE = false
-const DO_RECONNECTS = false
+const DO_MOVE = true
+const DO_RECONNECTS = true
 
 func main() {
 	counter := MainCounter{}

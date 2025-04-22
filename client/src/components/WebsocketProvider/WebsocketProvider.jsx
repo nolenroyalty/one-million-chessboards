@@ -228,6 +228,8 @@ function useWebsocket({
           pieceHandler.current.rejectOptimisticMove({
             moveToken: data.moveToken,
           });
+        } else if (data.type === "app-pong") {
+          // ok
         } else {
           console.log("unknown message type", data);
         }

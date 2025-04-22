@@ -639,6 +639,7 @@ func (b *Board) GetBoardSnapshot(pos Position) *StateSnapshot {
 
 	b.rawRowsPool.Put(piecesPtr)
 
+	// CR nroyalty: maybe we want a pool for this too?
 	snapshot := &StateSnapshot{
 		Type:   "stateSnapshot",
 		Pieces: pieceStates,
