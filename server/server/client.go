@@ -295,7 +295,6 @@ func (c *Client) handleMessage(message []byte) {
 	}
 }
 
-// WritePump handles sending messages to the client
 func (c *Client) WritePump() {
 	defer func() {
 		c.Close("WritePump")
