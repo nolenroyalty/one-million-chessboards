@@ -19,7 +19,6 @@ var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 var zstdMagic = [4]byte{0x28, 0xB5, 0x2F, 0xFD}
 
-// pool → avoids the 200 KiB/decoder overhead.
 var decPool = sync.Pool{
 	New: func() any {
 		dec, _ := zstd.NewReader(nil) // no window limit; fine for ≤16 MB frames
