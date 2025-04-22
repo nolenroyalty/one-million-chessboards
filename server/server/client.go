@@ -1,16 +1,10 @@
 package server
 
-// CR nroyalty: it would be nice if we ran all of our to-client actions through a
-// queue that let us guarantee better ordering of the messages that they receive...
-
 // CR nroyalty: figure out how to debounce snapshot requests to the degree that we can;
 // also make sure when we move to a read-lock approach that we use our latest position
 // after getting the lock, instead of the position from when we tried to take the lock.
 
-// CR nroyalty: we need to specify whether the client is playing white or black
-// and then use that to determine which pieces they can move.
 import (
-	"fmt"
 	"log"
 	"math"
 	"sync"
@@ -18,12 +12,23 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/klauspost/compress/zstd"
 )
+
+var zstdPool = sync.Pool{
+	New: func() any {
+		enc, _ := zstd.NewWriter(
+			nil,
+			zstd.WithEncoderLevel(zstd.SpeedFastest),
+			zstd.WithEncoderConcurrency(1),
+		)
+		return enc
+	},
+}
 
 // CR nroyalty: send seqnum with global stats and then updating global stats is
 // pretty easy.
 // CR nroyalty: standardize on a function for sending a message to the client or unsubbing
-// CR nroyalty: look for places where we can pass pointers for serialization instead of copying
 
 const (
 	// CR nroyalty: MAKE SURE THIS IS NOT BELOW 60 AND MAYBE MAKE IT HIGHER
@@ -50,18 +55,18 @@ func sleepSimulatedLatency() {
 }
 
 type Client struct {
-	conn                 *websocket.Conn
-	server               *Server
-	send                 chan []byte
-	position             atomic.Value
-	lastSnapshotPosition atomic.Value
-	moveBuffer           []PieceMove
-	captureBuffer        []PieceCapture
-	bufferMu             sync.Mutex
-	done                 chan struct{}
-	isClosed             atomic.Bool
-	lastActionTime       atomic.Int64
-	playingWhite         atomic.Bool
+	conn                                           *websocket.Conn
+	server                                         *Server
+	send_DO_NOT_DO_RAW_WRITES_OR_YOU_WILL_BE_FIRED chan []byte
+	position                                       atomic.Value
+	lastSnapshotPosition                           atomic.Value
+	moveBuffer                                     []PieceMove
+	captureBuffer                                  []PieceCapture
+	bufferMu                                       sync.Mutex
+	done                                           chan struct{}
+	isClosed                                       atomic.Bool
+	lastActionTime                                 atomic.Int64
+	playingWhite                                   atomic.Bool
 }
 
 // CR nroyalty: think HARD about your send channel and how big it should be.
@@ -69,9 +74,9 @@ type Client struct {
 // for benchmarking purposes.
 func NewClient(conn *websocket.Conn, server *Server) *Client {
 	c := &Client{
-		conn:           conn,
-		server:         server,
-		send:           make(chan []byte, 2048),
+		conn:   conn,
+		server: server,
+		send_DO_NOT_DO_RAW_WRITES_OR_YOU_WILL_BE_FIRED: make(chan []byte, 2048),
 		position:       atomic.Value{},
 		moveBuffer:     make([]PieceMove, 0, MOVE_BUFFER_SIZE),
 		captureBuffer:  make([]PieceCapture, 0, CAPTURE_BUFFER_SIZE),
@@ -96,9 +101,29 @@ func (c *Client) Run(playingWhite bool, pos Position) {
 	go c.WritePump()
 	go c.SendPeriodicUpdates()
 	go c.ProcessMoveUpdates()
-	// CR nroyalty: this should be one update that includes an initial state
-	// snapshot when we move to protobuffs
 	c.sendInitialState()
+}
+
+const minCompressBytes = 64
+
+func (c *Client) compresAndSend(raw []byte, onDrop string) {
+	var payload []byte
+	if len(raw) < minCompressBytes {
+		payload = raw
+	} else {
+		enc := zstdPool.Get().(*zstd.Encoder)
+		enc.Reset(nil)
+		payload = enc.EncodeAll(raw, make([]byte, 0, len(raw)))
+		zstdPool.Put(enc)
+	}
+	select {
+	case c.send_DO_NOT_DO_RAW_WRITES_OR_YOU_WILL_BE_FIRED <- payload:
+		return
+	case <-c.done:
+		return
+	default:
+		c.Close("Send full: " + onDrop)
+	}
 }
 
 type InitialInfo struct {
@@ -123,13 +148,7 @@ func (c *Client) sendInitialState() {
 		log.Printf("Error marshaling initial info: %v", err)
 		return
 	}
-	select {
-	case c.send <- data:
-	case <-c.done:
-		return
-	default:
-		c.Close("send full: sendInitialState")
-	}
+	c.compresAndSend(data, "sendInitialState")
 }
 
 func (c *Client) IsActive() bool {
@@ -287,11 +306,8 @@ func (c *Client) handleMessage(message []byte) {
 			log.Printf("Error marshaling app pong: %v", err)
 			return
 		}
-		select {
-		case c.send <- data:
-		case <-c.done:
-			return
-		}
+		// CR nroyalty: we don't need to compress this lol
+		c.compresAndSend(data, "app-ping")
 	}
 }
 
@@ -305,7 +321,7 @@ func (c *Client) WritePump() {
 
 	for {
 		select {
-		case message, ok := <-c.send:
+		case message, ok := <-c.send_DO_NOT_DO_RAW_WRITES_OR_YOU_WILL_BE_FIRED:
 			if !ok {
 				// Channel closed, server shutdown
 				log.Printf("!!Channel closed, server shutdown!!")
@@ -314,13 +330,12 @@ func (c *Client) WritePump() {
 			}
 
 			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-			// CR nroyalty: change this to binary
-			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
+			if err := c.conn.WriteMessage(websocket.BinaryMessage, message); err != nil {
 				return
 			}
 		case <-pingTicker.C:
-			pingData := []byte(fmt.Sprintf("ping-%d", time.Now().UnixNano()))
-			c.conn.WriteMessage(websocket.PingMessage, pingData)
+			// pingData := []byte(fmt.Sprintf("ping-%d", time.Now().UnixNano()))
+			c.conn.WriteMessage(websocket.PingMessage, nil)
 		case <-c.done:
 			return
 		}
@@ -387,14 +402,7 @@ func (c *Client) SendStateSnapshot() {
 		return
 	}
 	c.lastSnapshotPosition.Store(pos)
-
-	select {
-	case <-c.done:
-		return
-	case c.send <- data:
-	default:
-		c.Close("send full: SendStateSnapshot")
-	}
+	c.compresAndSend(data, "SendStateSnapshot")
 }
 
 // PERFORMANCE nroyalty: To avoid the cost of sending information about each piece
@@ -438,13 +446,7 @@ func (c *Client) MaybeSendMoveUpdates() {
 		return
 	}
 
-	select {
-	case <-c.done:
-		return
-	case c.send <- data:
-	default:
-		c.Close("send full: SendMoveUpdates")
-	}
+	c.compresAndSend(data, "SendMoveUpdates")
 }
 
 func (c *Client) SendInvalidMove(moveToken uint32) {
@@ -462,13 +464,7 @@ func (c *Client) SendInvalidMove(moveToken uint32) {
 		return
 	}
 
-	select {
-	case <-c.done:
-		return
-	case c.send <- data:
-	default:
-		c.Close("send full: SendInvalidMove")
-	}
+	c.compresAndSend(data, "SendInvalidMove")
 }
 
 func (c *Client) SendValidMove(moveToken uint32, asOfSeqnum uint64, capturedPieceId uint32) {
@@ -490,13 +486,7 @@ func (c *Client) SendValidMove(moveToken uint32, asOfSeqnum uint64, capturedPiec
 		return
 	}
 
-	select {
-	case <-c.done:
-		return
-	case c.send <- data:
-	default:
-		c.Close("send full: SendValidMove")
-	}
+	c.compresAndSend(data, "SendValidMove")
 }
 
 func (c *Client) SendError(errorMessage string) {
@@ -518,13 +508,7 @@ func (c *Client) SendError(errorMessage string) {
 		return
 	}
 
-	select {
-	case <-c.done:
-		return
-	case c.send <- data:
-	default:
-		c.Close("send full: SendError")
-	}
+	c.compresAndSend(data, "SendError")
 }
 
 func (c *Client) Close(why string) {

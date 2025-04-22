@@ -17,6 +17,7 @@
     "@panzoom/panzoom": "^4.6.0",
     "eslint": "^8.57.1",
     "eslint-config-react-app": "^7.0.1",
+    "fzstd": "^0.1.1",
     "lucide-react": "^0.483.0",
     "new-component": "^6.0.0",
     "parcel": "^2.13.3",

@@ -7,6 +7,8 @@ import {
   computeInitialArguments,
 } from "../../utils";
 import CoordsContext from "../CoordsContext/CoordsContext";
+import { decompress } from "fzstd";
+
 // CR nroyalty: replace with partysocket
 
 // CR nroyalty: delete this before rolling to prod...
@@ -124,6 +126,22 @@ function useStartBot({ pieceHandler, submitMove, onlyId }) {
   return { setRunBot: setStarted };
 }
 
+const ZSTD_MAGIC = [0x28, 0xb5, 0x2f, 0xfd]; // little‑endian
+
+function parseFrame(buf) {
+  const u8 = new Uint8Array(buf);
+
+  const isZstd =
+    u8[0] === ZSTD_MAGIC[0] &&
+    u8[1] === ZSTD_MAGIC[1] &&
+    u8[2] === ZSTD_MAGIC[2] &&
+    u8[3] === ZSTD_MAGIC[3];
+
+  const payload = isZstd ? decompress(u8) : u8;
+
+  return JSON.parse(new TextDecoder().decode(payload));
+}
+
 function useWebsocket({
   setConnected,
   pieceHandler,
@@ -172,14 +190,23 @@ function useWebsocket({
         websocketRef.current.close();
         websocketRef.current = null;
       }
-      const ws = new WebSocket(wsUrl);
-      websocketRef.current = ws;
 
-      ws.onmessage = (event) => {
+      // CR nroyalty: handle exceptions here lmao
+      let ws;
+      ws = new WebSocket(wsUrl);
+      websocketRef.current = ws;
+      ws.binaryType = "arraybuffer";
+
+      ws.onmessage = async (event) => {
         if (killed) {
           return;
         }
-        const data = JSON.parse(event.data);
+        const buf =
+          event.data instanceof Blob
+            ? await event.data.arrayBuffer()
+            : event.data;
+        const data = parseFrame(buf);
+
         if (data.type === "stateSnapshot") {
           pieceHandler.current.handleSnapshot({ snapshot: data });
         } else if (data.type === "moveUpdates") {
@@ -207,6 +234,7 @@ function useWebsocket({
       };
 
       ws.onopen = () => {
+        console.log("websocket opened");
         if (killed) {
           return;
         }
@@ -353,6 +381,7 @@ function WebsocketProvider({ children }) {
   );
 
   const safelySendJSON = React.useCallback((json) => {
+    console.log("safelySendJSON", json);
     const ws = websocketRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
       try {
@@ -362,6 +391,9 @@ function WebsocketProvider({ children }) {
         console.error("Error sending JSON", e);
         return false;
       }
+    } else {
+      console.log("websocket not open", ws?.readyState);
+      console.log("websocket not open", ws);
     }
     return false;
   }, []);

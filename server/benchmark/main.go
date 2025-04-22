@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"math/rand"
 	"sync"
@@ -8,12 +9,23 @@ import (
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/klauspost/compress/zstd"
 
 	"github.com/dustin/go-humanize"
 	"github.com/gorilla/websocket"
 )
 
 var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
+var zstdMagic = [4]byte{0x28, 0xB5, 0x2F, 0xFD}
+
+// pool → avoids the 200 KiB/decoder overhead.
+var decPool = sync.Pool{
+	New: func() any {
+		dec, _ := zstd.NewReader(nil) // no window limit; fine for ≤16 MB frames
+		return dec
+	},
+}
 
 const (
 	localURL = "ws://localhost:8080/ws"
@@ -42,6 +54,29 @@ func (c *MainCounter) logStats() {
 	log.Printf("MOVE UPDATES: %d", c.numberOfMoveUpdates.Load())
 	log.Printf("MOVES: %d", c.numberOfMoves.Load())
 	log.Printf("CAPTURES: %d", c.numberOfCaptures.Load())
+}
+
+func ParseFrame(buf []byte) (map[string]interface{}, error) {
+	if len(buf) < 4 {
+		return nil, errors.New("frame too small")
+	}
+
+	if buf[0] == zstdMagic[0] && buf[1] == zstdMagic[1] &&
+		buf[2] == zstdMagic[2] && buf[3] == zstdMagic[3] {
+		dec := decPool.Get().(*zstd.Decoder)
+		var err error
+		buf, err = dec.DecodeAll(buf, nil)
+		decPool.Put(dec)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var out map[string]interface{}
+	if err := json.Unmarshal(buf, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *MainCounter) randomlySubscribe(doReconnects bool) {
@@ -74,17 +109,16 @@ func (c *MainCounter) randomlySubscribe(doReconnects bool) {
 					goto restart
 				}
 				c.receivedBytes.Add(int64(len(message)))
-				var parsed map[string]any
-				err = json.Unmarshal(message, &parsed)
+				parsed, err := ParseFrame(message)
 				if err != nil {
 					goto restart
 				}
 				if parsed["type"] == "initialState" {
 					c.numberOfSnapshots.Add(1)
-					position := parsed["position"].(map[string]any)
-					x := int(position["x"].(float64))
-					y := int(position["y"].(float64))
-					log.Printf("Initial position: %d, %d", x, y)
+					// position := parsed["position"].(map[string]any)
+					// x := int(position["x"].(float64))
+					// y := int(position["y"].(float64))
+					// log.Printf("Initial position: %d, %d", x, y)
 				}
 				if parsed["type"] == "moveUpdates" {
 					c.numberOfMoveUpdates.Add(1)
@@ -115,8 +149,7 @@ func (c *MainCounter) ConnectAndLogSizes() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		var parsed map[string]any
-		err = json.Unmarshal(message, &parsed)
+		parsed, err := ParseFrame(message)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -126,7 +159,7 @@ func (c *MainCounter) ConnectAndLogSizes() {
 	}
 }
 
-const NUM_RANDOM_SUBSCRIPTIONS = 200
+const NUM_RANDOM_SUBSCRIPTIONS = 50
 const NUM_RANDOM_MOVERS = 1000
 const NUMBER_OF_MOVES = 1000
 const TEST_RUN_TIME = 60 * time.Second
@@ -205,8 +238,7 @@ func newRandomMover(boardX int) *RandomMover {
 			log.Printf("Error reading message: %v", err)
 			return
 		}
-		var parsed map[string]any
-		err = json.Unmarshal(message, &parsed)
+		parsed, err := ParseFrame(message)
 		if err != nil {
 			log.Printf("Error unmarshalling: %v", err)
 			return
@@ -308,7 +340,7 @@ func (c *MainCounter) runAllRandomMovers() {
 
 const DO_SUBSCRIBE = true
 const DO_MOVE = false
-const DO_RECONNECTS = true
+const DO_RECONNECTS = false
 
 func main() {
 	counter := MainCounter{}
