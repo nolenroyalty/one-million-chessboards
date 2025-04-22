@@ -338,7 +338,6 @@ function RecentCapturesButton({ setCoords, coords }) {
       style={{ gridArea: "recent" }}
       disabled={!hasRecentCaptures}
       onClick={() => {
-        console.log("recent captures");
         const result = recentCapturesHandler.current.randomRecentCapture({
           preferFurtherFromCoords: coords,
         });

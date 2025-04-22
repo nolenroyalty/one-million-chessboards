@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -43,10 +44,21 @@ func (c *MainCounter) logStats() {
 	log.Printf("CAPTURES: %d", c.numberOfCaptures.Load())
 }
 
-func (c *MainCounter) randomlySubscribe() {
+func (c *MainCounter) randomlySubscribe(doReconnects bool) {
 	for {
 		ws, _, err := websocket.DefaultDialer.Dial(getUrl(), nil)
 		done := make(chan struct{})
+
+		if doReconnects {
+			sleepTimeJitter := time.Duration(rand.Intn(3000)) * time.Millisecond
+			sleepTime := (time.Second * 1) + sleepTimeJitter
+
+			go func() {
+				time.Sleep(sleepTime)
+				ws.Close()
+				done <- struct{}{}
+			}()
+		}
 
 		if err != nil {
 			goto restart
@@ -55,12 +67,10 @@ func (c *MainCounter) randomlySubscribe() {
 		for {
 			select {
 			case <-done:
-				ws.Close()
 				goto restart
 			default:
 				_, message, err := ws.ReadMessage()
 				if err != nil {
-					log.Printf("Error reading message: %v", err)
 					goto restart
 				}
 				c.receivedBytes.Add(int64(len(message)))
@@ -121,7 +131,7 @@ const NUM_RANDOM_MOVERS = 1000
 const NUMBER_OF_MOVES = 1000
 const TEST_RUN_TIME = 60 * time.Second
 
-func (c *MainCounter) runRandomSubscribe() {
+func (c *MainCounter) runRandomSubscribe(doReconnects bool) {
 	var wg sync.WaitGroup
 	wg.Add(NUM_RANDOM_SUBSCRIPTIONS)
 
@@ -129,7 +139,7 @@ func (c *MainCounter) runRandomSubscribe() {
 	for i := 0; i < NUM_RANDOM_SUBSCRIPTIONS; i++ {
 		go func() {
 			defer wg.Done()
-			c.randomlySubscribe()
+			c.randomlySubscribe(doReconnects)
 		}()
 		time.Sleep(5 * time.Millisecond)
 	}
@@ -296,17 +306,26 @@ func (c *MainCounter) runAllRandomMovers() {
 	wg.Wait()
 }
 
+const DO_SUBSCRIBE = true
+const DO_MOVE = false
+const DO_RECONNECTS = true
+
 func main() {
 	counter := MainCounter{}
 	wg := sync.WaitGroup{}
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		counter.runRandomSubscribe()
-	}()
-	go func() {
-		defer wg.Done()
-		counter.runAllRandomMovers()
-	}()
+	if DO_SUBSCRIBE {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			counter.runRandomSubscribe(DO_RECONNECTS)
+		}()
+	}
+	if DO_MOVE {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			counter.runAllRandomMovers()
+		}()
+	}
 	wg.Wait()
 }

@@ -167,15 +167,15 @@ func (c *Client) ReadPump() {
 	}()
 
 	c.conn.SetReadLimit(8192) // 8KB max message size
-	c.conn.SetReadDeadline(time.Now().Add(120 * time.Second))
+	c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 	c.conn.SetPongHandler(func(string) error {
-		c.conn.SetReadDeadline(time.Now().Add(120 * time.Second))
+		c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 		return nil
 	})
 
 	for {
 		_, message, err := c.conn.ReadMessage()
-		c.conn.SetReadDeadline(time.Now().Add(120 * time.Second))
+		c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 		if err != nil {
 			log.Printf("Error reading message: %v", err)
 			// if websocket.IsUnexpectedCloseError(err) {
