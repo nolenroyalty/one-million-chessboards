@@ -12,15 +12,25 @@ const Wrapper = styled.div`
   gap: 1rem;
   /* margin-left: calc(-1 * var(--main-side-padding)); */
   /* margin-right: calc(-1 * var(--main-side-padding)); */
-  padding: 0 var(--main-side-padding);
+  /* padding: 0 var(--main-side-padding); */
   border-bottom: 1px solid var(--color-sky-700);
   margin-bottom: 0.25rem;
   position: relative;
 `;
 
-const Title = styled.span`
+const Title = styled.a`
   color: var(--color-neutral-400);
   font-family: "Sunset Demi";
+  text-decoration: none;
+  cursor: pointer;
+
+  &:visited {
+    color: var(--color-neutral-400);
+  }
+
+  &:hover {
+    color: var(--color-neutral-400);
+  }
 `;
 
 const DisconnectedDiv = styled.div`
@@ -60,7 +70,7 @@ function SmallHeader() {
   return (
     <Wrapper>
       <MaybeShowDisconnected />
-      <Title>One Million Chessboards</Title>
+      <Title href="/">One Million Chessboards</Title>
     </Wrapper>
   );
 }
