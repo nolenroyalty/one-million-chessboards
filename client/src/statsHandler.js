@@ -1,6 +1,9 @@
+import { intervalWithJitter } from "./utils";
+
 const YOUR_MOVES_KEY = "yourMoves";
 const YOUR_CAPTURES_KEY = "yourCaptures";
-const STATS_REFRESH_INTERVAL = 4 * 1000;
+const BASE_STATS_REFRESH_INTERVAL = 1900;
+const INTERVAL_VARIANCE = 600;
 
 class StatsHandler {
   constructor() {
@@ -32,11 +35,11 @@ class StatsHandler {
     this.resetPieceHandlerDelta();
 
     this.subscribers = [];
-    this.pollPeriodically();
+    this.pollLoopTimeout = null;
   }
 
-  pollOnce() {
-    fetch("/api/global-game-stats")
+  runPollLoop() {
+    fetch("/api/global-game-stats", { cache: "no-store" })
       .then((res) => {
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
@@ -49,11 +52,19 @@ class StatsHandler {
       .catch((error) => {
         console.error("Error fetching global game stats:", error);
       });
+
+    const interval = intervalWithJitter({
+      baseInterval: BASE_STATS_REFRESH_INTERVAL,
+      jitter: INTERVAL_VARIANCE,
+    });
+    this.pollLoopTimeout = setTimeout(() => this.runPollLoop(), interval);
   }
 
-  pollPeriodically() {
-    this.pollOnce();
-    setInterval(this.pollOnce.bind(this), STATS_REFRESH_INTERVAL);
+  stopPollLoop() {
+    if (this.pollLoopTimeout) {
+      clearTimeout(this.pollLoopTimeout);
+      this.pollLoopTimeout = null;
+    }
   }
 
   resetPieceHandlerDelta() {

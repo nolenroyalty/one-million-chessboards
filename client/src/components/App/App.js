@@ -2,12 +2,9 @@ import React from "react";
 import styled from "styled-components";
 import Board from "../Board/Board";
 import BoardControls from "../BoardControls/BoardControls";
-import PieceHandler from "../../pieceHandlerNewer.js";
 import ChessPieceColorer from "../ChessPieceColorer/ChessPieceColorer";
 import BigHeader from "../BigHeader/BigHeader.jsx";
 import SmallHeader from "../SmallHeader/SmallHeader.jsx";
-import MinimapHandler from "../../minimapHandler.js";
-import StatsHandler from "../../statsHandler.js";
 import { HandlersContextProvider } from "../HandlersContext/HandlersContext";
 import { CoordsContextProvider } from "../CoordsContext/CoordsContext";
 import { ShowLargeBoardContextProvider } from "../ShowLargeBoardContext/ShowLargeBoardContext";
@@ -57,18 +54,8 @@ const Main = styled.main`
 `;
 
 function App() {
-  const statsHandler = React.useRef(new StatsHandler());
-  const pieceHandler = React.useRef(
-    new PieceHandler({ statsHandler: statsHandler.current })
-  );
-  const minimapHandler = React.useRef(new MinimapHandler());
-
   return (
-    <HandlersContextProvider
-      statsHandler={statsHandler}
-      pieceHandler={pieceHandler}
-      minimapHandler={minimapHandler}
-    >
+    <HandlersContextProvider>
       <CoordsContextProvider>
         <CurrentColorProvider>
           <WebsocketProvider>

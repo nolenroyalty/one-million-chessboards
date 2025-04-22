@@ -1,5 +1,9 @@
 const MAX_MOVE_DISTANCE = 36;
 
+export function intervalWithJitter({ baseInterval, jitter }) {
+  return baseInterval + Math.random() * jitter - jitter / 2;
+}
+
 export const MOVE_TYPES = {
   NORMAL: 0,
   CASTLE: 1,

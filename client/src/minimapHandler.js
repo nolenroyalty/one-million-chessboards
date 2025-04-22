@@ -1,15 +1,17 @@
-const MINIMAP_REFRESH_INTERVAL = 30 * 1000;
+import { intervalWithJitter } from "./utils";
+
+const MINIMAP_REFRESH_INTERVAL = 25 * 1000;
+const MINIMAP_REFRESH_INTERVAL_JITTER = 4500;
 
 class MinimapHandler {
   constructor() {
     this.state = { initialized: false, aggregations: [] };
     this.subscribers = [];
-    this.pollPeriodically();
+    this.pollLoopTimeout = null;
   }
 
-  pollOnce() {
-    console.log("polling minimap data");
-    fetch("/api/minimap")
+  runPollLoop() {
+    fetch("/api/minimap", { cache: "no-store" })
       .then((res) => {
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
@@ -26,11 +28,18 @@ class MinimapHandler {
       .catch((error) => {
         console.error("Error fetching minimap data:", error);
       });
+    const interval = intervalWithJitter({
+      baseInterval: MINIMAP_REFRESH_INTERVAL,
+      jitter: MINIMAP_REFRESH_INTERVAL_JITTER,
+    });
+    this.pollLoopTimeout = setTimeout(() => this.runPollLoop(), interval);
   }
 
-  pollPeriodically() {
-    this.pollOnce();
-    setInterval(this.pollOnce.bind(this), MINIMAP_REFRESH_INTERVAL);
+  stopPollLoop() {
+    if (this.pollLoopTimeout) {
+      clearTimeout(this.pollLoopTimeout);
+      this.pollLoopTimeout = null;
+    }
   }
 
   subscribe({ id, callback }) {

@@ -366,7 +366,7 @@ func (s *Server) ServeMinimap(w http.ResponseWriter, r *http.Request) {
 	log.Printf("serving minimap")
 	aggregation := s.minimapAggregator.GetLastAggregation()
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=30, s-maxage=30")
+	w.Header().Set("Cache-Control", "public, max-age=10, s-maxage=15")
 
 	w.Write(aggregation)
 }
@@ -374,7 +374,7 @@ func (s *Server) ServeMinimap(w http.ResponseWriter, r *http.Request) {
 func (s *Server) ServeGlobalStats(w http.ResponseWriter, r *http.Request) {
 	log.Printf("serving global stats")
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=4, s-maxage=4")
+	w.Header().Set("Cache-Control", "public, max-age=1, s-maxage=3")
 	s.currentStatsMutex.RLock()
 	defer s.currentStatsMutex.RUnlock()
 	w.Write(s.currentStats)
@@ -383,7 +383,7 @@ func (s *Server) ServeGlobalStats(w http.ResponseWriter, r *http.Request) {
 func (s *Server) ServeRecentCaptures(w http.ResponseWriter, r *http.Request, white bool) {
 	log.Printf("serving recent captures")
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=5, s-maxage=5")
+	w.Header().Set("Cache-Control", "public, max-age=1, s-maxage=3")
 	if white {
 		w.Write(s.recentWhiteCapturesResult)
 	} else {

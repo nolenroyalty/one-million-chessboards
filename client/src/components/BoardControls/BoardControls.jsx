@@ -15,6 +15,7 @@ import {
   Mail,
   Twitter,
 } from "lucide-react";
+import HandlersContext from "../HandlersContext/HandlersContext";
 import {
   TYPE_TO_NAME,
   humanNameForPieceType,
@@ -91,7 +92,7 @@ const AllBoardButtonsWrapper = styled(BoardControlsPanel)`
   grid-template-areas:
     "zoomout up zoomin"
     "left . right"
-    ". down alert";
+    ". down recent";
   align-self: start;
   justify-self: end;
   max-width: fit-content;
@@ -310,8 +311,48 @@ const StatSquareLabel = styled.p`
   line-height: 1;
 `;
 
+function RecentCapturesButton({ setCoords, coords }) {
+  const { recentCapturesHandler } = React.useContext(HandlersContext);
+  const [hasRecentCaptures, setHasRecentCaptures] = React.useState(() => {
+    const recentCaptures = recentCapturesHandler.current.getRecentCaptures();
+    return recentCaptures.length > 0;
+  });
+
+  React.useEffect(() => {
+    let rch = recentCapturesHandler.current;
+    rch.subscribe({
+      id: "recent-captures-button",
+      callback: (recentCaptures) => {
+        setHasRecentCaptures(recentCaptures.length > 0);
+      },
+    });
+    return () => {
+      rch.unsubscribe({
+        id: "recent-captures-button",
+      });
+    };
+  }, [recentCapturesHandler]);
+
+  return (
+    <IconButton
+      style={{ gridArea: "recent" }}
+      disabled={!hasRecentCaptures}
+      onClick={() => {
+        console.log("recent captures");
+        const result = recentCapturesHandler.current.randomRecentCapture({
+          preferFurtherFromCoords: coords,
+        });
+        if (result) {
+          setCoords(result);
+        }
+      }}
+    >
+      <Skull />
+    </IconButton>
+  );
+}
 function AllBoardButtons() {
-  const { setCoords } = React.useContext(CoordsContext);
+  const { coords, setCoords } = React.useContext(CoordsContext);
   const { showLargeBoard, setShowLargeBoard } = React.useContext(
     ShowLargeBoardContext
   );
@@ -332,9 +373,7 @@ function AllBoardButtons() {
       >
         <CirclePlus />
       </IconButton>
-      <IconButton style={{ gridArea: "alert" }}>
-        <Skull />
-      </IconButton>
+      <RecentCapturesButton setCoords={setCoords} coords={coords} />
       <IconButton
         onClick={() => {
           setCoords((prev) => ({ x: prev.x, y: prev.y - delta }));

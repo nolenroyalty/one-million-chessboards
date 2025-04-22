@@ -6,7 +6,7 @@ import (
 )
 
 const RING_BUFFER_SIZE = 20
-const CAPTURE_EXPIRATION_TIME = 10 * time.Second
+const CAPTURE_EXPIRATION_TIME = 25 * time.Second
 
 type PositionAndTime struct {
 	Position Position
@@ -69,7 +69,7 @@ func (s *RecentCaptures) getRecentCapturesByColor(white bool) []Position {
 	now := time.Now()
 	ret := []Position{}
 	for i := uint32(0); i < length; i++ {
-		if now.Sub(targetBuffer[i].Time) > CAPTURE_EXPIRATION_TIME {
+		if now.Sub(targetBuffer[i].Time) <= CAPTURE_EXPIRATION_TIME {
 			ret = append(ret, targetBuffer[i].Position)
 		}
 	}
