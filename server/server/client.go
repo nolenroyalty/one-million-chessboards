@@ -289,18 +289,15 @@ func (c *Client) handleMessage(message []byte) {
 	case "app-ping":
 		type AppPong struct {
 			Type string `json:"type"`
-			Time int64  `json:"time"`
 		}
 		appPong := AppPong{
 			Type: "app-pong",
-			Time: time.Now().UnixNano(),
 		}
 		data, err := json.Marshal(appPong)
 		if err != nil {
 			log.Printf("Error marshaling app pong: %v", err)
 			return
 		}
-		// CR nroyalty: we don't need to compress this lol
 		c.compresAndSend(data, "app-ping")
 	}
 }
