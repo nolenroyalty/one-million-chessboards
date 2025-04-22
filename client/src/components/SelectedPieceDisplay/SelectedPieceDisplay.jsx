@@ -72,6 +72,17 @@ const RegicidalText = styled(AchievementText)`
   color: var(--color-violet-400);
 `;
 
+const AchievementsWrapper = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+
+  & > p:nth-child(n + 3) {
+    display: none;
+  }
+`;
+
 const PieceInfoOuter = styled.div`
   display: flex;
   flex-direction: column;
@@ -249,8 +260,10 @@ function SelectedPieceDisplay() {
             <PieceInfoInner>
               <PieceName>{pieceName}</PieceName>
               <PieceId>{pieceId}</PieceId>
-              {promoted}
-              {regicidal}
+              <AchievementsWrapper>
+                {promoted}
+                {regicidal}
+              </AchievementsWrapper>
             </PieceInfoInner>
             <PieceStats>
               <StatSquare

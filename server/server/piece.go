@@ -24,6 +24,7 @@ type Piece struct {
 	JustDoubleMoved bool
 	KingKiller      bool
 	KingPawner      bool
+	Adopted         bool
 	MoveCount       uint16
 	CaptureCount    uint16
 }
@@ -48,6 +49,7 @@ const (
 	JustDoubleMovedShift = 30 // 1 bit (only needed for pawns)
 	KingKillerShift      = 31 // 1 bit
 	KingPawnerShift      = 32 // 1 bit
+	AdoptedShift         = 33 // 1 bit
 	MoveCountShift       = 40 // 12 bits
 	CaptureCountShift    = 52 // 12 bits
 
@@ -57,6 +59,7 @@ const (
 	justDoubleMovedMask = 1 << JustDoubleMovedShift
 	kingKillerMask      = 1 << KingKillerShift
 	kingPawnerMask      = 1 << KingPawnerShift
+	adoptedMask         = 1 << AdoptedShift
 	moveCountMask       = 0xFFF << MoveCountShift
 	captureCountMask    = 0xFFF << CaptureCountShift
 )
@@ -78,6 +81,7 @@ func PieceOfEncodedPiece(encodedPiece EncodedPiece) Piece {
 			JustDoubleMoved: false,
 			KingKiller:      false,
 			KingPawner:      false,
+			Adopted:         false,
 			MoveCount:       0,
 			CaptureCount:    0,
 		}
@@ -89,6 +93,7 @@ func PieceOfEncodedPiece(encodedPiece EncodedPiece) Piece {
 	p.JustDoubleMoved = ((raw & justDoubleMovedMask) >> JustDoubleMovedShift) != 0
 	p.KingKiller = ((raw & kingKillerMask) >> KingKillerShift) != 0
 	p.KingPawner = ((raw & kingPawnerMask) >> KingPawnerShift) != 0
+	p.Adopted = ((raw & adoptedMask) >> AdoptedShift) != 0
 	p.MoveCount = uint16((raw & moveCountMask) >> MoveCountShift)
 	p.CaptureCount = uint16((raw & captureCountMask) >> CaptureCountShift)
 	return p
@@ -118,12 +123,17 @@ func (p *Piece) Encode() EncodedPiece {
 	if p.KingPawner {
 		kingPawnerInt = 1
 	}
+	adoptedInt := 0
+	if p.Adopted {
+		adoptedInt = 1
+	}
 	raw := uint64(p.ID)<<PieceIdShift |
 		uint64(p.Type)<<PieceTypeShift |
 		uint64(whiteInt)<<IsWhiteShift |
 		uint64(justDoubleMovedInt)<<JustDoubleMovedShift |
 		uint64(kingKillerInt)<<KingKillerShift |
 		uint64(kingPawnerInt)<<KingPawnerShift |
+		uint64(adoptedInt)<<AdoptedShift |
 		uint64(p.MoveCount)<<MoveCountShift |
 		uint64(p.CaptureCount)<<CaptureCountShift
 	return EncodedPiece(raw)
@@ -149,6 +159,7 @@ func NewPiece(id uint32, pieceType PieceType, isWhite bool) Piece {
 		JustDoubleMoved: false,
 		KingKiller:      false,
 		KingPawner:      false,
+		Adopted:         false,
 		MoveCount:       0,
 		CaptureCount:    0,
 	}
