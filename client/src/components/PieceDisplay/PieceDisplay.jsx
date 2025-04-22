@@ -77,7 +77,6 @@ function _Piece({
   selected,
   translate,
   savePieceRef,
-  isWhite,
   maybeHandlePieceClick,
   captured,
   moveable,
@@ -707,7 +706,6 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
           selected={piece.id === selectedPiece?.id}
           captured={captured}
           moveable={moveable}
-          isWhite={piece.isWhite}
           captureCount={piece.captureCount}
         />
       );

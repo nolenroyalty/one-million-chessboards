@@ -4,16 +4,20 @@ package server
 // have an anchor coordinate for the snapshot, so we can save 2 bytes per piece
 // by just using an offset
 type PieceDataForSnapshot struct {
-	ID              uint32    `json:"id"`
-	Dx              int8      `json:"dx"`
-	Dy              int8      `json:"dy"`
-	Type            PieceType `json:"type"`
-	JustDoubleMoved bool      `json:"justDoubleMoved"`
-	IsWhite         bool      `json:"isWhite"`
-	KingKiller      bool      `json:"kingKiller"`
-	KingPawner      bool      `json:"kingPawner"`
-	MoveCount       uint16    `json:"moveCount"`
-	CaptureCount    uint16    `json:"captureCount"`
+	ID                               uint32    `json:"id"`
+	Dx                               int8      `json:"dx"`
+	Dy                               int8      `json:"dy"`
+	Type                             PieceType `json:"type"`
+	JustDoubleMoved                  bool      `json:"justDoubleMoved"`
+	IsWhite                          bool      `json:"isWhite"`
+	KingKiller                       bool      `json:"kingKiller"`
+	KingPawner                       bool      `json:"kingPawner"`
+	QueenKiller                      bool      `json:"queenKiller"`
+	QueenPawner                      bool      `json:"queenPawner"`
+	AdoptedKiller                    bool      `json:"adoptedKiller"`
+	HasCapturedPieceTypeOtherThanOwn bool      `json:"hasCapturedPieceTypeOtherThanOwn"`
+	MoveCount                        uint16    `json:"moveCount"`
+	CaptureCount                     uint16    `json:"captureCount"`
 }
 
 // Using dx/dy for moves is a pain in the ass because we need to know the actual
@@ -29,14 +33,18 @@ type PieceDataForSnapshot struct {
 // If this ends up being a problem we can consider some clever tricks to work around
 // the copying problem and save 2 bytes per move, but I suspect it's not worth it.
 type PieceDataForMove struct {
-	ID              uint32    `json:"id"`
-	X               uint16    `json:"x"`
-	Y               uint16    `json:"y"`
-	Type            PieceType `json:"type"`
-	JustDoubleMoved bool      `json:"justDoubleMoved"`
-	IsWhite         bool      `json:"isWhite"`
-	KingKiller      bool      `json:"kingKiller"`
-	KingPawner      bool      `json:"kingPawner"`
-	MoveCount       uint16    `json:"moveCount"`
-	CaptureCount    uint16    `json:"captureCount"`
+	ID                               uint32    `json:"id"`
+	X                                uint16    `json:"x"`
+	Y                                uint16    `json:"y"`
+	Type                             PieceType `json:"type"`
+	JustDoubleMoved                  bool      `json:"justDoubleMoved"`
+	IsWhite                          bool      `json:"isWhite"`
+	KingKiller                       bool      `json:"kingKiller"`
+	KingPawner                       bool      `json:"kingPawner"`
+	QueenKiller                      bool      `json:"queenKiller"`
+	QueenPawner                      bool      `json:"queenPawner"`
+	AdoptedKiller                    bool      `json:"adoptedKiller"`
+	HasCapturedPieceTypeOtherThanOwn bool      `json:"hasCapturedPieceTypeOtherThanOwn"`
+	MoveCount                        uint16    `json:"moveCount"`
+	CaptureCount                     uint16    `json:"captureCount"`
 }

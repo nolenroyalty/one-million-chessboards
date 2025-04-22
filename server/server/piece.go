@@ -18,15 +18,19 @@ const (
 )
 
 type Piece struct {
-	ID              uint32
-	Type            PieceType
-	IsWhite         bool
-	JustDoubleMoved bool
-	KingKiller      bool
-	KingPawner      bool
-	Adopted         bool
-	MoveCount       uint16
-	CaptureCount    uint16
+	ID                               uint32
+	Type                             PieceType
+	IsWhite                          bool
+	JustDoubleMoved                  bool
+	KingKiller                       bool
+	KingPawner                       bool
+	QueenKiller                      bool
+	QueenPawner                      bool
+	AdoptedKiller                    bool
+	HasCapturedPieceTypeOtherThanOwn bool
+	Adopted                          bool
+	MoveCount                        uint16
+	CaptureCount                     uint16
 }
 
 type EncodedPiece uint64
@@ -43,25 +47,33 @@ const EmptyEncodedPiece = EncodedPiece(0)
 // reasons, but the complexity of double-moved detection gets higher for minor
 // savings, since JustDoubleMoved is default false so we don't have to encode it often)
 const (
-	PieceIdShift         = 0  // 2**25 = 33,554,432 > 32,000,001
-	PieceTypeShift       = 25 // give it 4 bits (7 piece types)
-	IsWhiteShift         = 29 // only 1 bit ever
-	JustDoubleMovedShift = 30 // 1 bit (only needed for pawns)
-	KingKillerShift      = 31 // 1 bit
-	KingPawnerShift      = 32 // 1 bit
-	AdoptedShift         = 33 // 1 bit
-	MoveCountShift       = 40 // 12 bits
-	CaptureCountShift    = 52 // 12 bits
+	PieceIdShift                          = 0  // 2**25 = 33,554,432 > 32,000,001
+	PieceTypeShift                        = 25 // 4 bits (7 piece types)
+	IsWhiteShift                          = 29 // only 1 bit ever
+	JustDoubleMovedShift                  = 30 // 1 bit (only needed for pawns)
+	KingKillerShift                       = 31 // 1 bit
+	KingPawnerShift                       = 32 // 1 bit
+	QueenKillerShift                      = 33 // 1 bit
+	QueenPawnerShift                      = 34 // 1 bit
+	AdoptedKillerShift                    = 35 // 1 bit
+	HasCapturedPieceTypeOtherThanOwnShift = 36 // 1 bit
+	AdoptedShift                          = 39 // 1 bit
+	MoveCountShift                        = 40 // 12 bits
+	CaptureCountShift                     = 52 // 12 bits
 
-	idMask              = 0x1FFFFFF
-	typeMask            = 0xF << PieceTypeShift
-	isWhiteMask         = 1 << IsWhiteShift
-	justDoubleMovedMask = 1 << JustDoubleMovedShift
-	kingKillerMask      = 1 << KingKillerShift
-	kingPawnerMask      = 1 << KingPawnerShift
-	adoptedMask         = 1 << AdoptedShift
-	moveCountMask       = 0xFFF << MoveCountShift
-	captureCountMask    = 0xFFF << CaptureCountShift
+	idMask                               = 0x1FFFFFF
+	typeMask                             = 0xF << PieceTypeShift
+	isWhiteMask                          = 1 << IsWhiteShift
+	justDoubleMovedMask                  = 1 << JustDoubleMovedShift
+	kingKillerMask                       = 1 << KingKillerShift
+	kingPawnerMask                       = 1 << KingPawnerShift
+	queenKillerMask                      = 1 << QueenKillerShift
+	queenPawnerMask                      = 1 << QueenPawnerShift
+	adoptedKillerMask                    = 1 << AdoptedKillerShift
+	hasCapturedPieceTypeOtherThanOwnMask = 1 << HasCapturedPieceTypeOtherThanOwnShift
+	adoptedMask                          = 1 << AdoptedShift
+	moveCountMask                        = 0xFFF << MoveCountShift
+	captureCountMask                     = 0xFFF << CaptureCountShift
 )
 
 func EncodedIsEmpty(encodedPiece EncodedPiece) bool {
@@ -75,15 +87,19 @@ func PieceOfEncodedPiece(encodedPiece EncodedPiece) Piece {
 
 	if empty {
 		return Piece{
-			ID:              0,
-			Type:            Pawn,
-			IsWhite:         false,
-			JustDoubleMoved: false,
-			KingKiller:      false,
-			KingPawner:      false,
-			Adopted:         false,
-			MoveCount:       0,
-			CaptureCount:    0,
+			ID:                               0,
+			Type:                             Pawn,
+			IsWhite:                          false,
+			JustDoubleMoved:                  false,
+			KingKiller:                       false,
+			KingPawner:                       false,
+			QueenKiller:                      false,
+			QueenPawner:                      false,
+			AdoptedKiller:                    false,
+			HasCapturedPieceTypeOtherThanOwn: false,
+			Adopted:                          false,
+			MoveCount:                        0,
+			CaptureCount:                     0,
 		}
 	}
 	var p Piece
@@ -93,7 +109,11 @@ func PieceOfEncodedPiece(encodedPiece EncodedPiece) Piece {
 	p.JustDoubleMoved = ((raw & justDoubleMovedMask) >> JustDoubleMovedShift) != 0
 	p.KingKiller = ((raw & kingKillerMask) >> KingKillerShift) != 0
 	p.KingPawner = ((raw & kingPawnerMask) >> KingPawnerShift) != 0
+	p.QueenKiller = ((raw & queenKillerMask) >> QueenKillerShift) != 0
+	p.QueenPawner = ((raw & queenPawnerMask) >> QueenPawnerShift) != 0
+	p.AdoptedKiller = ((raw & adoptedKillerMask) >> AdoptedKillerShift) != 0
 	p.Adopted = ((raw & adoptedMask) >> AdoptedShift) != 0
+	p.HasCapturedPieceTypeOtherThanOwn = ((raw & hasCapturedPieceTypeOtherThanOwnMask) >> HasCapturedPieceTypeOtherThanOwnShift) != 0
 	p.MoveCount = uint16((raw & moveCountMask) >> MoveCountShift)
 	p.CaptureCount = uint16((raw & captureCountMask) >> CaptureCountShift)
 	return p
@@ -107,35 +127,37 @@ func (p *Piece) Encode() EncodedPiece {
 	if p.IsEmpty() {
 		return EmptyEncodedPiece
 	}
-	whiteInt := 0
+	raw := uint64(p.ID) << PieceIdShift
+	raw |= uint64(p.Type) << PieceTypeShift
 	if p.IsWhite {
-		whiteInt = 1
+		raw |= 1 << IsWhiteShift
 	}
-	justDoubleMovedInt := 0
 	if p.JustDoubleMoved {
-		justDoubleMovedInt = 1
+		raw |= 1 << JustDoubleMovedShift
 	}
-	kingKillerInt := 0
 	if p.KingKiller {
-		kingKillerInt = 1
+		raw |= 1 << KingKillerShift
 	}
-	kingPawnerInt := 0
 	if p.KingPawner {
-		kingPawnerInt = 1
+		raw |= 1 << KingPawnerShift
 	}
-	adoptedInt := 0
+	if p.QueenKiller {
+		raw |= 1 << QueenKillerShift
+	}
+	if p.QueenPawner {
+		raw |= 1 << QueenPawnerShift
+	}
+	if p.HasCapturedPieceTypeOtherThanOwn {
+		raw |= 1 << HasCapturedPieceTypeOtherThanOwnShift
+	}
+	if p.AdoptedKiller {
+		raw |= 1 << AdoptedKillerShift
+	}
 	if p.Adopted {
-		adoptedInt = 1
+		raw |= 1 << AdoptedShift
 	}
-	raw := uint64(p.ID)<<PieceIdShift |
-		uint64(p.Type)<<PieceTypeShift |
-		uint64(whiteInt)<<IsWhiteShift |
-		uint64(justDoubleMovedInt)<<JustDoubleMovedShift |
-		uint64(kingKillerInt)<<KingKillerShift |
-		uint64(kingPawnerInt)<<KingPawnerShift |
-		uint64(adoptedInt)<<AdoptedShift |
-		uint64(p.MoveCount)<<MoveCountShift |
-		uint64(p.CaptureCount)<<CaptureCountShift
+	raw |= uint64(p.MoveCount) << MoveCountShift
+	raw |= uint64(p.CaptureCount) << CaptureCountShift
 	return EncodedPiece(raw)
 }
 
@@ -153,14 +175,18 @@ func (p *Piece) IncrementCaptureCount() {
 
 func NewPiece(id uint32, pieceType PieceType, isWhite bool) Piece {
 	return Piece{
-		ID:              id,
-		Type:            pieceType,
-		IsWhite:         isWhite,
-		JustDoubleMoved: false,
-		KingKiller:      false,
-		KingPawner:      false,
-		Adopted:         false,
-		MoveCount:       0,
-		CaptureCount:    0,
+		ID:                               id,
+		Type:                             pieceType,
+		IsWhite:                          isWhite,
+		JustDoubleMoved:                  false,
+		KingKiller:                       false,
+		KingPawner:                       false,
+		QueenKiller:                      false,
+		QueenPawner:                      false,
+		AdoptedKiller:                    false,
+		Adopted:                          false,
+		HasCapturedPieceTypeOtherThanOwn: false,
+		MoveCount:                        0,
+		CaptureCount:                     0,
 	}
 }

@@ -187,16 +187,20 @@ func (s *Server) processMoves() {
 			for i := 0; i < int(moveResult.Length); i++ {
 
 				pieceDataForMove := PieceDataForMove{
-					ID:              moveResult.MovedPieces[i].Piece.ID,
-					X:               moveResult.MovedPieces[i].ToX,
-					Y:               moveResult.MovedPieces[i].ToY,
-					Type:            moveResult.MovedPieces[i].Piece.Type,
-					JustDoubleMoved: moveResult.MovedPieces[i].Piece.JustDoubleMoved,
-					KingKiller:      moveResult.MovedPieces[i].Piece.KingKiller,
-					KingPawner:      moveResult.MovedPieces[i].Piece.KingPawner,
-					IsWhite:         moveResult.MovedPieces[i].Piece.IsWhite,
-					MoveCount:       moveResult.MovedPieces[i].Piece.MoveCount,
-					CaptureCount:    moveResult.MovedPieces[i].Piece.CaptureCount,
+					ID:                               moveResult.MovedPieces[i].Piece.ID,
+					X:                                moveResult.MovedPieces[i].ToX,
+					Y:                                moveResult.MovedPieces[i].ToY,
+					Type:                             moveResult.MovedPieces[i].Piece.Type,
+					JustDoubleMoved:                  moveResult.MovedPieces[i].Piece.JustDoubleMoved,
+					KingKiller:                       moveResult.MovedPieces[i].Piece.KingKiller,
+					KingPawner:                       moveResult.MovedPieces[i].Piece.KingPawner,
+					QueenKiller:                      moveResult.MovedPieces[i].Piece.QueenKiller,
+					QueenPawner:                      moveResult.MovedPieces[i].Piece.QueenPawner,
+					AdoptedKiller:                    moveResult.MovedPieces[i].Piece.AdoptedKiller,
+					IsWhite:                          moveResult.MovedPieces[i].Piece.IsWhite,
+					HasCapturedPieceTypeOtherThanOwn: moveResult.MovedPieces[i].Piece.HasCapturedPieceTypeOtherThanOwn,
+					MoveCount:                        moveResult.MovedPieces[i].Piece.MoveCount,
+					CaptureCount:                     moveResult.MovedPieces[i].Piece.CaptureCount,
 				}
 
 				movedPieces[i] = PieceMove{

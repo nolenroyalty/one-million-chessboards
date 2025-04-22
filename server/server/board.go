@@ -516,22 +516,31 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 			movedPiece.IncrementCaptureCount()
 			if capturedPiece.IsWhite {
 				b.whitePiecesCaptured.Add(1)
-				if capturedPiece.Type == King {
-					b.whiteKingsCaptured.Add(1)
-					movedPiece.KingKiller = true
-					if movedPiece.Type == Pawn {
-						movedPiece.KingPawner = true
-					}
-				}
 			} else {
 				b.blackPiecesCaptured.Add(1)
-				if capturedPiece.Type == King {
-					b.blackKingsCaptured.Add(1)
-					movedPiece.KingKiller = true
-					if movedPiece.Type == Pawn {
-						movedPiece.KingPawner = true
-					}
+			}
+			if capturedPiece.Type == Queen {
+				movedPiece.QueenKiller = true
+				if movedPiece.Type == Pawn {
+					movedPiece.QueenPawner = true
 				}
+			}
+			if capturedPiece.Type == King {
+				if capturedPiece.IsWhite {
+					b.whiteKingsCaptured.Add(1)
+				} else {
+					b.blackKingsCaptured.Add(1)
+				}
+				movedPiece.KingKiller = true
+				if movedPiece.Type == Pawn {
+					movedPiece.KingPawner = true
+				}
+			}
+			if capturedPiece.Adopted {
+				movedPiece.AdoptedKiller = true
+			}
+			if capturedPiece.Type != movedPiece.Type {
+				movedPiece.HasCapturedPieceTypeOtherThanOwn = true
 			}
 		}
 
@@ -639,16 +648,20 @@ func (b *Board) GetBoardSnapshot(pos Position) *StateSnapshot {
 			}
 			piece := PieceOfEncodedPiece(encodedPiece)
 			pieceStates = append(pieceStates, PieceDataForSnapshot{
-				ID:              piece.ID,
-				Type:            piece.Type,
-				IsWhite:         piece.IsWhite,
-				JustDoubleMoved: piece.JustDoubleMoved,
-				KingKiller:      piece.KingKiller,
-				KingPawner:      piece.KingPawner,
-				MoveCount:       piece.MoveCount,
-				CaptureCount:    piece.CaptureCount,
-				Dx:              startingDx + int8(x),
-				Dy:              startingDy + int8(y),
+				ID:                               piece.ID,
+				Type:                             piece.Type,
+				IsWhite:                          piece.IsWhite,
+				JustDoubleMoved:                  piece.JustDoubleMoved,
+				KingKiller:                       piece.KingKiller,
+				KingPawner:                       piece.KingPawner,
+				QueenKiller:                      piece.QueenKiller,
+				QueenPawner:                      piece.QueenPawner,
+				AdoptedKiller:                    piece.AdoptedKiller,
+				MoveCount:                        piece.MoveCount,
+				CaptureCount:                     piece.CaptureCount,
+				HasCapturedPieceTypeOtherThanOwn: piece.HasCapturedPieceTypeOtherThanOwn,
+				Dx:                               startingDx + int8(x),
+				Dy:                               startingDy + int8(y),
 			})
 		}
 	}

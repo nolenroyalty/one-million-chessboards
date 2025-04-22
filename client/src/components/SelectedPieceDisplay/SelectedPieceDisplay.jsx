@@ -10,7 +10,11 @@ import { QUERY } from "../../constants";
 import BoardControlsPanel from "../BoardControlsPanel/BoardControlsPanel";
 import { ArrowDownUp, Axe } from "lucide-react";
 
+// CR nroyalty: bump these values
 const MAX_CAPTURE_MOVE_COUNT = 4000;
+const FAR_FROM_HOME_DISTANCE = 1;
+const PACIFIST_MOVE_COUNT = 1;
+const SELF_HATING_THRESHOLD = 2;
 
 const Middle = styled(BoardControlsPanel)`
   flex-grow: 1;
@@ -68,8 +72,24 @@ const PromotedText = styled(AchievementText)`
   color: var(--color-sky-400);
 `;
 
-const RegicidalText = styled(AchievementText)`
+const RoyaltyKillerText = styled(AchievementText)`
   color: var(--color-violet-400);
+`;
+
+const GoldSlayerText = styled(AchievementText)`
+  color: var(--color-amber-400);
+`;
+
+const FarFromHomeText = styled(AchievementText)`
+  color: var(--color-indigo-400);
+`;
+
+const PacifistText = styled(AchievementText)`
+  color: var(--color-blue-400);
+`;
+
+const SelfHatingText = styled(AchievementText)`
+  color: var(--color-red-400);
 `;
 
 const AchievementsWrapper = styled.div`
@@ -102,6 +122,7 @@ const PieceInfoInner = styled.div`
 const PieceName = styled.p`
   font-size: 1rem;
   line-height: 1;
+  color: var(--color-neutral-300);
 `;
 
 const PieceStats = styled.div`
@@ -220,26 +241,61 @@ function SelectedPieceDisplay() {
     if (TYPE_TO_NAME[selectedPiece.type] !== "promotedPawn") {
       return null;
     }
-    const idNoX = selectedPiece.id % 32000;
+    const idNoX = (selectedPiece.id - 1) % 32000;
     const yRank = Math.floor(idNoX / 32);
     const promotionRank = selectedPiece.isWhite ? yRank + 1 : 1000 - yRank;
     return <PromotedText>Promoted - {promotionRank}</PromotedText>;
   }, [selectedPiece]);
 
-  const regicidal = React.useMemo(() => {
+  const captureAchievement = React.useMemo(() => {
     if (!selectedPiece) {
       return null;
     }
-    if (selectedPiece.kingPawner) {
-      return <RegicidalText>King Pwner</RegicidalText>;
-    }
-    if (selectedPiece.kingKiller) {
-      return <RegicidalText>Regicidal</RegicidalText>;
+    if (selectedPiece.kingPawner && selectedPiece.queenPawner) {
+      return <RoyaltyKillerText>Pawnipotent</RoyaltyKillerText>;
+    } else if (selectedPiece.adoptedKiller) {
+      return <GoldSlayerText>Goldslayer</GoldSlayerText>;
+    } else if (selectedPiece.kingPawner) {
+      return <RoyaltyKillerText>King Pwner</RoyaltyKillerText>;
+    } else if (selectedPiece.queenPawner) {
+      return <RoyaltyKillerText>Queen Pwner</RoyaltyKillerText>;
+    } else if (selectedPiece.kingKiller && selectedPiece.queenKiller) {
+      return <RoyaltyKillerText>Regicidal</RoyaltyKillerText>;
+    } else if (selectedPiece.kingKiller) {
+      return <RoyaltyKillerText>Usurper</RoyaltyKillerText>;
+    } else if (selectedPiece.queenKiller) {
+      return <RoyaltyKillerText>Treasonous</RoyaltyKillerText>;
+    } else if (
+      selectedPiece.moveCount >= PACIFIST_MOVE_COUNT &&
+      selectedPiece.captureCount === 0
+    ) {
+      return <PacifistText>Pacifist</PacifistText>;
+    } else if (
+      selectedPiece.captureCount >= SELF_HATING_THRESHOLD &&
+      !selectedPiece.hasCapturedPieceTypeOtherThanOwn
+    ) {
+      return <SelfHatingText>Self-Hating</SelfHatingText>;
     }
     return null;
   }, [selectedPiece]);
 
-  // CR nroyalty: add "far from home?"
+  const farFromHome = React.useMemo(() => {
+    if (!selectedPiece) {
+      return null;
+    }
+    const noX = (selectedPiece.id - 1) % 32000;
+    const xStart = Math.floor((selectedPiece.id - 1) / 32000);
+    const yStart = Math.floor(noX / 32);
+    const xCurrent = Math.floor(selectedPiece.x / 8);
+    const yCurrent = Math.floor(selectedPiece.y / 8);
+    const xDistance = Math.abs(xCurrent - xStart);
+    const yDistance = Math.abs(yCurrent - yStart);
+    const totalDistance = xDistance + yDistance;
+    if (totalDistance >= FAR_FROM_HOME_DISTANCE) {
+      return <FarFromHomeText>Far from Home</FarFromHomeText>;
+    }
+    return null;
+  }, [selectedPiece]);
 
   return (
     <Middle>
@@ -262,7 +318,8 @@ function SelectedPieceDisplay() {
               <PieceId>{pieceId}</PieceId>
               <AchievementsWrapper>
                 {promoted}
-                {regicidal}
+                {captureAchievement}
+                {farFromHome}
               </AchievementsWrapper>
             </PieceInfoInner>
             <PieceStats>
