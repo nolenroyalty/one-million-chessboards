@@ -73,7 +73,6 @@ function PanzoomBox() {
         dx -= dStep * xMult;
         lastPanzoom.current.accX -= baseStep * xMult;
         lastPanzoom.current.firstXMove = false;
-        console.log(`baseStep: ${baseStep}`);
       }
       while (lastPanzoom.current.accX < -baseStep * xMult) {
         dx += dStep * xMult;

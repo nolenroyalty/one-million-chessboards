@@ -12,8 +12,8 @@ const (
 	VIEW_DIAMETER     = VIEW_RADIUS*2 + 1
 	// this lets them move up to 24 squares while maintaining snapshot validity
 	RESPECT_COLOR_REQUIREMENT = true
-	MOVE_BUFFER_SIZE          = 200
-	CAPTURE_BUFFER_SIZE       = 100
+	MOVE_BUFFER_SIZE          = 400
+	CAPTURE_BUFFER_SIZE       = 400
 	MINIMAP_REFRESH_INTERVAL  = time.Second * 10
 	STATS_REFRESH_INTERVAL    = time.Second * 1
 	CAPTURE_REFRESH_INTERVAL  = time.Second * 1

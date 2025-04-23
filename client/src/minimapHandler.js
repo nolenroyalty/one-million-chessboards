@@ -19,7 +19,6 @@ class MinimapHandler {
         return res.json();
       })
       .then((data) => {
-        console.log("refreshed minimap data");
         this.setState({
           initialized: true,
           aggregations: data.aggregations,

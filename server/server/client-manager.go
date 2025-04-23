@@ -1,5 +1,8 @@
 package server
 
+// CR nroyalty: think HARD about how to choose ZONE_COUNT vs our snapshot size
+// to make sure that clients see all relevant moves but no more than that.
+
 import (
 	"log"
 	"sync"

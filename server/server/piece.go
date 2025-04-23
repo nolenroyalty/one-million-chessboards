@@ -1,15 +1,15 @@
 package server
 
-type PieceType int
+import "one-million-chessboards/protocol"
 
 const (
-	Pawn PieceType = iota
-	Knight
-	Bishop
-	Rook
-	Queen
-	King
-	PromotedPawn
+	Pawn         = protocol.PieceType_PIECE_TYPE_PAWN
+	Knight       = protocol.PieceType_PIECE_TYPE_KNIGHT
+	Bishop       = protocol.PieceType_PIECE_TYPE_BISHOP
+	Rook         = protocol.PieceType_PIECE_TYPE_ROOK
+	Queen        = protocol.PieceType_PIECE_TYPE_QUEEN
+	King         = protocol.PieceType_PIECE_TYPE_KING
+	PromotedPawn = protocol.PieceType_PIECE_TYPE_PROMOTED_PAWN
 )
 
 const (
@@ -19,7 +19,7 @@ const (
 
 type Piece struct {
 	ID                               uint32
-	Type                             PieceType
+	Type                             protocol.PieceType
 	IsWhite                          bool
 	JustDoubleMoved                  bool
 	KingKiller                       bool
@@ -104,7 +104,7 @@ func PieceOfEncodedPiece(encodedPiece EncodedPiece) Piece {
 	}
 	var p Piece
 	p.ID = uint32((raw & idMask) >> PieceIdShift)
-	p.Type = PieceType((raw & typeMask) >> PieceTypeShift)
+	p.Type = protocol.PieceType((raw & typeMask) >> PieceTypeShift)
 	p.IsWhite = ((raw & isWhiteMask) >> IsWhiteShift) != 0
 	p.JustDoubleMoved = ((raw & justDoubleMovedMask) >> JustDoubleMovedShift) != 0
 	p.KingKiller = ((raw & kingKillerMask) >> KingKillerShift) != 0
@@ -173,7 +173,7 @@ func (p *Piece) IncrementCaptureCount() {
 	}
 }
 
-func NewPiece(id uint32, pieceType PieceType, isWhite bool) Piece {
+func NewPiece(id uint32, pieceType protocol.PieceType, isWhite bool) Piece {
 	return Piece{
 		ID:                               id,
 		Type:                             pieceType,
@@ -188,5 +188,23 @@ func NewPiece(id uint32, pieceType PieceType, isWhite bool) Piece {
 		HasCapturedPieceTypeOtherThanOwn: false,
 		MoveCount:                        0,
 		CaptureCount:                     0,
+	}
+}
+
+func (p *Piece) ToProtocol() *protocol.PieceDataShared {
+	return &protocol.PieceDataShared{
+		Id:                               p.ID,
+		Type:                             p.Type,
+		IsWhite:                          p.IsWhite,
+		JustDoubleMoved:                  p.JustDoubleMoved,
+		KingKiller:                       p.KingKiller,
+		KingPawner:                       p.KingPawner,
+		QueenKiller:                      p.QueenKiller,
+		QueenPawner:                      p.QueenPawner,
+		AdoptedKiller:                    p.AdoptedKiller,
+		Adopted:                          p.Adopted,
+		MoveCount:                        uint32(p.MoveCount),
+		CaptureCount:                     uint32(p.CaptureCount),
+		HasCapturedPieceTypeOtherThanOwn: p.HasCapturedPieceTypeOtherThanOwn,
 	}
 }

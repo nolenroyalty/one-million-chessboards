@@ -382,7 +382,7 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 
 		return MoveResult{Valid: true, MovedPieces: movedPieces, Length: 2, Seqnum: seqNum}
 
-	case protocol.MoveType_MOVE_TYPE_ENPASSANT:
+	case protocol.MoveType_MOVE_TYPE_EN_PASSANT:
 		// Must be a pawn
 		if movedPiece.Type != Pawn {
 			return MoveResult{Valid: false}
@@ -603,7 +603,7 @@ func (b *Board) GetStats() GameStats {
 // CR nroyalty: we could pass in a function that returns the current position
 // and use that to figure out the client's position at lock-aquisition time,
 // not lock-request time. Not a huge deal in practice probably.
-func (b *Board) GetBoardSnapshot(pos Position) *StateSnapshot {
+func (b *Board) GetBoardSnapshot(pos Position) *protocol.ServerStateSnapshot {
 	minX := uint16(0)
 	minY := uint16(0)
 	maxX := uint16(BOARD_SIZE - 1)
@@ -638,7 +638,7 @@ func (b *Board) GetBoardSnapshot(pos Position) *StateSnapshot {
 	b.RUnlock()
 
 	// estimate that the slice is half-full?
-	pieceStates := make([]PieceDataForSnapshot, 0, (width*height)/2)
+	pieceStates := make([]*protocol.PieceDataForSnapshot, 0, (width*height)/2)
 	startingDx := int8(int16(minX) - int16(pos.X))
 	startingDy := int8(int16(minY) - int16(pos.Y))
 	for y := uint16(0); y < height; y++ {
@@ -649,21 +649,10 @@ func (b *Board) GetBoardSnapshot(pos Position) *StateSnapshot {
 				continue
 			}
 			piece := PieceOfEncodedPiece(encodedPiece)
-			pieceStates = append(pieceStates, PieceDataForSnapshot{
-				ID:                               piece.ID,
-				Type:                             piece.Type,
-				IsWhite:                          piece.IsWhite,
-				JustDoubleMoved:                  piece.JustDoubleMoved,
-				KingKiller:                       piece.KingKiller,
-				KingPawner:                       piece.KingPawner,
-				QueenKiller:                      piece.QueenKiller,
-				QueenPawner:                      piece.QueenPawner,
-				AdoptedKiller:                    piece.AdoptedKiller,
-				MoveCount:                        piece.MoveCount,
-				CaptureCount:                     piece.CaptureCount,
-				HasCapturedPieceTypeOtherThanOwn: piece.HasCapturedPieceTypeOtherThanOwn,
-				Dx:                               startingDx + int8(x),
-				Dy:                               startingDy + int8(y),
+			pieceStates = append(pieceStates, &protocol.PieceDataForSnapshot{
+				Dx:    int32(startingDx + int8(x)),
+				Dy:    int32(startingDy + int8(y)),
+				Piece: piece.ToProtocol(),
 			})
 		}
 	}
@@ -671,12 +660,11 @@ func (b *Board) GetBoardSnapshot(pos Position) *StateSnapshot {
 	b.rawRowsPool.Put(piecesPtr)
 
 	// CR nroyalty: maybe we want a pool for this too?
-	snapshot := &StateSnapshot{
-		Type:   "stateSnapshot",
+	snapshot := &protocol.ServerStateSnapshot{
 		Pieces: pieceStates,
 		Seqnum: seqnum,
-		XCoord: pos.X,
-		YCoord: pos.Y,
+		XCoord: uint32(pos.X),
+		YCoord: uint32(pos.Y),
 	}
 
 	return snapshot
@@ -705,14 +693,14 @@ func (b *Board) setupPiecesForColor(boardX, boardY uint16, isWhite bool) {
 		b.pieces[pawnRow][baseX+x] = uint64(piece.Encode())
 	}
 
-	pieceTypes := []PieceType{Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook}
+	pieceTypes := []protocol.PieceType{Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook}
 	for x := uint16(0); x < 8; x++ {
 		piece := b.createPiece(pieceTypes[x], isWhite)
 		b.pieces[pieceRow][baseX+x] = uint64(piece.Encode())
 	}
 }
 
-func (b *Board) createPiece(pieceType PieceType, isWhite bool) Piece {
+func (b *Board) createPiece(pieceType protocol.PieceType, isWhite bool) Piece {
 	piece := NewPiece(b.nextID, pieceType, isWhite)
 	b.nextID++
 	return piece
@@ -748,12 +736,4 @@ func (b *Board) InitializeRandom() {
 type Position struct {
 	X uint16 `json:"x"`
 	Y uint16 `json:"y"`
-}
-
-type StateSnapshot struct {
-	Type   string                 `json:"type"`
-	Pieces []PieceDataForSnapshot `json:"pieces"`
-	Seqnum uint64                 `json:"seqnum"`
-	XCoord uint16                 `json:"xCoord"`
-	YCoord uint16                 `json:"yCoord"`
 }

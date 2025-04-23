@@ -29,16 +29,14 @@ var zstdPool = sync.Pool{
 	},
 }
 
-// CR nroyalty: send seqnum with global stats and then updating global stats is
-// pretty easy.
-// CR nroyalty: standardize on a function for sending a message to the client or unsubbing
+var marshalOpt = proto.MarshalOptions{Deterministic: false}
 
 const (
 	// CR nroyalty: MAKE SURE THIS IS NOT BELOW 60 AND MAYBE MAKE IT HIGHER
 	PeriodicUpdateInterval = time.Second * 60
 	activityThreshold      = time.Second * 20
 	// CR nroyalty: remove before release
-	simulatedLatency          = 5 * time.Second
+	simulatedLatency          = 3 * time.Second
 	simulatedJitterMs         = 1
 	maxWaitBeforeSendingMoves = 200 * time.Millisecond
 )
@@ -63,13 +61,15 @@ type Client struct {
 	send_DO_NOT_DO_RAW_WRITES_OR_YOU_WILL_BE_FIRED chan []byte
 	position                                       atomic.Value
 	lastSnapshotPosition                           atomic.Value
-	moveBuffer                                     []PieceMove
-	captureBuffer                                  []PieceCapture
+	moveBuffer                                     []*protocol.PieceDataForMove
+	captureBuffer                                  []*protocol.PieceCapture
 	bufferMu                                       sync.Mutex
 	done                                           chan struct{}
 	isClosed                                       atomic.Bool
 	lastActionTime                                 atomic.Int64
 	playingWhite                                   atomic.Bool
+	moveScratchBuffer                              []byte
+	moveScratchMu                                  sync.Mutex
 }
 
 // CR nroyalty: think HARD about your send channel and how big it should be.
@@ -81,8 +81,8 @@ func NewClient(conn *websocket.Conn, server *Server) *Client {
 		server: server,
 		send_DO_NOT_DO_RAW_WRITES_OR_YOU_WILL_BE_FIRED: make(chan []byte, 2048),
 		position:       atomic.Value{},
-		moveBuffer:     make([]PieceMove, 0, MOVE_BUFFER_SIZE),
-		captureBuffer:  make([]PieceCapture, 0, CAPTURE_BUFFER_SIZE),
+		moveBuffer:     make([]*protocol.PieceDataForMove, 0, MOVE_BUFFER_SIZE),
+		captureBuffer:  make([]*protocol.PieceCapture, 0, CAPTURE_BUFFER_SIZE),
 		done:           make(chan struct{}),
 		isClosed:       atomic.Bool{},
 		bufferMu:       sync.Mutex{},
@@ -109,7 +109,7 @@ func (c *Client) Run(playingWhite bool, pos Position) {
 
 const minCompressBytes = 64
 
-func (c *Client) compresAndSend(raw []byte, onDrop string) {
+func (c *Client) compressAndSend(raw []byte, onDrop string) {
 	var payload []byte
 	if len(raw) < minCompressBytes {
 		payload = raw
@@ -129,29 +129,25 @@ func (c *Client) compresAndSend(raw []byte, onDrop string) {
 	}
 }
 
-type InitialInfo struct {
-	Type         string         `json:"type"`
-	Position     Position       `json:"position"`
-	PlayingWhite bool           `json:"playingWhite"`
-	Snapshot     *StateSnapshot `json:"snapshot"`
-}
-
 func (c *Client) sendInitialState() {
 	currentPosition := c.position.Load().(Position)
 	snapshot := c.server.board.GetBoardSnapshot(currentPosition)
 
-	initialInfo := InitialInfo{
-		Type:         "initialState",
-		Position:     currentPosition,
-		PlayingWhite: c.playingWhite.Load(),
-		Snapshot:     snapshot,
+	m := &protocol.ServerMessage{
+		Payload: &protocol.ServerMessage_InitialState{
+			InitialState: &protocol.ServerInitialState{
+				Position:     &protocol.Position{X: uint32(currentPosition.X), Y: uint32(currentPosition.Y)},
+				PlayingWhite: c.playingWhite.Load(),
+				Snapshot:     snapshot,
+			},
+		},
 	}
-	data, err := json.Marshal(&initialInfo)
+	message, err := proto.Marshal(m)
 	if err != nil {
-		log.Printf("Error marshaling initial info: %v", err)
+		log.Printf("Error marshalling initial state: %v", err)
 		return
 	}
-	c.compresAndSend(data, "sendInitialState")
+	c.compressAndSend(message, "sendInitialState")
 }
 
 func (c *Client) IsActive() bool {
@@ -207,16 +203,6 @@ func (c *Client) ReadPump() {
 			log.Printf("Error unmarshalling message: %v", err)
 			continue
 		}
-		// if err != nil {
-		// 	// log.Printf("Error reading message: %v", err)
-		// 	// if websocket.IsUnexpectedCloseError(err) {
-		// 	// 	now := time.Now().UnixNano()
-		// 	// 	log.Printf("client disconnected: %v, %d", err, now)
-		// 	// }
-		// 	break
-		// }
-
-		// c.handleMessage(msg)
 		c.handleProtoMessage(&msg)
 	}
 }
@@ -249,7 +235,7 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 
 		if moveType != protocol.MoveType_MOVE_TYPE_NORMAL &&
 			moveType != protocol.MoveType_MOVE_TYPE_CASTLE &&
-			moveType != protocol.MoveType_MOVE_TYPE_ENPASSANT {
+			moveType != protocol.MoveType_MOVE_TYPE_EN_PASSANT {
 			log.Printf("Invalid move type: %v", moveType)
 			return
 		}
@@ -280,111 +266,21 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 		c.BumpActive()
 		c.UpdatePositionAndMaybeSnapshot(Position{X: uint16(centerX), Y: uint16(centerY)})
 	case *protocol.ClientMessage_Ping:
-		type AppPong struct {
-			Type string `json:"type"`
+		m := &protocol.ServerMessage{
+			Payload: &protocol.ServerMessage_Pong{
+				Pong: &protocol.ServerPong{},
+			},
 		}
-		appPong := AppPong{
-			Type: "app-pong",
-		}
-		data, err := json.Marshal(appPong)
+		message, err := proto.Marshal(m)
 		if err != nil {
-			log.Printf("Error marshaling app pong: %v", err)
+			log.Printf("Error marshalling app pong: %v", err)
 			return
 		}
-		c.compresAndSend(data, "app-ping")
+		c.compressAndSend(message, "app-ping")
 	default:
 		log.Printf("Unknown message type: %v", p)
 	}
 }
-
-// func (c *Client) handleMessage(message []byte) {
-// 	var msg map[string]interface{}
-// 	if err := json.Unmarshal(message, &msg); err != nil {
-// 		return
-// 	}
-
-// 	msgType, ok := msg["type"].(string)
-// 	if !ok {
-// 		return
-// 	}
-
-// 	switch msgType {
-// 	case "move":
-// 		// CR nroyalty: validate that the move is somewhere that the player
-// 		// is currently looking at
-// 		pieceID, _ := msg["pieceId"].(float64)
-// 		fromX, _ := msg["fromX"].(float64)
-// 		fromY, _ := msg["fromY"].(float64)
-// 		toX, _ := msg["toX"].(float64)
-// 		toY, _ := msg["toY"].(float64)
-// 		moveType, _ := msg["moveType"].(float64)
-// 		moveTypeEnum := MoveType(int(moveType))
-// 		moveToken, _ := msg["moveToken"].(float64)
-
-// 		// Basic bounds checking
-// 		if !CoordInBounds(fromX) || !CoordInBounds(fromY) ||
-// 			!CoordInBounds(toX) || !CoordInBounds(toY) {
-// 			return
-// 		}
-// 		c.BumpActive()
-
-// 		move := Move{
-// 			PieceID:              uint32(pieceID),
-// 			FromX:                uint16(fromX),
-// 			FromY:                uint16(fromY),
-// 			ToX:                  uint16(toX),
-// 			ToY:                  uint16(toY),
-// 			MoveType:             moveTypeEnum,
-// 			MoveToken:            uint32(moveToken),
-// 			ClientIsPlayingWhite: c.playingWhite.Load(),
-// 		}
-
-// 		// CR nroyalty: maybe we don't want to block here? We could just
-// 		// reject the move
-// 		c.server.moveRequests <- MoveRequest{
-// 			Move:   move,
-// 			Client: c,
-// 		}
-
-// 	case "subscribe":
-// 		centerX, ok := msg["centerX"].(float64)
-// 		if !ok {
-// 			return
-// 		}
-// 		centerY, ok := msg["centerY"].(float64)
-// 		if !ok {
-// 			return
-// 		}
-
-// 		// Basic bounds checking
-// 		if !CoordInBounds(centerX) || !CoordInBounds(centerY) {
-// 			return
-// 		}
-// 		centerXInt := uint16(centerX)
-// 		centerYInt := uint16(centerY)
-
-// 		if centerXInt == c.position.Load().(Position).X && centerYInt == c.position.Load().(Position).Y {
-// 			return
-// 		}
-
-// 		c.BumpActive()
-// 		c.UpdatePositionAndMaybeSnapshot(Position{X: centerXInt, Y: centerYInt})
-
-// 	case "app-ping":
-// 		type AppPong struct {
-// 			Type string `json:"type"`
-// 		}
-// 		appPong := AppPong{
-// 			Type: "app-pong",
-// 		}
-// 		data, err := json.Marshal(appPong)
-// 		if err != nil {
-// 			log.Printf("Error marshaling app pong: %v", err)
-// 			return
-// 		}
-// 		c.compresAndSend(data, "app-ping")
-// 	}
-// }
 
 func (c *Client) WritePump() {
 	defer func() {
@@ -446,7 +342,7 @@ func (c *Client) ProcessMoveUpdates() {
 	}
 }
 
-func (c *Client) AddMovesToBuffer(moves []PieceMove, capture *PieceCapture) {
+func (c *Client) AddMovesToBuffer(moves []*protocol.PieceDataForMove, capture *protocol.PieceCapture) {
 	if c.isClosed.Load() {
 		return
 	}
@@ -455,7 +351,7 @@ func (c *Client) AddMovesToBuffer(moves []PieceMove, capture *PieceCapture) {
 
 	c.moveBuffer = append(c.moveBuffer, moves...)
 	if capture != nil {
-		c.captureBuffer = append(c.captureBuffer, *capture)
+		c.captureBuffer = append(c.captureBuffer, capture)
 	}
 
 	// Send immediately if buffer gets large
@@ -467,13 +363,18 @@ func (c *Client) AddMovesToBuffer(moves []PieceMove, capture *PieceCapture) {
 func (c *Client) SendStateSnapshot() {
 	pos := c.position.Load().(Position)
 	snapshot := c.server.board.GetBoardSnapshot(pos)
-	data, err := json.Marshal(snapshot)
+	m := &protocol.ServerMessage{
+		Payload: &protocol.ServerMessage_Snapshot{
+			Snapshot: snapshot,
+		},
+	}
+	message, err := proto.Marshal(m)
 	if err != nil {
-		log.Printf("Error marshaling snapshot: %v", err)
+		log.Printf("Error marshalling snapshot: %v", err)
 		return
 	}
 	c.lastSnapshotPosition.Store(pos)
-	c.compresAndSend(data, "SendStateSnapshot")
+	c.compressAndSend(message, "SendStateSnapshot")
 }
 
 func (c *Client) MaybeSendMoveUpdates() {
@@ -486,81 +387,74 @@ func (c *Client) MaybeSendMoveUpdates() {
 	// a pain in the ass because we need to wait until they're
 	// actually sent to the client before we can return them
 	// which means managing state inside our send goroutine
-	moves := make([]PieceMove, len(c.moveBuffer))
-	captures := make([]PieceCapture, len(c.captureBuffer))
+	moves := make([]*protocol.PieceDataForMove, len(c.moveBuffer))
+	captures := make([]*protocol.PieceCapture, len(c.captureBuffer))
 	copy(moves, c.moveBuffer)
 	copy(captures, c.captureBuffer)
 	c.moveBuffer = c.moveBuffer[:0]
 	c.captureBuffer = c.captureBuffer[:0]
 	c.bufferMu.Unlock()
 
-	type MoveUpdateMessage struct {
-		Type     string         `json:"type"`
-		Moves    []PieceMove    `json:"moves"`
-		Captures []PieceCapture `json:"captures"`
+	m := &protocol.ServerMessage{
+		Payload: &protocol.ServerMessage_MovesAndCaptures{
+			MovesAndCaptures: &protocol.ServerMovesAndCaptures{
+				Moves:    moves,
+				Captures: captures,
+			},
+		},
 	}
-
-	message := MoveUpdateMessage{
-		Type:     "moveUpdates",
-		Moves:    moves,
-		Captures: captures,
-	}
-
-	data, err := json.Marshal(&message)
+	c.moveScratchMu.Lock()
+	defer c.moveScratchMu.Unlock()
+	buf := c.moveScratchBuffer[:0]
+	buf, err := marshalOpt.MarshalAppend(buf, m)
 	if err != nil {
-		log.Printf("Error marshaling move updates: %v", err)
+		log.Printf("Error marshalling move updates: %v", err)
 		return
 	}
 
-	c.compresAndSend(data, "SendMoveUpdates")
+	c.compressAndSend(buf, "SendMoveUpdates")
 }
 
 func (c *Client) SendInvalidMove(moveToken uint32) {
-	message := struct {
-		Type      string `json:"type"`
-		MoveToken uint32 `json:"moveToken"`
-	}{
-		Type:      "invalidMove",
-		MoveToken: moveToken,
+	m := &protocol.ServerMessage{
+		Payload: &protocol.ServerMessage_InvalidMove{
+			InvalidMove: &protocol.ServerInvalidMove{
+				MoveToken: moveToken,
+			},
+		},
 	}
-
-	data, err := json.Marshal(message)
+	message, err := proto.Marshal(m)
 	if err != nil {
-		log.Printf("Error marshaling invalid move: %v", err)
+		log.Printf("Error marshalling invalid move: %v", err)
 		return
 	}
 
-	c.compresAndSend(data, "SendInvalidMove")
+	c.compressAndSend(message, "SendInvalidMove")
 }
 
 func (c *Client) SendValidMove(moveToken uint32, asOfSeqnum uint64, capturedPieceId uint32) {
-	message := struct {
-		Type            string `json:"type"`
-		MoveToken       uint32 `json:"moveToken"`
-		AsOfSeqnum      uint64 `json:"asOfSeqnum"`
-		CapturedPieceID uint32 `json:"capturedPieceId"`
-	}{
-		Type:            "validMove",
-		MoveToken:       moveToken,
-		AsOfSeqnum:      asOfSeqnum,
-		CapturedPieceID: capturedPieceId,
+	m := &protocol.ServerMessage{
+		Payload: &protocol.ServerMessage_ValidMove{
+			ValidMove: &protocol.ServerValidMove{
+				MoveToken:       moveToken,
+				AsOfSeqnum:      asOfSeqnum,
+				CapturedPieceId: capturedPieceId,
+			},
+		},
 	}
-
-	data, err := json.Marshal(message)
+	message, err := proto.Marshal(m)
 	if err != nil {
-		log.Printf("Error marshaling validated move: %v", err)
+		log.Printf("Error marshalling invalid move: %v", err)
 		return
 	}
 
-	c.compresAndSend(data, "SendValidMove")
+	c.compressAndSend(message, "SendValidMove")
 }
 
 func (c *Client) Close(why string) {
 	if !c.isClosed.CompareAndSwap(false, true) {
 		return
 	}
-	// log.Printf("Closing client: %s", why)
-
 	close(c.done)
 	c.server.clientManager.UnregisterClient(c)
 	c.conn.Close()

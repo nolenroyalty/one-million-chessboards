@@ -24,9 +24,9 @@ const (
 type MoveType int32
 
 const (
-	MoveType_MOVE_TYPE_NORMAL    MoveType = 0
-	MoveType_MOVE_TYPE_CASTLE    MoveType = 1
-	MoveType_MOVE_TYPE_ENPASSANT MoveType = 2
+	MoveType_MOVE_TYPE_NORMAL     MoveType = 0
+	MoveType_MOVE_TYPE_CASTLE     MoveType = 1
+	MoveType_MOVE_TYPE_EN_PASSANT MoveType = 2
 )
 
 // Enum value maps for MoveType.
@@ -34,12 +34,12 @@ var (
 	MoveType_name = map[int32]string{
 		0: "MOVE_TYPE_NORMAL",
 		1: "MOVE_TYPE_CASTLE",
-		2: "MOVE_TYPE_ENPASSANT",
+		2: "MOVE_TYPE_EN_PASSANT",
 	}
 	MoveType_value = map[string]int32{
-		"MOVE_TYPE_NORMAL":    0,
-		"MOVE_TYPE_CASTLE":    1,
-		"MOVE_TYPE_ENPASSANT": 2,
+		"MOVE_TYPE_NORMAL":     0,
+		"MOVE_TYPE_CASTLE":     1,
+		"MOVE_TYPE_EN_PASSANT": 2,
 	}
 )
 
@@ -68,6 +68,67 @@ func (x MoveType) Number() protoreflect.EnumNumber {
 // Deprecated: Use MoveType.Descriptor instead.
 func (MoveType) EnumDescriptor() ([]byte, []int) {
 	return file_chess_proto_rawDescGZIP(), []int{0}
+}
+
+type PieceType int32
+
+const (
+	PieceType_PIECE_TYPE_PAWN          PieceType = 0
+	PieceType_PIECE_TYPE_KNIGHT        PieceType = 1
+	PieceType_PIECE_TYPE_BISHOP        PieceType = 2
+	PieceType_PIECE_TYPE_ROOK          PieceType = 3
+	PieceType_PIECE_TYPE_QUEEN         PieceType = 4
+	PieceType_PIECE_TYPE_KING          PieceType = 5
+	PieceType_PIECE_TYPE_PROMOTED_PAWN PieceType = 6
+)
+
+// Enum value maps for PieceType.
+var (
+	PieceType_name = map[int32]string{
+		0: "PIECE_TYPE_PAWN",
+		1: "PIECE_TYPE_KNIGHT",
+		2: "PIECE_TYPE_BISHOP",
+		3: "PIECE_TYPE_ROOK",
+		4: "PIECE_TYPE_QUEEN",
+		5: "PIECE_TYPE_KING",
+		6: "PIECE_TYPE_PROMOTED_PAWN",
+	}
+	PieceType_value = map[string]int32{
+		"PIECE_TYPE_PAWN":          0,
+		"PIECE_TYPE_KNIGHT":        1,
+		"PIECE_TYPE_BISHOP":        2,
+		"PIECE_TYPE_ROOK":          3,
+		"PIECE_TYPE_QUEEN":         4,
+		"PIECE_TYPE_KING":          5,
+		"PIECE_TYPE_PROMOTED_PAWN": 6,
+	}
+)
+
+func (x PieceType) Enum() *PieceType {
+	p := new(PieceType)
+	*p = x
+	return p
+}
+
+func (x PieceType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (PieceType) Descriptor() protoreflect.EnumDescriptor {
+	return file_chess_proto_enumTypes[1].Descriptor()
+}
+
+func (PieceType) Type() protoreflect.EnumType {
+	return &file_chess_proto_enumTypes[1]
+}
+
+func (x PieceType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use PieceType.Descriptor instead.
+func (PieceType) EnumDescriptor() ([]byte, []int) {
+	return file_chess_proto_rawDescGZIP(), []int{1}
 }
 
 type ClientPing struct {
@@ -348,6 +409,859 @@ func (*ClientMessage_Subscribe) isClientMessage_Payload() {}
 
 func (*ClientMessage_Move) isClientMessage_Payload() {}
 
+type ServerValidMove struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	AsOfSeqnum      uint64                 `protobuf:"varint,1,opt,name=asOfSeqnum,proto3" json:"asOfSeqnum,omitempty"`
+	MoveToken       uint32                 `protobuf:"varint,2,opt,name=moveToken,proto3" json:"moveToken,omitempty"`
+	CapturedPieceId uint32                 `protobuf:"varint,3,opt,name=capturedPieceId,proto3" json:"capturedPieceId,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ServerValidMove) Reset() {
+	*x = ServerValidMove{}
+	mi := &file_chess_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ServerValidMove) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServerValidMove) ProtoMessage() {}
+
+func (x *ServerValidMove) ProtoReflect() protoreflect.Message {
+	mi := &file_chess_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServerValidMove.ProtoReflect.Descriptor instead.
+func (*ServerValidMove) Descriptor() ([]byte, []int) {
+	return file_chess_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ServerValidMove) GetAsOfSeqnum() uint64 {
+	if x != nil {
+		return x.AsOfSeqnum
+	}
+	return 0
+}
+
+func (x *ServerValidMove) GetMoveToken() uint32 {
+	if x != nil {
+		return x.MoveToken
+	}
+	return 0
+}
+
+func (x *ServerValidMove) GetCapturedPieceId() uint32 {
+	if x != nil {
+		return x.CapturedPieceId
+	}
+	return 0
+}
+
+type ServerInvalidMove struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MoveToken     uint32                 `protobuf:"varint,1,opt,name=moveToken,proto3" json:"moveToken,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ServerInvalidMove) Reset() {
+	*x = ServerInvalidMove{}
+	mi := &file_chess_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ServerInvalidMove) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServerInvalidMove) ProtoMessage() {}
+
+func (x *ServerInvalidMove) ProtoReflect() protoreflect.Message {
+	mi := &file_chess_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServerInvalidMove.ProtoReflect.Descriptor instead.
+func (*ServerInvalidMove) Descriptor() ([]byte, []int) {
+	return file_chess_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ServerInvalidMove) GetMoveToken() uint32 {
+	if x != nil {
+		return x.MoveToken
+	}
+	return 0
+}
+
+type ServerPong struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ServerPong) Reset() {
+	*x = ServerPong{}
+	mi := &file_chess_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ServerPong) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServerPong) ProtoMessage() {}
+
+func (x *ServerPong) ProtoReflect() protoreflect.Message {
+	mi := &file_chess_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServerPong.ProtoReflect.Descriptor instead.
+func (*ServerPong) Descriptor() ([]byte, []int) {
+	return file_chess_proto_rawDescGZIP(), []int{6}
+}
+
+type PieceCapture struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	CapturedPieceId uint32                 `protobuf:"varint,1,opt,name=capturedPieceId,proto3" json:"capturedPieceId,omitempty"`
+	Seqnum          uint64                 `protobuf:"varint,2,opt,name=seqnum,proto3" json:"seqnum,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *PieceCapture) Reset() {
+	*x = PieceCapture{}
+	mi := &file_chess_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PieceCapture) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PieceCapture) ProtoMessage() {}
+
+func (x *PieceCapture) ProtoReflect() protoreflect.Message {
+	mi := &file_chess_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PieceCapture.ProtoReflect.Descriptor instead.
+func (*PieceCapture) Descriptor() ([]byte, []int) {
+	return file_chess_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *PieceCapture) GetCapturedPieceId() uint32 {
+	if x != nil {
+		return x.CapturedPieceId
+	}
+	return 0
+}
+
+func (x *PieceCapture) GetSeqnum() uint64 {
+	if x != nil {
+		return x.Seqnum
+	}
+	return 0
+}
+
+type PieceDataShared struct {
+	state                            protoimpl.MessageState `protogen:"open.v1"`
+	Id                               uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Type                             PieceType              `protobuf:"varint,2,opt,name=type,proto3,enum=chess.PieceType" json:"type,omitempty"`
+	IsWhite                          bool                   `protobuf:"varint,3,opt,name=isWhite,proto3" json:"isWhite,omitempty"`
+	JustDoubleMoved                  bool                   `protobuf:"varint,4,opt,name=justDoubleMoved,proto3" json:"justDoubleMoved,omitempty"`
+	KingKiller                       bool                   `protobuf:"varint,5,opt,name=kingKiller,proto3" json:"kingKiller,omitempty"`
+	KingPawner                       bool                   `protobuf:"varint,6,opt,name=kingPawner,proto3" json:"kingPawner,omitempty"`
+	QueenKiller                      bool                   `protobuf:"varint,7,opt,name=queenKiller,proto3" json:"queenKiller,omitempty"`
+	QueenPawner                      bool                   `protobuf:"varint,8,opt,name=queenPawner,proto3" json:"queenPawner,omitempty"`
+	AdoptedKiller                    bool                   `protobuf:"varint,9,opt,name=adoptedKiller,proto3" json:"adoptedKiller,omitempty"`
+	Adopted                          bool                   `protobuf:"varint,10,opt,name=adopted,proto3" json:"adopted,omitempty"`
+	HasCapturedPieceTypeOtherThanOwn bool                   `protobuf:"varint,11,opt,name=hasCapturedPieceTypeOtherThanOwn,proto3" json:"hasCapturedPieceTypeOtherThanOwn,omitempty"`
+	MoveCount                        uint32                 `protobuf:"varint,12,opt,name=moveCount,proto3" json:"moveCount,omitempty"`
+	CaptureCount                     uint32                 `protobuf:"varint,13,opt,name=captureCount,proto3" json:"captureCount,omitempty"`
+	unknownFields                    protoimpl.UnknownFields
+	sizeCache                        protoimpl.SizeCache
+}
+
+func (x *PieceDataShared) Reset() {
+	*x = PieceDataShared{}
+	mi := &file_chess_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PieceDataShared) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PieceDataShared) ProtoMessage() {}
+
+func (x *PieceDataShared) ProtoReflect() protoreflect.Message {
+	mi := &file_chess_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PieceDataShared.ProtoReflect.Descriptor instead.
+func (*PieceDataShared) Descriptor() ([]byte, []int) {
+	return file_chess_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *PieceDataShared) GetId() uint32 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *PieceDataShared) GetType() PieceType {
+	if x != nil {
+		return x.Type
+	}
+	return PieceType_PIECE_TYPE_PAWN
+}
+
+func (x *PieceDataShared) GetIsWhite() bool {
+	if x != nil {
+		return x.IsWhite
+	}
+	return false
+}
+
+func (x *PieceDataShared) GetJustDoubleMoved() bool {
+	if x != nil {
+		return x.JustDoubleMoved
+	}
+	return false
+}
+
+func (x *PieceDataShared) GetKingKiller() bool {
+	if x != nil {
+		return x.KingKiller
+	}
+	return false
+}
+
+func (x *PieceDataShared) GetKingPawner() bool {
+	if x != nil {
+		return x.KingPawner
+	}
+	return false
+}
+
+func (x *PieceDataShared) GetQueenKiller() bool {
+	if x != nil {
+		return x.QueenKiller
+	}
+	return false
+}
+
+func (x *PieceDataShared) GetQueenPawner() bool {
+	if x != nil {
+		return x.QueenPawner
+	}
+	return false
+}
+
+func (x *PieceDataShared) GetAdoptedKiller() bool {
+	if x != nil {
+		return x.AdoptedKiller
+	}
+	return false
+}
+
+func (x *PieceDataShared) GetAdopted() bool {
+	if x != nil {
+		return x.Adopted
+	}
+	return false
+}
+
+func (x *PieceDataShared) GetHasCapturedPieceTypeOtherThanOwn() bool {
+	if x != nil {
+		return x.HasCapturedPieceTypeOtherThanOwn
+	}
+	return false
+}
+
+func (x *PieceDataShared) GetMoveCount() uint32 {
+	if x != nil {
+		return x.MoveCount
+	}
+	return 0
+}
+
+func (x *PieceDataShared) GetCaptureCount() uint32 {
+	if x != nil {
+		return x.CaptureCount
+	}
+	return 0
+}
+
+// Using dx/dy for moves is a pain in the ass because we need to know the actual
+// X and Y for the move, then use the client's current position to back out
+// the dx/dy that we'd pass on. This requires an extra loop and some copying,
+// which I think means it's not worth it.
+//
+// You could imagine doing all of this by only passing moved piece IDs to
+// the client goroutine and then having it do a lookup on those IDs when it
+// processes the move, but I think that probably adds too much read contention
+// to be worth it.
+//
+// If this ends up being a problem we can consider some clever tricks to work around
+// the copying problem and save 2 bytes per move, but I suspect it's not worth it.
+type PieceDataForMove struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	X             uint32                 `protobuf:"varint,1,opt,name=x,proto3" json:"x,omitempty"`
+	Y             uint32                 `protobuf:"varint,2,opt,name=y,proto3" json:"y,omitempty"`
+	Seqnum        uint64                 `protobuf:"varint,3,opt,name=seqnum,proto3" json:"seqnum,omitempty"`
+	Piece         *PieceDataShared       `protobuf:"bytes,4,opt,name=piece,proto3" json:"piece,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PieceDataForMove) Reset() {
+	*x = PieceDataForMove{}
+	mi := &file_chess_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PieceDataForMove) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PieceDataForMove) ProtoMessage() {}
+
+func (x *PieceDataForMove) ProtoReflect() protoreflect.Message {
+	mi := &file_chess_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PieceDataForMove.ProtoReflect.Descriptor instead.
+func (*PieceDataForMove) Descriptor() ([]byte, []int) {
+	return file_chess_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *PieceDataForMove) GetX() uint32 {
+	if x != nil {
+		return x.X
+	}
+	return 0
+}
+
+func (x *PieceDataForMove) GetY() uint32 {
+	if x != nil {
+		return x.Y
+	}
+	return 0
+}
+
+func (x *PieceDataForMove) GetSeqnum() uint64 {
+	if x != nil {
+		return x.Seqnum
+	}
+	return 0
+}
+
+func (x *PieceDataForMove) GetPiece() *PieceDataShared {
+	if x != nil {
+		return x.Piece
+	}
+	return nil
+}
+
+// For snapshots, we use dx and dy instead of a full uint16 x and y because we already
+// have an anchor coordinate for the snapshot, so we can save 2 bytes per piece
+// by just using an offset
+type PieceDataForSnapshot struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Dx            int32                  `protobuf:"zigzag32,1,opt,name=dx,proto3" json:"dx,omitempty"`
+	Dy            int32                  `protobuf:"zigzag32,2,opt,name=dy,proto3" json:"dy,omitempty"`
+	Piece         *PieceDataShared       `protobuf:"bytes,3,opt,name=piece,proto3" json:"piece,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PieceDataForSnapshot) Reset() {
+	*x = PieceDataForSnapshot{}
+	mi := &file_chess_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PieceDataForSnapshot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PieceDataForSnapshot) ProtoMessage() {}
+
+func (x *PieceDataForSnapshot) ProtoReflect() protoreflect.Message {
+	mi := &file_chess_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PieceDataForSnapshot.ProtoReflect.Descriptor instead.
+func (*PieceDataForSnapshot) Descriptor() ([]byte, []int) {
+	return file_chess_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *PieceDataForSnapshot) GetDx() int32 {
+	if x != nil {
+		return x.Dx
+	}
+	return 0
+}
+
+func (x *PieceDataForSnapshot) GetDy() int32 {
+	if x != nil {
+		return x.Dy
+	}
+	return 0
+}
+
+func (x *PieceDataForSnapshot) GetPiece() *PieceDataShared {
+	if x != nil {
+		return x.Piece
+	}
+	return nil
+}
+
+type ServerMovesAndCaptures struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Moves         []*PieceDataForMove    `protobuf:"bytes,1,rep,name=moves,proto3" json:"moves,omitempty"`
+	Captures      []*PieceCapture        `protobuf:"bytes,2,rep,name=captures,proto3" json:"captures,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ServerMovesAndCaptures) Reset() {
+	*x = ServerMovesAndCaptures{}
+	mi := &file_chess_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ServerMovesAndCaptures) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServerMovesAndCaptures) ProtoMessage() {}
+
+func (x *ServerMovesAndCaptures) ProtoReflect() protoreflect.Message {
+	mi := &file_chess_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServerMovesAndCaptures.ProtoReflect.Descriptor instead.
+func (*ServerMovesAndCaptures) Descriptor() ([]byte, []int) {
+	return file_chess_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ServerMovesAndCaptures) GetMoves() []*PieceDataForMove {
+	if x != nil {
+		return x.Moves
+	}
+	return nil
+}
+
+func (x *ServerMovesAndCaptures) GetCaptures() []*PieceCapture {
+	if x != nil {
+		return x.Captures
+	}
+	return nil
+}
+
+type ServerStateSnapshot struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	XCoord        uint32                  `protobuf:"varint,1,opt,name=xCoord,proto3" json:"xCoord,omitempty"`
+	YCoord        uint32                  `protobuf:"varint,2,opt,name=yCoord,proto3" json:"yCoord,omitempty"`
+	Seqnum        uint64                  `protobuf:"varint,3,opt,name=seqnum,proto3" json:"seqnum,omitempty"`
+	Pieces        []*PieceDataForSnapshot `protobuf:"bytes,4,rep,name=pieces,proto3" json:"pieces,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ServerStateSnapshot) Reset() {
+	*x = ServerStateSnapshot{}
+	mi := &file_chess_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ServerStateSnapshot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServerStateSnapshot) ProtoMessage() {}
+
+func (x *ServerStateSnapshot) ProtoReflect() protoreflect.Message {
+	mi := &file_chess_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServerStateSnapshot.ProtoReflect.Descriptor instead.
+func (*ServerStateSnapshot) Descriptor() ([]byte, []int) {
+	return file_chess_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ServerStateSnapshot) GetXCoord() uint32 {
+	if x != nil {
+		return x.XCoord
+	}
+	return 0
+}
+
+func (x *ServerStateSnapshot) GetYCoord() uint32 {
+	if x != nil {
+		return x.YCoord
+	}
+	return 0
+}
+
+func (x *ServerStateSnapshot) GetSeqnum() uint64 {
+	if x != nil {
+		return x.Seqnum
+	}
+	return 0
+}
+
+func (x *ServerStateSnapshot) GetPieces() []*PieceDataForSnapshot {
+	if x != nil {
+		return x.Pieces
+	}
+	return nil
+}
+
+type Position struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	X             uint32                 `protobuf:"varint,1,opt,name=x,proto3" json:"x,omitempty"`
+	Y             uint32                 `protobuf:"varint,2,opt,name=y,proto3" json:"y,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Position) Reset() {
+	*x = Position{}
+	mi := &file_chess_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Position) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Position) ProtoMessage() {}
+
+func (x *Position) ProtoReflect() protoreflect.Message {
+	mi := &file_chess_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Position.ProtoReflect.Descriptor instead.
+func (*Position) Descriptor() ([]byte, []int) {
+	return file_chess_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *Position) GetX() uint32 {
+	if x != nil {
+		return x.X
+	}
+	return 0
+}
+
+func (x *Position) GetY() uint32 {
+	if x != nil {
+		return x.Y
+	}
+	return 0
+}
+
+type ServerInitialState struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayingWhite  bool                   `protobuf:"varint,1,opt,name=playingWhite,proto3" json:"playingWhite,omitempty"`
+	Position      *Position              `protobuf:"bytes,2,opt,name=position,proto3" json:"position,omitempty"`
+	Snapshot      *ServerStateSnapshot   `protobuf:"bytes,3,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ServerInitialState) Reset() {
+	*x = ServerInitialState{}
+	mi := &file_chess_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ServerInitialState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServerInitialState) ProtoMessage() {}
+
+func (x *ServerInitialState) ProtoReflect() protoreflect.Message {
+	mi := &file_chess_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServerInitialState.ProtoReflect.Descriptor instead.
+func (*ServerInitialState) Descriptor() ([]byte, []int) {
+	return file_chess_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ServerInitialState) GetPlayingWhite() bool {
+	if x != nil {
+		return x.PlayingWhite
+	}
+	return false
+}
+
+func (x *ServerInitialState) GetPosition() *Position {
+	if x != nil {
+		return x.Position
+	}
+	return nil
+}
+
+func (x *ServerInitialState) GetSnapshot() *ServerStateSnapshot {
+	if x != nil {
+		return x.Snapshot
+	}
+	return nil
+}
+
+type ServerMessage struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Payload:
+	//
+	//	*ServerMessage_InitialState
+	//	*ServerMessage_Snapshot
+	//	*ServerMessage_MovesAndCaptures
+	//	*ServerMessage_ValidMove
+	//	*ServerMessage_InvalidMove
+	//	*ServerMessage_Pong
+	Payload       isServerMessage_Payload `protobuf_oneof:"payload"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ServerMessage) Reset() {
+	*x = ServerMessage{}
+	mi := &file_chess_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ServerMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServerMessage) ProtoMessage() {}
+
+func (x *ServerMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_chess_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServerMessage.ProtoReflect.Descriptor instead.
+func (*ServerMessage) Descriptor() ([]byte, []int) {
+	return file_chess_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ServerMessage) GetPayload() isServerMessage_Payload {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *ServerMessage) GetInitialState() *ServerInitialState {
+	if x != nil {
+		if x, ok := x.Payload.(*ServerMessage_InitialState); ok {
+			return x.InitialState
+		}
+	}
+	return nil
+}
+
+func (x *ServerMessage) GetSnapshot() *ServerStateSnapshot {
+	if x != nil {
+		if x, ok := x.Payload.(*ServerMessage_Snapshot); ok {
+			return x.Snapshot
+		}
+	}
+	return nil
+}
+
+func (x *ServerMessage) GetMovesAndCaptures() *ServerMovesAndCaptures {
+	if x != nil {
+		if x, ok := x.Payload.(*ServerMessage_MovesAndCaptures); ok {
+			return x.MovesAndCaptures
+		}
+	}
+	return nil
+}
+
+func (x *ServerMessage) GetValidMove() *ServerValidMove {
+	if x != nil {
+		if x, ok := x.Payload.(*ServerMessage_ValidMove); ok {
+			return x.ValidMove
+		}
+	}
+	return nil
+}
+
+func (x *ServerMessage) GetInvalidMove() *ServerInvalidMove {
+	if x != nil {
+		if x, ok := x.Payload.(*ServerMessage_InvalidMove); ok {
+			return x.InvalidMove
+		}
+	}
+	return nil
+}
+
+func (x *ServerMessage) GetPong() *ServerPong {
+	if x != nil {
+		if x, ok := x.Payload.(*ServerMessage_Pong); ok {
+			return x.Pong
+		}
+	}
+	return nil
+}
+
+type isServerMessage_Payload interface {
+	isServerMessage_Payload()
+}
+
+type ServerMessage_InitialState struct {
+	InitialState *ServerInitialState `protobuf:"bytes,1,opt,name=initialState,proto3,oneof"`
+}
+
+type ServerMessage_Snapshot struct {
+	Snapshot *ServerStateSnapshot `protobuf:"bytes,2,opt,name=snapshot,proto3,oneof"`
+}
+
+type ServerMessage_MovesAndCaptures struct {
+	MovesAndCaptures *ServerMovesAndCaptures `protobuf:"bytes,3,opt,name=movesAndCaptures,proto3,oneof"`
+}
+
+type ServerMessage_ValidMove struct {
+	ValidMove *ServerValidMove `protobuf:"bytes,4,opt,name=validMove,proto3,oneof"`
+}
+
+type ServerMessage_InvalidMove struct {
+	InvalidMove *ServerInvalidMove `protobuf:"bytes,5,opt,name=invalidMove,proto3,oneof"`
+}
+
+type ServerMessage_Pong struct {
+	Pong *ServerPong `protobuf:"bytes,6,opt,name=pong,proto3,oneof"`
+}
+
+func (*ServerMessage_InitialState) isServerMessage_Payload() {}
+
+func (*ServerMessage_Snapshot) isServerMessage_Payload() {}
+
+func (*ServerMessage_MovesAndCaptures) isServerMessage_Payload() {}
+
+func (*ServerMessage_ValidMove) isServerMessage_Payload() {}
+
+func (*ServerMessage_InvalidMove) isServerMessage_Payload() {}
+
+func (*ServerMessage_Pong) isServerMessage_Payload() {}
+
 var File_chess_proto protoreflect.FileDescriptor
 
 const file_chess_proto_rawDesc = "" +
@@ -371,11 +1285,83 @@ const file_chess_proto_rawDesc = "" +
 	"\x04ping\x18\x01 \x01(\v2\x11.chess.ClientPingH\x00R\x04ping\x126\n" +
 	"\tsubscribe\x18\x02 \x01(\v2\x16.chess.ClientSubscribeH\x00R\tsubscribe\x12'\n" +
 	"\x04move\x18\x03 \x01(\v2\x11.chess.ClientMoveH\x00R\x04moveB\t\n" +
-	"\apayload*O\n" +
+	"\apayload\"y\n" +
+	"\x0fServerValidMove\x12\x1e\n" +
+	"\n" +
+	"asOfSeqnum\x18\x01 \x01(\x04R\n" +
+	"asOfSeqnum\x12\x1c\n" +
+	"\tmoveToken\x18\x02 \x01(\rR\tmoveToken\x12(\n" +
+	"\x0fcapturedPieceId\x18\x03 \x01(\rR\x0fcapturedPieceId\"1\n" +
+	"\x11ServerInvalidMove\x12\x1c\n" +
+	"\tmoveToken\x18\x01 \x01(\rR\tmoveToken\"\f\n" +
+	"\n" +
+	"ServerPong\"P\n" +
+	"\fPieceCapture\x12(\n" +
+	"\x0fcapturedPieceId\x18\x01 \x01(\rR\x0fcapturedPieceId\x12\x16\n" +
+	"\x06seqnum\x18\x02 \x01(\x04R\x06seqnum\"\xdd\x03\n" +
+	"\x0fPieceDataShared\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\rR\x02id\x12$\n" +
+	"\x04type\x18\x02 \x01(\x0e2\x10.chess.PieceTypeR\x04type\x12\x18\n" +
+	"\aisWhite\x18\x03 \x01(\bR\aisWhite\x12(\n" +
+	"\x0fjustDoubleMoved\x18\x04 \x01(\bR\x0fjustDoubleMoved\x12\x1e\n" +
+	"\n" +
+	"kingKiller\x18\x05 \x01(\bR\n" +
+	"kingKiller\x12\x1e\n" +
+	"\n" +
+	"kingPawner\x18\x06 \x01(\bR\n" +
+	"kingPawner\x12 \n" +
+	"\vqueenKiller\x18\a \x01(\bR\vqueenKiller\x12 \n" +
+	"\vqueenPawner\x18\b \x01(\bR\vqueenPawner\x12$\n" +
+	"\radoptedKiller\x18\t \x01(\bR\radoptedKiller\x12\x18\n" +
+	"\aadopted\x18\n" +
+	" \x01(\bR\aadopted\x12J\n" +
+	" hasCapturedPieceTypeOtherThanOwn\x18\v \x01(\bR hasCapturedPieceTypeOtherThanOwn\x12\x1c\n" +
+	"\tmoveCount\x18\f \x01(\rR\tmoveCount\x12\"\n" +
+	"\fcaptureCount\x18\r \x01(\rR\fcaptureCount\"t\n" +
+	"\x10PieceDataForMove\x12\f\n" +
+	"\x01x\x18\x01 \x01(\rR\x01x\x12\f\n" +
+	"\x01y\x18\x02 \x01(\rR\x01y\x12\x16\n" +
+	"\x06seqnum\x18\x03 \x01(\x04R\x06seqnum\x12,\n" +
+	"\x05piece\x18\x04 \x01(\v2\x16.chess.PieceDataSharedR\x05piece\"d\n" +
+	"\x14PieceDataForSnapshot\x12\x0e\n" +
+	"\x02dx\x18\x01 \x01(\x11R\x02dx\x12\x0e\n" +
+	"\x02dy\x18\x02 \x01(\x11R\x02dy\x12,\n" +
+	"\x05piece\x18\x03 \x01(\v2\x16.chess.PieceDataSharedR\x05piece\"x\n" +
+	"\x16ServerMovesAndCaptures\x12-\n" +
+	"\x05moves\x18\x01 \x03(\v2\x17.chess.PieceDataForMoveR\x05moves\x12/\n" +
+	"\bcaptures\x18\x02 \x03(\v2\x13.chess.PieceCaptureR\bcaptures\"\x92\x01\n" +
+	"\x13ServerStateSnapshot\x12\x16\n" +
+	"\x06xCoord\x18\x01 \x01(\rR\x06xCoord\x12\x16\n" +
+	"\x06yCoord\x18\x02 \x01(\rR\x06yCoord\x12\x16\n" +
+	"\x06seqnum\x18\x03 \x01(\x04R\x06seqnum\x123\n" +
+	"\x06pieces\x18\x04 \x03(\v2\x1b.chess.PieceDataForSnapshotR\x06pieces\"&\n" +
+	"\bPosition\x12\f\n" +
+	"\x01x\x18\x01 \x01(\rR\x01x\x12\f\n" +
+	"\x01y\x18\x02 \x01(\rR\x01y\"\x9d\x01\n" +
+	"\x12ServerInitialState\x12\"\n" +
+	"\fplayingWhite\x18\x01 \x01(\bR\fplayingWhite\x12+\n" +
+	"\bposition\x18\x02 \x01(\v2\x0f.chess.PositionR\bposition\x126\n" +
+	"\bsnapshot\x18\x03 \x01(\v2\x1a.chess.ServerStateSnapshotR\bsnapshot\"\x81\x03\n" +
+	"\rServerMessage\x12?\n" +
+	"\finitialState\x18\x01 \x01(\v2\x19.chess.ServerInitialStateH\x00R\finitialState\x128\n" +
+	"\bsnapshot\x18\x02 \x01(\v2\x1a.chess.ServerStateSnapshotH\x00R\bsnapshot\x12K\n" +
+	"\x10movesAndCaptures\x18\x03 \x01(\v2\x1d.chess.ServerMovesAndCapturesH\x00R\x10movesAndCaptures\x126\n" +
+	"\tvalidMove\x18\x04 \x01(\v2\x16.chess.ServerValidMoveH\x00R\tvalidMove\x12<\n" +
+	"\vinvalidMove\x18\x05 \x01(\v2\x18.chess.ServerInvalidMoveH\x00R\vinvalidMove\x12'\n" +
+	"\x04pong\x18\x06 \x01(\v2\x11.chess.ServerPongH\x00R\x04pongB\t\n" +
+	"\apayload*P\n" +
 	"\bMoveType\x12\x14\n" +
 	"\x10MOVE_TYPE_NORMAL\x10\x00\x12\x14\n" +
-	"\x10MOVE_TYPE_CASTLE\x10\x01\x12\x17\n" +
-	"\x13MOVE_TYPE_ENPASSANT\x10\x02B2Z0one-million-chessboards/server/protocol;protocolb\x06proto3"
+	"\x10MOVE_TYPE_CASTLE\x10\x01\x12\x18\n" +
+	"\x14MOVE_TYPE_EN_PASSANT\x10\x02*\xac\x01\n" +
+	"\tPieceType\x12\x13\n" +
+	"\x0fPIECE_TYPE_PAWN\x10\x00\x12\x15\n" +
+	"\x11PIECE_TYPE_KNIGHT\x10\x01\x12\x15\n" +
+	"\x11PIECE_TYPE_BISHOP\x10\x02\x12\x13\n" +
+	"\x0fPIECE_TYPE_ROOK\x10\x03\x12\x14\n" +
+	"\x10PIECE_TYPE_QUEEN\x10\x04\x12\x13\n" +
+	"\x0fPIECE_TYPE_KING\x10\x05\x12\x1c\n" +
+	"\x18PIECE_TYPE_PROMOTED_PAWN\x10\x06B2Z0one-million-chessboards/server/protocol;protocolb\x06proto3"
 
 var (
 	file_chess_proto_rawDescOnce sync.Once
@@ -389,25 +1375,52 @@ func file_chess_proto_rawDescGZIP() []byte {
 	return file_chess_proto_rawDescData
 }
 
-var file_chess_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_chess_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_chess_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_chess_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_chess_proto_goTypes = []any{
-	(MoveType)(0),           // 0: chess.MoveType
-	(*ClientPing)(nil),      // 1: chess.ClientPing
-	(*ClientSubscribe)(nil), // 2: chess.ClientSubscribe
-	(*ClientMove)(nil),      // 3: chess.ClientMove
-	(*ClientMessage)(nil),   // 4: chess.ClientMessage
+	(MoveType)(0),                  // 0: chess.MoveType
+	(PieceType)(0),                 // 1: chess.PieceType
+	(*ClientPing)(nil),             // 2: chess.ClientPing
+	(*ClientSubscribe)(nil),        // 3: chess.ClientSubscribe
+	(*ClientMove)(nil),             // 4: chess.ClientMove
+	(*ClientMessage)(nil),          // 5: chess.ClientMessage
+	(*ServerValidMove)(nil),        // 6: chess.ServerValidMove
+	(*ServerInvalidMove)(nil),      // 7: chess.ServerInvalidMove
+	(*ServerPong)(nil),             // 8: chess.ServerPong
+	(*PieceCapture)(nil),           // 9: chess.PieceCapture
+	(*PieceDataShared)(nil),        // 10: chess.PieceDataShared
+	(*PieceDataForMove)(nil),       // 11: chess.PieceDataForMove
+	(*PieceDataForSnapshot)(nil),   // 12: chess.PieceDataForSnapshot
+	(*ServerMovesAndCaptures)(nil), // 13: chess.ServerMovesAndCaptures
+	(*ServerStateSnapshot)(nil),    // 14: chess.ServerStateSnapshot
+	(*Position)(nil),               // 15: chess.Position
+	(*ServerInitialState)(nil),     // 16: chess.ServerInitialState
+	(*ServerMessage)(nil),          // 17: chess.ServerMessage
 }
 var file_chess_proto_depIdxs = []int32{
-	0, // 0: chess.ClientMove.moveType:type_name -> chess.MoveType
-	1, // 1: chess.ClientMessage.ping:type_name -> chess.ClientPing
-	2, // 2: chess.ClientMessage.subscribe:type_name -> chess.ClientSubscribe
-	3, // 3: chess.ClientMessage.move:type_name -> chess.ClientMove
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	0,  // 0: chess.ClientMove.moveType:type_name -> chess.MoveType
+	2,  // 1: chess.ClientMessage.ping:type_name -> chess.ClientPing
+	3,  // 2: chess.ClientMessage.subscribe:type_name -> chess.ClientSubscribe
+	4,  // 3: chess.ClientMessage.move:type_name -> chess.ClientMove
+	1,  // 4: chess.PieceDataShared.type:type_name -> chess.PieceType
+	10, // 5: chess.PieceDataForMove.piece:type_name -> chess.PieceDataShared
+	10, // 6: chess.PieceDataForSnapshot.piece:type_name -> chess.PieceDataShared
+	11, // 7: chess.ServerMovesAndCaptures.moves:type_name -> chess.PieceDataForMove
+	9,  // 8: chess.ServerMovesAndCaptures.captures:type_name -> chess.PieceCapture
+	12, // 9: chess.ServerStateSnapshot.pieces:type_name -> chess.PieceDataForSnapshot
+	15, // 10: chess.ServerInitialState.position:type_name -> chess.Position
+	14, // 11: chess.ServerInitialState.snapshot:type_name -> chess.ServerStateSnapshot
+	16, // 12: chess.ServerMessage.initialState:type_name -> chess.ServerInitialState
+	14, // 13: chess.ServerMessage.snapshot:type_name -> chess.ServerStateSnapshot
+	13, // 14: chess.ServerMessage.movesAndCaptures:type_name -> chess.ServerMovesAndCaptures
+	6,  // 15: chess.ServerMessage.validMove:type_name -> chess.ServerValidMove
+	7,  // 16: chess.ServerMessage.invalidMove:type_name -> chess.ServerInvalidMove
+	8,  // 17: chess.ServerMessage.pong:type_name -> chess.ServerPong
+	18, // [18:18] is the sub-list for method output_type
+	18, // [18:18] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_chess_proto_init() }
@@ -420,13 +1433,21 @@ func file_chess_proto_init() {
 		(*ClientMessage_Subscribe)(nil),
 		(*ClientMessage_Move)(nil),
 	}
+	file_chess_proto_msgTypes[15].OneofWrappers = []any{
+		(*ServerMessage_InitialState)(nil),
+		(*ServerMessage_Snapshot)(nil),
+		(*ServerMessage_MovesAndCaptures)(nil),
+		(*ServerMessage_ValidMove)(nil),
+		(*ServerMessage_InvalidMove)(nil),
+		(*ServerMessage_Pong)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_chess_proto_rawDesc), len(file_chess_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   4,
+			NumEnums:      2,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
