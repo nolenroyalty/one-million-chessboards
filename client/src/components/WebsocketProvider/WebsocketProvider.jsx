@@ -136,14 +136,20 @@ function useWebsocket({
         const data = parseFrame(buf);
 
         if (data.type === "stateSnapshot") {
-          pieceHandler.current.handleSnapshot({ snapshot: data });
+          pieceHandler.current.handleSnapshot({
+            snapshot: data,
+            newConnection: false,
+          });
         } else if (data.type === "moveUpdates") {
           pieceHandler.current.handleMoves({
             moves: data.moves,
             captures: data.captures,
           });
         } else if (data.type === "initialState") {
-          pieceHandler.current.handleSnapshot({ snapshot: data.snapshot });
+          pieceHandler.current.handleSnapshot({
+            snapshot: data.snapshot,
+            newConnection: true,
+          });
           setCoords({ x: data.position.x, y: data.position.y });
           setCurrentColor({ playingWhite: data.playingWhite });
         } else if (data.type === "validMove") {
