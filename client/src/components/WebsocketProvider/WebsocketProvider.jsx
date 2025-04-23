@@ -202,6 +202,7 @@ function useWebsocket({
             return;
           }
           protoSendPing({ ws });
+          // CR nroyalty: reduce frequency and add jitter
         }, 10000);
       };
 

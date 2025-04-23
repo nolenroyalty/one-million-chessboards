@@ -1,5 +1,9 @@
 import { chess } from "./protoCompiled.js";
 
+console.log(chess.PieceType);
+console.log(chess.PieceType[0]);
+console.log(chess.PieceType[chess.PieceType.PIECE_TYPE_PAWN]);
+
 const MAX_MOVE_DISTANCE = 36;
 
 export function intervalWithJitter({ baseInterval, jitter }) {
@@ -76,18 +80,19 @@ export function getZoomedInScreenAbsoluteCoords({
 }
 
 export const TYPE_TO_NAME = {
-  0: "pawn",
-  1: "knight",
-  2: "bishop",
-  3: "rook",
-  4: "queen",
-  5: "king",
-  6: "promotedPawn",
+  [chess.PieceType.PIECE_TYPE_PAWN]: "pawn",
+  [chess.PieceType.PIECE_TYPE_KNIGHT]: "knight",
+  [chess.PieceType.PIECE_TYPE_BISHOP]: "bishop",
+  [chess.PieceType.PIECE_TYPE_ROOK]: "rook",
+  [chess.PieceType.PIECE_TYPE_QUEEN]: "queen",
+  [chess.PieceType.PIECE_TYPE_KING]: "king",
+  [chess.PieceType.PIECE_TYPE_PROMOTED_PAWN]: "promotedPawn",
 };
 
 export const NAME_TO_TYPE = Object.fromEntries(
   Object.entries(TYPE_TO_NAME).map(([key, value]) => [value, key])
 );
+
 console.log(NAME_TO_TYPE);
 
 export function humanNameForPieceType({ pieceType }) {
