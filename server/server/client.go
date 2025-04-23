@@ -198,7 +198,7 @@ func (c *Client) ReadPump() {
 	for {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
-			log.Printf("Error reading message: %v", err)
+			// log.Printf("Error reading message: %v", err)
 			break
 		}
 		var msg protocol.ClientMessage
@@ -243,12 +243,14 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 
 		if !CoordInBoundsInt(fromX) || !CoordInBoundsInt(fromY) ||
 			!CoordInBoundsInt(toX) || !CoordInBoundsInt(toY) {
+			log.Printf("Invalid move: %v", p)
 			return
 		}
 
 		if moveType != protocol.MoveType_MOVE_TYPE_NORMAL &&
 			moveType != protocol.MoveType_MOVE_TYPE_CASTLE &&
 			moveType != protocol.MoveType_MOVE_TYPE_ENPASSANT {
+			log.Printf("Invalid move type: %v", moveType)
 			return
 		}
 
@@ -556,7 +558,7 @@ func (c *Client) Close(why string) {
 	if !c.isClosed.CompareAndSwap(false, true) {
 		return
 	}
-	log.Printf("Closing client: %s", why)
+	// log.Printf("Closing client: %s", why)
 
 	close(c.done)
 	c.server.clientManager.UnregisterClient(c)
