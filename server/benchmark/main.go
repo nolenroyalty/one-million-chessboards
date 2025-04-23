@@ -243,9 +243,9 @@ func newRandomMover(boardX int) *RandomMover {
 			return
 		}
 		if parsed["type"] == "initialState" {
-			log.Printf("Initial state")
+			// log.Printf("Initial state")
 			playingWhite := parsed["playingWhite"].(bool)
-			log.Printf("Playing white: %v", playingWhite)
+			// log.Printf("Playing white: %v", playingWhite)
 			rm.playingWhite = playingWhite
 			close(ready)
 		} else if parsed["type"] == "stateSnapshot" {
@@ -337,7 +337,7 @@ func (c *MainCounter) runAllRandomMovers() {
 	wg.Wait()
 }
 
-const DO_SUBSCRIBE = true
+const DO_SUBSCRIBE = false
 const DO_MOVE = true
 const DO_RECONNECTS = true
 
