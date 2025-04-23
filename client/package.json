@@ -29,5 +29,9 @@
     "react-feather": "^2.0.10",
     "rimraf": "^6.0.1",
     "styled-components": "^6.1.15"
+  },
+  "devDependencies": {
+    "protobufjs": "^7.5.0",
+    "protobufjs-cli": "^1.1.3"
   }
 }

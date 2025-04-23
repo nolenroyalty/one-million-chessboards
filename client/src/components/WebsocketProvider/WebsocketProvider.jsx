@@ -1,130 +1,12 @@
 import React from "react";
 import HandlersContext from "../HandlersContext/HandlersContext";
 import CurrentColorContext from "../CurrentColorProvider/CurrentColorProvider";
-import {
-  createMoveRequest,
-  keyToCoords,
-  computeInitialArguments,
-} from "../../utils";
+import { computeInitialArguments } from "../../utils";
 import CoordsContext from "../CoordsContext/CoordsContext";
 import { decompress } from "fzstd";
-
+import useStartBot from "../../hooks/use-start-bot";
+import { chess } from "../../protoCompiled.js";
 // CR nroyalty: replace with partysocket
-
-// CR nroyalty: delete this before rolling to prod...
-function useStartBot({ pieceHandler, submitMove, onlyId }) {
-  const [started, setStarted] = React.useState(false);
-
-  React.useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (event.ctrlKey && event.key === "b") {
-        setStarted((prev) => !prev);
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, []);
-
-  React.useEffect(() => {
-    if (!started) {
-      return;
-    }
-    let botInterval;
-    let count = 0;
-    let attemptsById = {};
-
-    const loop = () => {
-      let attempts = 0;
-      let targetPiece, targetSquare, targetMoveType;
-      if (onlyId) {
-        const piece = pieceHandler.current.getPieceById(onlyId);
-        if (piece) {
-          targetPiece = piece;
-          const moveableSquaresAndMoveType =
-            pieceHandler.current.getMoveableSquares(targetPiece);
-          if (moveableSquaresAndMoveType.size > 0) {
-            const squares = Array.from(moveableSquaresAndMoveType.keys());
-            targetSquare =
-              Array.from(squares)[Math.floor(Math.random() * squares.length)];
-            const data = moveableSquaresAndMoveType.get(targetSquare);
-            targetMoveType = data.moveType;
-            const [x, y] = keyToCoords(targetSquare);
-            submitMove({
-              piece: targetPiece,
-              toX: x,
-              toY: y,
-              moveType: targetMoveType,
-            });
-          }
-        }
-      } else {
-        let data;
-        for (let i = 0; i < 10; i++) {
-          while (attempts < 50) {
-            const allPieceIds = Array.from(
-              pieceHandler.current.getAllPieceIds()
-            );
-            const randomId =
-              allPieceIds[Math.floor(Math.random() * allPieceIds.length)];
-            const randomPiece = pieceHandler.current.getPieceById(randomId);
-            if (!randomPiece) {
-              continue;
-            }
-            const moveableSquaresAndMoveType =
-              pieceHandler.current.getMoveableSquares(randomPiece);
-            if (moveableSquaresAndMoveType.size > 0) {
-              targetPiece = randomPiece;
-              const squares = Array.from(moveableSquaresAndMoveType.keys());
-              targetSquare =
-                Array.from(squares)[Math.floor(Math.random() * squares.length)];
-              data = moveableSquaresAndMoveType.get(targetSquare);
-              break;
-            }
-            attempts++;
-          }
-          if (targetPiece && targetSquare && data) {
-            if (!attemptsById[targetPiece.id]) {
-              attemptsById[targetPiece.id] = 0;
-            }
-            attemptsById[targetPiece.id] = attemptsById[targetPiece.id] + 1;
-            if (attemptsById[targetPiece.id] > 1) {
-              console.log(
-                `ATTEMPT ${attemptsById[targetPiece.id]} FOR PIECE ${targetPiece.id}`
-              );
-            }
-            const [x, y] = keyToCoords(targetSquare);
-            submitMove({
-              piece: targetPiece,
-              toX: x,
-              toY: y,
-              moveType: data.targetMoveType,
-              capturedPiece: data.capturedPiece,
-              additionalMovedPiece: data.additionalMovedPiece,
-              captureRequired: data.captureRequired,
-            });
-          }
-        }
-        count++;
-        if (count > 5) {
-          count = 0;
-          attemptsById = {};
-        }
-      }
-    };
-    const freq = onlyId ? 400 : 100;
-    console.log("starting bot");
-    botInterval = setInterval(loop, freq);
-
-    return () => {
-      console.log("stopping bot");
-      clearInterval(botInterval);
-    };
-  }, [pieceHandler, submitMove, started, onlyId]);
-
-  return { setRunBot: setStarted };
-}
 
 const ZSTD_MAGIC = [0x28, 0xb5, 0x2f, 0xfd]; // little‑endian
 
@@ -140,6 +22,52 @@ function parseFrame(buf) {
   const payload = isZstd ? decompress(u8) : u8;
 
   return JSON.parse(new TextDecoder().decode(payload));
+}
+
+function encodeAndSendIfOpen({ ws, msg }) {
+  const wire = chess.ClientMessage.encode(msg).finish();
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    try {
+      ws.send(wire);
+      return true;
+    } catch (e) {
+      console.error("Error sending to server", e);
+      return false;
+    }
+  }
+  return false;
+}
+
+function protoSendSubscribe({ ws, coords }) {
+  const msg = chess.ClientMessage.create({
+    subscribe: {
+      centerX: coords.x,
+      centerY: coords.y,
+    },
+  });
+  return encodeAndSendIfOpen({ ws, msg });
+}
+
+function protoSendPing({ ws }) {
+  const msg = chess.ClientMessage.create({
+    ping: {},
+  });
+  return encodeAndSendIfOpen({ ws, msg });
+}
+
+function protoSendMove({ ws, piece, toX, toY, moveType, moveToken }) {
+  const msg = chess.ClientMessage.create({
+    move: {
+      pieceId: piece.id,
+      fromX: piece.x,
+      fromY: piece.y,
+      toX,
+      toY,
+      moveType,
+      moveToken,
+    },
+  });
+  return encodeAndSendIfOpen({ ws, msg });
 }
 
 function useWebsocket({
@@ -249,7 +177,7 @@ function useWebsocket({
           if (killed) {
             return;
           }
-          ws.send(JSON.stringify({ type: "app-ping" }));
+          protoSendPing({ ws });
         }, 10000);
       };
 
@@ -333,7 +261,7 @@ function useWebsocket({
 // more aggressively if we've recently requested a snapshot, and can skip
 // debouncing if we just did a big jump in position!
 const DEBOUNCE_TIME = 100;
-function useUpdateCoords({ connected, safelySendJSON }) {
+function useUpdateCoords({ connected, sendSubscribe }) {
   const { coords } = React.useContext(CoordsContext);
   const debounceTimeoutRef = React.useRef(null);
   React.useEffect(() => {
@@ -347,11 +275,7 @@ function useUpdateCoords({ connected, safelySendJSON }) {
       clearTimeout(debounceTimeoutRef.current);
     }
     debounceTimeoutRef.current = setTimeout(() => {
-      safelySendJSON({
-        type: "subscribe",
-        centerX: coords.x,
-        centerY: coords.y,
-      });
+      sendSubscribe(coords);
     }, DEBOUNCE_TIME);
 
     return () => {
@@ -359,7 +283,7 @@ function useUpdateCoords({ connected, safelySendJSON }) {
         clearTimeout(debounceTimeoutRef.current);
       }
     };
-  }, [safelySendJSON, coords, connected]);
+  }, [coords, connected, sendSubscribe]);
 }
 export const WebsocketContext = React.createContext();
 
@@ -382,22 +306,8 @@ function WebsocketProvider({ children }) {
     [pieceHandler]
   );
 
-  const safelySendJSON = React.useCallback((json) => {
-    console.log("safelySendJSON", json);
-    const ws = websocketRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      try {
-        ws.send(JSON.stringify(json));
-        return true;
-      } catch (e) {
-        console.error("Error sending JSON", e);
-        return false;
-      }
-    } else {
-      console.log("websocket not open", ws?.readyState);
-      console.log("websocket not open", ws);
-    }
-    return false;
+  const sendSubscribe = React.useCallback((coords) => {
+    protoSendSubscribe({ ws: websocketRef.current, coords });
   }, []);
 
   useWebsocket({
@@ -407,7 +317,7 @@ function WebsocketProvider({ children }) {
     statsHandler,
   });
 
-  useUpdateCoords({ connected, safelySendJSON });
+  useUpdateCoords({ connected, sendSubscribe });
 
   const submitMove = React.useCallback(
     ({
@@ -421,9 +331,17 @@ function WebsocketProvider({ children }) {
       couldBeACapture,
     }) => {
       const moveToken = pieceHandler.current.getIncrMoveToken();
-      const move = createMoveRequest({ piece, toX, toY, moveType, moveToken });
-      // CR nroyalty: figure out what to do once we move to partysocket...
-      if (safelySendJSON(move)) {
+      if (
+        protoSendMove({
+          ws: websocketRef.current,
+          piece,
+          toX,
+          toY,
+          moveType,
+          moveToken,
+        })
+      ) {
+        // CR nroyalty: figure out what to do once we move to partysocket...
         let incrLocalMoves = true;
         let incrLocalCaptures = false;
         if (capturedPiece) {
@@ -446,14 +364,15 @@ function WebsocketProvider({ children }) {
         });
       }
     },
-    [pieceHandler, safelySendJSON, statsHandler]
+    [pieceHandler, statsHandler]
   );
 
+  // CR nroyalty: delete this before rolling to prod...
   useStartBot({ pieceHandler, submitMove });
 
   const value = React.useMemo(
-    () => ({ connected, safelySendJSON, submitMove }),
-    [connected, safelySendJSON, submitMove]
+    () => ({ connected, submitMove }),
+    [connected, submitMove]
   );
 
   return (

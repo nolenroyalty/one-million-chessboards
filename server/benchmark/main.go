@@ -8,8 +8,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"one-million-chessboards/protocol"
+
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/compress/zstd"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dustin/go-humanize"
 	"github.com/gorilla/websocket"
@@ -55,6 +58,45 @@ func (c *MainCounter) logStats() {
 	log.Printf("CAPTURES: %d", c.numberOfCaptures.Load())
 }
 
+func writeSubscribe(ws *websocket.Conn, boardX int, boardY int) {
+	m := &protocol.ClientMessage{
+		Payload: &protocol.ClientMessage_Subscribe{
+			Subscribe: &protocol.ClientSubscribe{
+				CenterX: uint32(4 + boardX*8),
+				CenterY: uint32(4 + boardY*8),
+			},
+		},
+	}
+	message, err := proto.Marshal(m)
+	if err != nil {
+		log.Printf("Error marshalling subscribe: %v", err)
+		return
+	}
+	ws.WriteMessage(websocket.BinaryMessage, message)
+}
+
+func writeMove(ws *websocket.Conn, pieceID int, fromX int, fromY int, toX int, toY int, moveType protocol.MoveType, moveToken int) {
+	m := &protocol.ClientMessage{
+		Payload: &protocol.ClientMessage_Move{
+			Move: &protocol.ClientMove{
+				PieceId:   uint32(pieceID),
+				FromX:     uint32(fromX),
+				FromY:     uint32(fromY),
+				ToX:       uint32(toX),
+				ToY:       uint32(toY),
+				MoveType:  moveType,
+				MoveToken: uint32(moveToken),
+			},
+		},
+	}
+	message, err := proto.Marshal(m)
+	if err != nil {
+		log.Printf("Error marshalling move: %v", err)
+		return
+	}
+	ws.WriteMessage(websocket.BinaryMessage, message)
+}
+
 func ParseFrame(buf []byte) (map[string]interface{}, error) {
 	if len(buf) < 4 {
 		return nil, errors.New("frame too small")
@@ -78,6 +120,8 @@ func ParseFrame(buf []byte) (map[string]interface{}, error) {
 	return out, nil
 }
 
+// CR nroyalty: instead of randomly disconnecting, maybe we should just
+// resub to a new area?
 func (c *MainCounter) randomlySubscribe(doReconnects bool) {
 	for {
 		ws, _, err := websocket.DefaultDialer.Dial(getUrl(), nil)
@@ -257,19 +301,7 @@ func newRandomMover(boardX int) *RandomMover {
 }
 
 func (rm *RandomMover) subscribe() {
-	message, err := json.Marshal(map[string]any{
-		"type":    "subscribe",
-		"centerX": 4 + rm.boardX*8,
-		"centerY": 4 + rm.boardY*8,
-	})
-	if err != nil {
-		log.Printf("Error marshalling subscribe: %v", err)
-		return
-	}
-	err = rm.ws.WriteMessage(websocket.TextMessage, message)
-	if err != nil {
-		log.Printf("Error subscribing: %v", err)
-	}
+	writeSubscribe(rm.ws, rm.boardX, rm.boardY)
 }
 
 func (rm *RandomMover) movePawn() {
@@ -288,24 +320,7 @@ func (rm *RandomMover) movePawn() {
 	}
 
 	pawnID := rm.boardX*32000 + 32*rm.boardY + (rm.pawnCount % 8) + idOffset
-	message, err := json.Marshal(map[string]any{
-		"type":      "move",
-		"pieceId":   pawnID,
-		"fromX":     pawnX,
-		"fromY":     pawnY,
-		"toX":       pawnX,
-		"toY":       targetY,
-		"moveType":  0,
-		"moveToken": rm.pawnCount + 1,
-	})
-	if err != nil {
-		log.Printf("Error marshalling move: %v", err)
-		return
-	}
-	err = rm.ws.WriteMessage(websocket.TextMessage, message)
-	if err != nil {
-		log.Printf("Error moving pawn: %v", err)
-	}
+	writeMove(rm.ws, pawnID, pawnX, pawnY, pawnX, targetY, protocol.MoveType_MOVE_TYPE_NORMAL, rm.pawnCount+1)
 	rm.pawnCount++
 	if (rm.pawnCount % 8) == 0 {
 		rm.boardY++
@@ -339,7 +354,7 @@ func (c *MainCounter) runAllRandomMovers() {
 
 const DO_SUBSCRIBE = false
 const DO_MOVE = true
-const DO_RECONNECTS = true
+const DO_RECONNECTS = false
 
 func main() {
 	counter := MainCounter{}

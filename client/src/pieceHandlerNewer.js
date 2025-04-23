@@ -438,7 +438,6 @@ class OptimisticState {
   }
 
   revertSinglePieceId(pieceId) {
-    console.log(`Single piece revert / ${pieceId}`);
     const actions = this.actionsByPieceId.get(pieceId) || [];
     if (actions.length === 0) {
       return null;
@@ -721,7 +720,6 @@ class PieceHandler {
   // with our optimistic move is relevant in any way, so we can just revert to the
   // ground truth unconditionally.
   rejectOptimisticMove({ moveToken }) {
-    console.log(`move token rejected: ${moveToken}`);
     const { preRevertVisualStates } = this.optimisticStateHandler.processRevert(
       {
         tokens: new Set([moveToken]),
@@ -821,6 +819,8 @@ class PieceHandler {
           continue;
         } else if (predictedState?.state === OACTION.MOVE) {
           // predicted move, piece was captured, our move must be wrong
+          // We already have a capture in the works, so we probably just
+          // revert the predicted state and broadcast that capture
           revertPieceId(pieceId);
         }
       } else if (
@@ -1133,11 +1133,6 @@ class PieceHandler {
       }
     });
 
-    // CR nroyalty: we want to get rid of seqnums from captures. I think what we can
-    // do is just maintain a buffer of recent captures and keep them around until
-    // we get a snapshot that doesn't contain the piece. The only problem here is
-    // around server restarts and captures getting reverted, which we'll need to
-    // figure out down the line
     captures.forEach((capture) => {
       const ourPiece = this.piecesById.get(capture.capturedPieceId);
       let wasKing = null;

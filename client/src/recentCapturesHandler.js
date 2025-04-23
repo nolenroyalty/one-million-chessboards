@@ -25,13 +25,11 @@ class RecentCapturesHandler {
     if (this.pollLoopTimeout) {
       clearTimeout(this.pollLoopTimeout);
     }
-    console.log("fetching recent captures");
     fetch(`/api/recently-captured/${this.playingWhite ? "white" : "black"}`, {
       cache: "no-store",
     })
       .then((res) => res.json())
       .then((data) => {
-        console.log("recent captures", data);
         this.recentCaptures = data.captures;
         this.broadcast();
       });

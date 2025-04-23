@@ -11,8 +11,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"one-million-chessboards/protocol"
+
 	"github.com/gorilla/websocket"
 	"github.com/klauspost/compress/zstd"
+	"google.golang.org/protobuf/proto"
 )
 
 var zstdPool = sync.Pool{
@@ -35,7 +38,7 @@ const (
 	PeriodicUpdateInterval = time.Second * 60
 	activityThreshold      = time.Second * 20
 	// CR nroyalty: remove before release
-	simulatedLatency          = 1 * time.Millisecond
+	simulatedLatency          = 5 * time.Second
 	simulatedJitterMs         = 1
 	maxWaitBeforeSendingMoves = 200 * time.Millisecond
 )
@@ -197,14 +200,24 @@ func (c *Client) ReadPump() {
 		c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 		if err != nil {
 			// log.Printf("Error reading message: %v", err)
-			// if websocket.IsUnexpectedCloseError(err) {
-			// 	now := time.Now().UnixNano()
-			// 	log.Printf("client disconnected: %v, %d", err, now)
-			// }
 			break
 		}
+		var msg protocol.ClientMessage
+		if err := proto.Unmarshal(message, &msg); err != nil {
+			log.Printf("Error unmarshalling message: %v", err)
+			continue
+		}
+		// if err != nil {
+		// 	// log.Printf("Error reading message: %v", err)
+		// 	// if websocket.IsUnexpectedCloseError(err) {
+		// 	// 	now := time.Now().UnixNano()
+		// 	// 	log.Printf("client disconnected: %v, %d", err, now)
+		// 	// }
+		// 	break
+		// }
 
-		c.handleMessage(message)
+		// c.handleMessage(msg)
+		c.handleProtoMessage(&msg)
 	}
 }
 
@@ -212,81 +225,61 @@ func CoordInBounds(coord float64) bool {
 	return coord >= 0 && uint16(coord) < BOARD_SIZE
 }
 
+func CoordInBoundsInt(coord uint32) bool {
+	return coord < BOARD_SIZE
+}
+
 // CR nroyalty: RATE LIMITS HERE!!
-func (c *Client) handleMessage(message []byte) {
-	var msg map[string]interface{}
-	if err := json.Unmarshal(message, &msg); err != nil {
-		return
-	}
+func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
+	switch p := msg.Payload.(type) {
+	case *protocol.ClientMessage_Move:
+		pieceID := p.Move.PieceId
+		fromX := p.Move.FromX
+		fromY := p.Move.FromY
+		toX := p.Move.ToX
+		toY := p.Move.ToY
+		moveType := p.Move.MoveType
+		moveToken := p.Move.MoveToken
 
-	msgType, ok := msg["type"].(string)
-	if !ok {
-		return
-	}
-
-	switch msgType {
-	case "move":
-		// CR nroyalty: validate that the move is somewhere that the player
-		// is currently looking at
-		pieceID, _ := msg["pieceId"].(float64)
-		fromX, _ := msg["fromX"].(float64)
-		fromY, _ := msg["fromY"].(float64)
-		toX, _ := msg["toX"].(float64)
-		toY, _ := msg["toY"].(float64)
-		moveType, _ := msg["moveType"].(float64)
-		moveTypeEnum := MoveType(int(moveType))
-		moveToken, _ := msg["moveToken"].(float64)
-
-		// Basic bounds checking
-		if !CoordInBounds(fromX) || !CoordInBounds(fromY) ||
-			!CoordInBounds(toX) || !CoordInBounds(toY) {
+		if !CoordInBoundsInt(fromX) || !CoordInBoundsInt(fromY) ||
+			!CoordInBoundsInt(toX) || !CoordInBoundsInt(toY) {
+			log.Printf("Invalid move: %v", p)
 			return
 		}
+
+		if moveType != protocol.MoveType_MOVE_TYPE_NORMAL &&
+			moveType != protocol.MoveType_MOVE_TYPE_CASTLE &&
+			moveType != protocol.MoveType_MOVE_TYPE_ENPASSANT {
+			log.Printf("Invalid move type: %v", moveType)
+			return
+		}
+
 		c.BumpActive()
 
 		move := Move{
-			PieceID:              uint32(pieceID),
+			PieceID:              pieceID,
 			FromX:                uint16(fromX),
 			FromY:                uint16(fromY),
 			ToX:                  uint16(toX),
 			ToY:                  uint16(toY),
-			MoveType:             moveTypeEnum,
-			MoveToken:            uint32(moveToken),
+			MoveType:             moveType,
+			MoveToken:            moveToken,
 			ClientIsPlayingWhite: c.playingWhite.Load(),
 		}
 
-		// CR nroyalty: maybe we don't want to block here? We could just
-		// reject the move
 		c.server.moveRequests <- MoveRequest{
 			Move:   move,
 			Client: c,
 		}
-
-	case "subscribe":
-		centerX, ok := msg["centerX"].(float64)
-		if !ok {
+	case *protocol.ClientMessage_Subscribe:
+		centerX := p.Subscribe.CenterX
+		centerY := p.Subscribe.CenterY
+		if !CoordInBoundsInt(centerX) || !CoordInBoundsInt(centerY) {
 			return
 		}
-		centerY, ok := msg["centerY"].(float64)
-		if !ok {
-			return
-		}
-
-		// Basic bounds checking
-		if !CoordInBounds(centerX) || !CoordInBounds(centerY) {
-			return
-		}
-		centerXInt := uint16(centerX)
-		centerYInt := uint16(centerY)
-
-		if centerXInt == c.position.Load().(Position).X && centerYInt == c.position.Load().(Position).Y {
-			return
-		}
-
 		c.BumpActive()
-		c.UpdatePositionAndMaybeSnapshot(Position{X: centerXInt, Y: centerYInt})
-
-	case "app-ping":
+		c.UpdatePositionAndMaybeSnapshot(Position{X: uint16(centerX), Y: uint16(centerY)})
+	case *protocol.ClientMessage_Ping:
 		type AppPong struct {
 			Type string `json:"type"`
 		}
@@ -299,8 +292,99 @@ func (c *Client) handleMessage(message []byte) {
 			return
 		}
 		c.compresAndSend(data, "app-ping")
+	default:
+		log.Printf("Unknown message type: %v", p)
 	}
 }
+
+// func (c *Client) handleMessage(message []byte) {
+// 	var msg map[string]interface{}
+// 	if err := json.Unmarshal(message, &msg); err != nil {
+// 		return
+// 	}
+
+// 	msgType, ok := msg["type"].(string)
+// 	if !ok {
+// 		return
+// 	}
+
+// 	switch msgType {
+// 	case "move":
+// 		// CR nroyalty: validate that the move is somewhere that the player
+// 		// is currently looking at
+// 		pieceID, _ := msg["pieceId"].(float64)
+// 		fromX, _ := msg["fromX"].(float64)
+// 		fromY, _ := msg["fromY"].(float64)
+// 		toX, _ := msg["toX"].(float64)
+// 		toY, _ := msg["toY"].(float64)
+// 		moveType, _ := msg["moveType"].(float64)
+// 		moveTypeEnum := MoveType(int(moveType))
+// 		moveToken, _ := msg["moveToken"].(float64)
+
+// 		// Basic bounds checking
+// 		if !CoordInBounds(fromX) || !CoordInBounds(fromY) ||
+// 			!CoordInBounds(toX) || !CoordInBounds(toY) {
+// 			return
+// 		}
+// 		c.BumpActive()
+
+// 		move := Move{
+// 			PieceID:              uint32(pieceID),
+// 			FromX:                uint16(fromX),
+// 			FromY:                uint16(fromY),
+// 			ToX:                  uint16(toX),
+// 			ToY:                  uint16(toY),
+// 			MoveType:             moveTypeEnum,
+// 			MoveToken:            uint32(moveToken),
+// 			ClientIsPlayingWhite: c.playingWhite.Load(),
+// 		}
+
+// 		// CR nroyalty: maybe we don't want to block here? We could just
+// 		// reject the move
+// 		c.server.moveRequests <- MoveRequest{
+// 			Move:   move,
+// 			Client: c,
+// 		}
+
+// 	case "subscribe":
+// 		centerX, ok := msg["centerX"].(float64)
+// 		if !ok {
+// 			return
+// 		}
+// 		centerY, ok := msg["centerY"].(float64)
+// 		if !ok {
+// 			return
+// 		}
+
+// 		// Basic bounds checking
+// 		if !CoordInBounds(centerX) || !CoordInBounds(centerY) {
+// 			return
+// 		}
+// 		centerXInt := uint16(centerX)
+// 		centerYInt := uint16(centerY)
+
+// 		if centerXInt == c.position.Load().(Position).X && centerYInt == c.position.Load().(Position).Y {
+// 			return
+// 		}
+
+// 		c.BumpActive()
+// 		c.UpdatePositionAndMaybeSnapshot(Position{X: centerXInt, Y: centerYInt})
+
+// 	case "app-ping":
+// 		type AppPong struct {
+// 			Type string `json:"type"`
+// 		}
+// 		appPong := AppPong{
+// 			Type: "app-pong",
+// 		}
+// 		data, err := json.Marshal(appPong)
+// 		if err != nil {
+// 			log.Printf("Error marshaling app pong: %v", err)
+// 			return
+// 		}
+// 		c.compresAndSend(data, "app-ping")
+// 	}
+// }
 
 func (c *Client) WritePump() {
 	defer func() {
@@ -475,7 +559,7 @@ func (c *Client) Close(why string) {
 	if !c.isClosed.CompareAndSwap(false, true) {
 		return
 	}
-	log.Printf("Closing client: %s", why)
+	// log.Printf("Closing client: %s", why)
 
 	close(c.done)
 	c.server.clientManager.UnregisterClient(c)

@@ -8,6 +8,8 @@ import (
 	"math/rand"
 	"sync"
 	"sync/atomic"
+
+	"one-million-chessboards/protocol"
 )
 
 type Board struct {
@@ -279,7 +281,7 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 	}
 
 	switch move.MoveType {
-	case MoveTypeCastle:
+	case protocol.MoveType_MOVE_TYPE_CASTLE:
 		// Must be a king
 		if movedPiece.Type != King {
 			return MoveResult{Valid: false}
@@ -380,7 +382,7 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 
 		return MoveResult{Valid: true, MovedPieces: movedPieces, Length: 2, Seqnum: seqNum}
 
-	case MoveTypeEnPassant:
+	case protocol.MoveType_MOVE_TYPE_ENPASSANT:
 		// Must be a pawn
 		if movedPiece.Type != Pawn {
 			return MoveResult{Valid: false}
@@ -469,7 +471,7 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 			Seqnum: seqNum,
 		}
 
-	case MoveTypeNormal:
+	case protocol.MoveType_MOVE_TYPE_NORMAL:
 		capturedRaw := b.pieces[move.ToY][move.ToX]
 		capturedPiece := PieceOfEncodedPiece(EncodedPiece(capturedRaw))
 

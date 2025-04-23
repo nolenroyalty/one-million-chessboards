@@ -1,0 +1,39 @@
+syntax = "proto3";
+package chess;
+
+option go_package = "one-million-chessboards/server/protocol;protocol";
+
+// - shared -
+
+enum MoveType {
+  MOVE_TYPE_NORMAL    = 0;
+  MOVE_TYPE_CASTLE    = 1;
+  MOVE_TYPE_ENPASSANT = 2;
+}
+
+// - client -> server -
+
+message ClientPing {}
+
+message ClientSubscribe {
+  uint32 centerX = 1;
+  uint32 centerY = 2;
+}
+
+message ClientMove {
+  uint32 pieceId    = 1;
+  uint32 fromX      = 2;
+  uint32 fromY      = 3;
+  uint32 toX        = 4;
+  uint32 toY        = 5;
+  MoveType moveType = 6;
+  uint32 moveToken  = 7;
+}
+
+message ClientMessage {
+  oneof payload {
+    ClientPing      ping      = 1;
+    ClientSubscribe subscribe = 2;
+    ClientMove      move      = 3;
+  }
+}
