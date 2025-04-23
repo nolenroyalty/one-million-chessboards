@@ -5,6 +5,10 @@ import {
   NAME_TO_TYPE,
 } from "./utils";
 
+import { chess } from "./protoCompiled.js";
+
+// CR nroyalty: install long.js?
+
 const OACTION = {
   MOVE: "move",
   CAPTURE: "capture",
@@ -976,7 +980,7 @@ class PieceHandler {
 
     let shouldComputeSimulatedChanges = false;
     const SIMULATED_CHANGES_THRESHOLD = 20;
-    const piecesById = new Map();
+    const newPiecesById = new Map();
     const activeCaptures = [];
     const animationsByPieceId = new Map();
 
@@ -998,18 +1002,30 @@ class PieceHandler {
         snapshotYDelta < SIMULATED_CHANGES_THRESHOLD;
     }
 
-    snapshot.pieces.forEach((piece) => {
+    snapshot.pieces.forEach((pieceSnapshot) => {
+      // nroyalty PERFORMANCE:
+      // this is a little gross, but we rely on copying our piece in several places
+      // the shallow copies that we do won't copy over default values (which are
+      // set on the prototype only) and it feels really easy to screw something up
+      // there and forget to do a toObject call.
+      //
+      // So we just do it here, making our code safe. This will create more work
+      // and more GC churn (probably) so if we're having performance issues in prod
+      // we can revisit this.
+      const piece = chess.PieceDataShared.toObject(pieceSnapshot.piece, {
+        defaults: true,
+      });
+      piece.x = pieceSnapshot.dx + snapshot.xCoord;
+      piece.y = pieceSnapshot.dy + snapshot.yCoord;
       piece.seqnum = snapshot.seqnum;
-      piece.x = snapshot.xCoord + piece.dx;
-      piece.y = snapshot.yCoord + piece.dy;
-      piecesById.set(piece.id, piece);
+      newPiecesById.set(piece.id, piece);
     });
 
     this.activeCaptures.forEach((capture) => {
       if (capture.seqnum > snapshot.seqnum) {
         activeCaptures.push(capture);
-        if (piecesById.has(capture.pieceId)) {
-          piecesById.delete(capture.pieceId);
+        if (newPiecesById.has(capture.pieceId)) {
+          newPiecesById.delete(capture.pieceId);
         }
       }
     });
@@ -1019,7 +1035,7 @@ class PieceHandler {
     // otherwise we'll end up potentially simulating a move or capture twice!
     const snapshotSeqnum = snapshot.seqnum;
     let stalePieceCount = 0;
-    snapshot.pieces.forEach((piece) => {
+    for (const piece of newPiecesById.values()) {
       if (this.piecesById.has(piece.id)) {
         const oldPiece = this.piecesById.get(piece.id);
         if (FORCE_KEEP_SNAPSHOT_VALUES || oldPiece.seqnum < snapshotSeqnum) {
@@ -1034,7 +1050,7 @@ class PieceHandler {
           }
         } else if (oldPiece.seqnum > snapshotSeqnum) {
           stalePieceCount++;
-          piecesById.set(piece.id, oldPiece);
+          newPiecesById.set(piece.id, oldPiece);
         } else {
           if (oldPiece.x !== piece.x || oldPiece.y !== piece.y) {
             console.warn(
@@ -1046,7 +1062,7 @@ class PieceHandler {
         const animation = animateAppearance({ piece, receivedAt });
         animationsByPieceId.set(piece.id, animation);
       }
-    });
+    }
 
     if (stalePieceCount > 0) {
       console.warn(`${stalePieceCount} stale pieces in snapshot`);
@@ -1058,7 +1074,7 @@ class PieceHandler {
     // the missing piece to exist in the new snapshot window"
     if (shouldComputeSimulatedChanges) {
       for (const [oldPieceId, oldPiece] of this.piecesById) {
-        if (!piecesById.has(oldPieceId)) {
+        if (!newPiecesById.has(oldPieceId)) {
           // This check probably shouldn't matter but it should be relatively cheap
           const existsInRecentCaptures = this.activeCaptures.some((elt) => {
             return elt.pieceId === oldPieceId;
@@ -1072,7 +1088,7 @@ class PieceHandler {
     }
 
     this.activeCaptures = activeCaptures;
-    this.piecesById = piecesById;
+    this.piecesById = newPiecesById;
     this.snapshotSeqnum = Math.max(this.snapshotSeqnum, snapshot.seqnum);
 
     const { processedAnimationsByPieceId } = this.processGroundTruthAnimations({
@@ -1096,9 +1112,14 @@ class PieceHandler {
     const moveSeqnumsForStatsHandler = [];
     const capturesForStatsHandler = [];
 
-    moves.forEach((move) => {
-      const { piece, seqnum } = move;
-      piece.seqnum = seqnum;
+    moves.forEach((pieceDataForMove) => {
+      const { seqnum, x, y, piece: pieceDataShared } = pieceDataForMove;
+      const piece = chess.PieceDataShared.toObject(pieceDataShared, {
+        defaults: true,
+      });
+      piece.seqnum = pieceDataForMove.seqnum;
+      piece.x = x;
+      piece.y = y;
       const currentPiece = this.piecesById.get(piece.id);
       moveSeqnumsForStatsHandler.push(seqnum);
       if (!currentPiece) {
@@ -1189,6 +1210,7 @@ class PieceHandler {
         if (predictedState.wasPromotion && TYPE_TO_NAME[type] === "pawn") {
           type = NAME_TO_TYPE["promotedPawn"];
         }
+
         return {
           ...piece,
           moveCount: piece.moveCount + predictedState.incrMoves,

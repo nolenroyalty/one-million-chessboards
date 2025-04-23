@@ -6,11 +6,12 @@ import CoordsContext from "../CoordsContext/CoordsContext";
 import { decompress } from "fzstd";
 import useStartBot from "../../hooks/use-start-bot";
 import { chess } from "../../protoCompiled.js";
+import protobuf from "protobufjs";
 // CR nroyalty: replace with partysocket
 
 const ZSTD_MAGIC = [0x28, 0xb5, 0x2f, 0xfd]; // little‑endian
 
-function parseFrame(buf) {
+function parseServerMessage(buf) {
   const u8 = new Uint8Array(buf);
 
   const isZstd =
@@ -21,7 +22,19 @@ function parseFrame(buf) {
 
   const payload = isZstd ? decompress(u8) : u8;
 
-  return JSON.parse(new TextDecoder().decode(payload));
+  let decoded;
+  try {
+    decoded = chess.ServerMessage.decode(payload);
+    return decoded;
+  } catch (e) {
+    if (e instanceof protobuf.util.ProtocolError) {
+      console.error("Error decoding server message", e);
+      return null;
+    } else {
+      console.error("Error decoding server message", e);
+      return null;
+    }
+  }
 }
 
 function encodeAndSendIfOpen({ ws, msg }) {
@@ -133,39 +146,44 @@ function useWebsocket({
           event.data instanceof Blob
             ? await event.data.arrayBuffer()
             : event.data;
-        const data = parseFrame(buf);
-
-        if (data.type === "stateSnapshot") {
+        const data = parseServerMessage(buf);
+        if (!data) {
+          return;
+        }
+        if (data.initialState) {
+          const initialState = data.initialState;
+          setCoords({ x: initialState.position.x, y: initialState.position.y });
+          setCurrentColor({ playingWhite: initialState.playingWhite });
           pieceHandler.current.handleSnapshot({
-            snapshot: data,
-            newConnection: false,
-          });
-        } else if (data.type === "moveUpdates") {
-          pieceHandler.current.handleMoves({
-            moves: data.moves,
-            captures: data.captures,
-          });
-        } else if (data.type === "initialState") {
-          pieceHandler.current.handleSnapshot({
-            snapshot: data.snapshot,
+            snapshot: initialState.snapshot,
             newConnection: true,
           });
-          setCoords({ x: data.position.x, y: data.position.y });
-          setCurrentColor({ playingWhite: data.playingWhite });
-        } else if (data.type === "validMove") {
+        } else if (data.snapshot) {
+          pieceHandler.current.handleSnapshot({
+            snapshot: data.snapshot,
+            newConnection: false,
+          });
+        } else if (data.movesAndCaptures) {
+          const movesAndCaptures = data.movesAndCaptures;
+          pieceHandler.current.handleMoves({
+            moves: movesAndCaptures.moves,
+            captures: movesAndCaptures.captures,
+          });
+        } else if (data.validMove) {
+          const valid = data.validMove;
           pieceHandler.current.confirmOptimisticMove({
-            moveToken: data.moveToken,
-            asOfSeqnum: data.asOfSeqnum,
-            capturedPieceId: data.capturedPieceId,
+            moveToken: valid.moveToken,
+            asOfSeqnum: valid.asOfSeqnum,
+            capturedPieceId: valid.capturedPieceId,
           });
-        } else if (data.type === "invalidMove") {
+        } else if (data.invalidMove) {
+          const invalid = data.invalidMove;
           pieceHandler.current.rejectOptimisticMove({
-            moveToken: data.moveToken,
+            moveToken: invalid.moveToken,
           });
-        } else if (data.type === "app-pong") {
-          // ok
+        } else if (data.pong) {
         } else {
-          console.log("unknown message type", data);
+          console.debug("unknown message type", data);
         }
       };
 

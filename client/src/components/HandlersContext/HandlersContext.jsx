@@ -1,7 +1,7 @@
 import React from "react";
 import MinimapHandler from "../../minimapHandler.js";
 import StatsHandler from "../../statsHandler.js";
-import PieceHandler from "../../pieceHandlerNewer.js";
+import PieceHandler from "../../pieceHandler.js";
 import RecentCapturesHandler from "../../recentCapturesHandler.js";
 const HandlersContext = React.createContext();
 

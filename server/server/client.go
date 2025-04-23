@@ -31,10 +31,6 @@ var zstdPool = sync.Pool{
 
 var marshalOpt = proto.MarshalOptions{Deterministic: false}
 
-// CR nroyalty: send seqnum with global stats and then updating global stats is
-// pretty easy.
-// CR nroyalty: standardize on a function for sending a message to the client or unsubbing
-
 const (
 	// CR nroyalty: MAKE SURE THIS IS NOT BELOW 60 AND MAYBE MAKE IT HIGHER
 	PeriodicUpdateInterval = time.Second * 60
