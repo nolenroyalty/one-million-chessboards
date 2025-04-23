@@ -352,9 +352,9 @@ func (c *MainCounter) runAllRandomMovers() {
 	wg.Wait()
 }
 
-const DO_SUBSCRIBE = false
+const DO_SUBSCRIBE = true
 const DO_MOVE = true
-const DO_RECONNECTS = false
+const DO_RECONNECTS = true
 
 func main() {
 	counter := MainCounter{}
