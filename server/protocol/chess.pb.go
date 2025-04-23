@@ -24,9 +24,9 @@ const (
 type MoveType int32
 
 const (
-	MoveType_MOVE_TYPE_NORMAL    MoveType = 0
-	MoveType_MOVE_TYPE_CASTLE    MoveType = 1
-	MoveType_MOVE_TYPE_ENPASSANT MoveType = 2
+	MoveType_MOVE_TYPE_NORMAL     MoveType = 0
+	MoveType_MOVE_TYPE_CASTLE     MoveType = 1
+	MoveType_MOVE_TYPE_EN_PASSANT MoveType = 2
 )
 
 // Enum value maps for MoveType.
@@ -34,12 +34,12 @@ var (
 	MoveType_name = map[int32]string{
 		0: "MOVE_TYPE_NORMAL",
 		1: "MOVE_TYPE_CASTLE",
-		2: "MOVE_TYPE_ENPASSANT",
+		2: "MOVE_TYPE_EN_PASSANT",
 	}
 	MoveType_value = map[string]int32{
-		"MOVE_TYPE_NORMAL":    0,
-		"MOVE_TYPE_CASTLE":    1,
-		"MOVE_TYPE_ENPASSANT": 2,
+		"MOVE_TYPE_NORMAL":     0,
+		"MOVE_TYPE_CASTLE":     1,
+		"MOVE_TYPE_EN_PASSANT": 2,
 	}
 )
 
@@ -1349,11 +1349,11 @@ const file_chess_proto_rawDesc = "" +
 	"\tvalidMove\x18\x04 \x01(\v2\x16.chess.ServerValidMoveH\x00R\tvalidMove\x12<\n" +
 	"\vinvalidMove\x18\x05 \x01(\v2\x18.chess.ServerInvalidMoveH\x00R\vinvalidMove\x12'\n" +
 	"\x04pong\x18\x06 \x01(\v2\x11.chess.ServerPongH\x00R\x04pongB\t\n" +
-	"\apayload*O\n" +
+	"\apayload*P\n" +
 	"\bMoveType\x12\x14\n" +
 	"\x10MOVE_TYPE_NORMAL\x10\x00\x12\x14\n" +
-	"\x10MOVE_TYPE_CASTLE\x10\x01\x12\x17\n" +
-	"\x13MOVE_TYPE_ENPASSANT\x10\x02*\xac\x01\n" +
+	"\x10MOVE_TYPE_CASTLE\x10\x01\x12\x18\n" +
+	"\x14MOVE_TYPE_EN_PASSANT\x10\x02*\xac\x01\n" +
 	"\tPieceType\x12\x13\n" +
 	"\x0fPIECE_TYPE_PAWN\x10\x00\x12\x15\n" +
 	"\x11PIECE_TYPE_KNIGHT\x10\x01\x12\x15\n" +

@@ -382,7 +382,7 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 
 		return MoveResult{Valid: true, MovedPieces: movedPieces, Length: 2, Seqnum: seqNum}
 
-	case protocol.MoveType_MOVE_TYPE_ENPASSANT:
+	case protocol.MoveType_MOVE_TYPE_EN_PASSANT:
 		// Must be a pawn
 		if movedPiece.Type != Pawn {
 			return MoveResult{Valid: false}

@@ -32,6 +32,9 @@ class RecentCapturesHandler {
       .then((data) => {
         this.recentCaptures = data.captures;
         this.broadcast();
+      })
+      .catch((error) => {
+        console.error("Error fetching recently captured pieces:", error);
       });
     const interval = intervalWithJitter({
       baseInterval: BASE_STATS_REFRESH_INTERVAL,

@@ -346,7 +346,7 @@ func (c *MainCounter) runRandomMover(boardX int) {
 	rm.subscribe()
 	for i := 0; i < NUMBER_OF_MOVES; i++ {
 		rm.movePawn()
-		time.Sleep(4 * time.Millisecond)
+		time.Sleep(6 * time.Millisecond)
 	}
 }
 

@@ -492,7 +492,7 @@ class PieceHandler {
     this.currentCoords = { x: null, y: null };
     this.lastSnapshotCoords = { x: null, y: null };
 
-    this.activeCaptures = [];
+    this.activeCapturesByPieceId = new Map(); // pieceId -> seqnum
 
     // CR nroyalty: implement this...
     this.cachedCombinedView = null;
@@ -507,7 +507,7 @@ class PieceHandler {
     if (wasConnected && !nowConnected) {
       console.log(`disconnected - reverting optimistic state, etc`);
       const { preRevertVisualStates } = this.optimisticStateHandler.revertAll();
-      this.activeCaptures = [];
+      this.activeCapturesByPieceId.clear();
       const receivedAt = performance.now();
       const animations = [];
       for (const [pieceId, visualState] of preRevertVisualStates.entries()) {
@@ -634,16 +634,15 @@ class PieceHandler {
     // this.optimisticStateHandler._debugDumpState("after");
     const animations = [];
     let needToSimulateAdditionalCapture = true;
+    if (capturedPieceId && capturedPieceId !== 0) {
+      this.activeCapturesByPieceId.set(capturedPieceId, asOfSeqnum);
+    }
 
     groundTruthUpdates.forEach((update) => {
       if (update.state === OACTION.CAPTURE) {
         if (update.pieceId === capturedPieceId) {
           // We captured the piece that we thought we were capturing!
           needToSimulateAdditionalCapture = false;
-          this.activeCaptures.push({
-            pieceId: capturedPieceId,
-            seqnum: asOfSeqnum,
-          });
         } else {
           // we simulated a capture for a piece that we didn't actually capture lol
           const ourPiece = this.piecesById.get(update.pieceId);
@@ -661,7 +660,7 @@ class PieceHandler {
       } else if (update.state === OACTION.MOVE) {
         const ourPiece = this.piecesById.get(update.pieceId);
         if (ourPiece) {
-          if (ourPiece.seqnum > update.seqnum) {
+          if (ourPiece.seqnum > asOfSeqnum) {
             if (ourPiece.x !== update.x || ourPiece.y !== update.y) {
               // We have a newer state for this piece and should make that
               // visible to the client.
@@ -680,7 +679,7 @@ class PieceHandler {
             ourPiece.x = update.x;
             ourPiece.y = update.y;
             ourPiece.moveCount++;
-            ourPiece.seqnum = update.seqnum;
+            ourPiece.seqnum = asOfSeqnum;
             if (capturedPieceId) {
               ourPiece.captureCount++;
             }
@@ -701,10 +700,6 @@ class PieceHandler {
             receivedAt: performance.now(),
           })
         );
-        this.activeCaptures.push({
-          pieceId: capturedPieceId,
-          seqnum: asOfSeqnum,
-        });
         this.piecesById.delete(capturedPieceId);
       }
     }
@@ -981,7 +976,7 @@ class PieceHandler {
     let shouldComputeSimulatedChanges = false;
     const SIMULATED_CHANGES_THRESHOLD = 20;
     const newPiecesById = new Map();
-    const activeCaptures = [];
+    const newActiveCapturesByPieceId = new Map();
     const animationsByPieceId = new Map();
 
     if (
@@ -1021,14 +1016,14 @@ class PieceHandler {
       newPiecesById.set(piece.id, piece);
     });
 
-    this.activeCaptures.forEach((capture) => {
-      if (capture.seqnum > snapshot.seqnum) {
-        activeCaptures.push(capture);
-        if (newPiecesById.has(capture.pieceId)) {
-          newPiecesById.delete(capture.pieceId);
+    for (const [pieceId, seqnum] of this.activeCapturesByPieceId) {
+      if (seqnum > snapshot.seqnum) {
+        newActiveCapturesByPieceId.set(pieceId, seqnum);
+        if (newPiecesById.has(pieceId)) {
+          newPiecesById.delete(pieceId);
         }
       }
-    });
+    }
 
     const receivedAt = performance.now();
     // we need to do this *after* we process the active moves and captures,
@@ -1076,9 +1071,8 @@ class PieceHandler {
       for (const [oldPieceId, oldPiece] of this.piecesById) {
         if (!newPiecesById.has(oldPieceId)) {
           // This check probably shouldn't matter but it should be relatively cheap
-          const existsInRecentCaptures = this.activeCaptures.some((elt) => {
-            return elt.pieceId === oldPieceId;
-          });
+          const existsInRecentCaptures =
+            this.activeCapturesByPieceId.has(oldPieceId);
           if (!existsInRecentCaptures) {
             const animation = animateCapture({ piece: oldPiece, receivedAt });
             animationsByPieceId.set(oldPieceId, animation);
@@ -1087,7 +1081,7 @@ class PieceHandler {
       }
     }
 
-    this.activeCaptures = activeCaptures;
+    this.activeCapturesByPieceId = newActiveCapturesByPieceId;
     this.piecesById = newPiecesById;
     this.snapshotSeqnum = Math.max(this.snapshotSeqnum, snapshot.seqnum);
 
@@ -1112,6 +1106,11 @@ class PieceHandler {
     const moveSeqnumsForStatsHandler = [];
     const capturesForStatsHandler = [];
 
+    // this is annoying, but we want to remember the original location
+    // of a piece in the case that we receive multiple moves for it in the
+    // same tick
+    const originalLocationByPieceId = new Map();
+
     moves.forEach((pieceDataForMove) => {
       const { seqnum, x, y, piece: pieceDataShared } = pieceDataForMove;
       const piece = chess.PieceDataShared.toObject(pieceDataShared, {
@@ -1122,7 +1121,10 @@ class PieceHandler {
       piece.y = y;
       const currentPiece = this.piecesById.get(piece.id);
       moveSeqnumsForStatsHandler.push(seqnum);
-      if (!currentPiece) {
+      if (this.activeCapturesByPieceId.has(piece.id)) {
+        // nothing to do here; this could happen if we've already receive an ack
+        // for our move but haven't received the actual capture update yet
+      } else if (!currentPiece) {
         // CR nroyalty: soon - only add move if it's somewhat close to where
         // we're looking!
         this.piecesById.set(piece.id, piece);
@@ -1131,13 +1133,27 @@ class PieceHandler {
       } else if (seqnum < currentPiece.seqnum) {
         // Nothing to do! We already know about this state
       } else {
+        // we only want to set this once, since our goal is to animate from
+        // the original location before receiving any moves this tick
+        if (!originalLocationByPieceId.has(piece.id)) {
+          originalLocationByPieceId.set(piece.id, {
+            x: currentPiece.x,
+            y: currentPiece.y,
+          });
+        }
         this.piecesById.set(piece.id, piece);
         if (currentPiece.x === piece.x && currentPiece.y === piece.y) {
           // Weird, but nothing to do
         } else {
+          let fromX = currentPiece.x;
+          let fromY = currentPiece.y;
+          if (originalLocationByPieceId.has(piece.id)) {
+            fromX = originalLocationByPieceId.get(piece.id).x;
+            fromY = originalLocationByPieceId.get(piece.id).y;
+          }
           const animation = animateMove({
-            fromX: currentPiece.x,
-            fromY: currentPiece.y,
+            fromX,
+            fromY,
             piece,
             receivedAt,
           });
@@ -1167,10 +1183,10 @@ class PieceHandler {
         if (ourPiece === undefined) {
           // probably a capture for somewhere we're not looking anymore?
         } else {
-          this.activeCaptures.push({
-            pieceId: capture.capturedPieceId,
-            seqnum: capture.seqnum,
-          });
+          this.activeCapturesByPieceId.set(
+            capture.capturedPieceId,
+            capture.seqnum
+          );
           this.piecesById.delete(ourPiece.id);
           const animation = animateCapture({ piece: ourPiece, receivedAt });
           animationsByPieceId.set(ourPiece.id, animation);
@@ -1197,6 +1213,9 @@ class PieceHandler {
     return new Set(this.piecesById.keys());
   }
 
+  // nroyalty performance: maybe this should take in the coords we want to
+  // search for and not return the piece if it's outside those coords? would
+  // let us avoid some copying
   getPieceById(id) {
     const predictedState = this.optimisticStateHandler.getPredictedState(id);
     const piece = this.piecesById.get(id);

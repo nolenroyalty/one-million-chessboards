@@ -8,7 +8,7 @@ option go_package = "one-million-chessboards/server/protocol;protocol";
 enum MoveType {
     MOVE_TYPE_NORMAL    = 0;
     MOVE_TYPE_CASTLE    = 1;
-    MOVE_TYPE_ENPASSANT = 2;
+    MOVE_TYPE_EN_PASSANT = 2;
 }
 
 enum PieceType {

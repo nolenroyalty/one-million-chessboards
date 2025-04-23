@@ -36,7 +36,7 @@ const (
 	PeriodicUpdateInterval = time.Second * 60
 	activityThreshold      = time.Second * 20
 	// CR nroyalty: remove before release
-	simulatedLatency          = 5 * time.Second
+	simulatedLatency          = 3 * time.Second
 	simulatedJitterMs         = 1
 	maxWaitBeforeSendingMoves = 200 * time.Millisecond
 )
@@ -235,7 +235,7 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 
 		if moveType != protocol.MoveType_MOVE_TYPE_NORMAL &&
 			moveType != protocol.MoveType_MOVE_TYPE_CASTLE &&
-			moveType != protocol.MoveType_MOVE_TYPE_ENPASSANT {
+			moveType != protocol.MoveType_MOVE_TYPE_EN_PASSANT {
 			log.Printf("Invalid move type: %v", moveType)
 			return
 		}

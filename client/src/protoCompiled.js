@@ -22,13 +22,13 @@ export const chess = $root.chess = (() => {
      * @enum {number}
      * @property {number} MOVE_TYPE_NORMAL=0 MOVE_TYPE_NORMAL value
      * @property {number} MOVE_TYPE_CASTLE=1 MOVE_TYPE_CASTLE value
-     * @property {number} MOVE_TYPE_ENPASSANT=2 MOVE_TYPE_ENPASSANT value
+     * @property {number} MOVE_TYPE_EN_PASSANT=2 MOVE_TYPE_EN_PASSANT value
      */
     chess.MoveType = (function() {
         const valuesById = {}, values = Object.create(valuesById);
         values[valuesById[0] = "MOVE_TYPE_NORMAL"] = 0;
         values[valuesById[1] = "MOVE_TYPE_CASTLE"] = 1;
-        values[valuesById[2] = "MOVE_TYPE_ENPASSANT"] = 2;
+        values[valuesById[2] = "MOVE_TYPE_EN_PASSANT"] = 2;
         return values;
     })();
 
@@ -752,7 +752,7 @@ export const chess = $root.chess = (() => {
             case 1:
                 message.moveType = 1;
                 break;
-            case "MOVE_TYPE_ENPASSANT":
+            case "MOVE_TYPE_EN_PASSANT":
             case 2:
                 message.moveType = 2;
                 break;
