@@ -8,6 +8,7 @@ import {
   pieceKey,
 } from "../../utils";
 import SelectedPieceAndSquaresContext from "../SelectedPieceAndSquaresContext/SelectedPieceAndSquaresContext";
+import { BOARD_BACKGROUND_COLOR, BOARD_BORDER_COLOR } from "../../constants";
 const Canvas = styled.canvas`
   position: absolute;
   top: 0;
@@ -37,9 +38,6 @@ function adjustHexColor(hex, amount) {
   );
 }
 
-const BOARD_BACKGROUND_COLOR = "#0a0a0a";
-// const BOARD_BACKGROUND_COLOR = "transparent";
-const BOARD_BORDER_COLOR = "#171717";
 const MOVEABLE_SQUARE_COLOR = "#3b82f6";
 const SELECTED_PIECE_COLOR = "#fbbf24";
 const DARK_COLOR_OLD = "#6f8d51";

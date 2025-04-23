@@ -162,7 +162,7 @@ func (c *Client) BumpActive() {
 	c.lastActionTime.Store(time.Now().Unix())
 }
 
-const SNAPSHOT_THRESHOLD = 15
+const SNAPSHOT_THRESHOLD = VIEW_RADIUS - MAX_CLIENT_HALF_VIEW_RADIUS
 
 func shouldSendSnapshot(lastSnapshotPosition Position, currentPosition Position) bool {
 	dx := math.Abs(float64(lastSnapshotPosition.X) - float64(currentPosition.X))

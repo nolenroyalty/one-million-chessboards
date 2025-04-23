@@ -10,14 +10,10 @@ import {
 } from "../../utils";
 import CoordsContext from "../CoordsContext/CoordsContext";
 import ShowLargeBoardContext from "../ShowLargeBoardContext/ShowLargeBoardContext";
-
+import { BOARD_BACKGROUND_COLOR, BOARD_BORDER_COLOR } from "../../constants";
 const MAX_ANIMATION_DURATION = 1200;
 const MIN_ANIMATION_DURATION = 500;
 const MAX_DMOVE = 25;
-const BORDER_COLOR = "#0a0a0a";
-const BACKGROUND_COLOR = "#0a0a0a";
-const DARK_STROKE_COLOR = "#171717";
-const LIGHT_STROKE_COLOR = "#f5f5f5";
 
 const ZoomedOutOverviewWrapper = styled.div`
   position: absolute;
@@ -106,9 +102,9 @@ function ZoomedOutOverview({ opacity, boardSizeParams }) {
       return;
     }
     const ctx = boardCanvasRef.current.getContext("2d");
-    ctx.fillStyle = BACKGROUND_COLOR;
+    ctx.clearRect(0, 0, boardSizeParams.pxWidth, boardSizeParams.pxHeight);
+    ctx.fillStyle = BOARD_BACKGROUND_COLOR;
     ctx.fillRect(0, 0, boardSizeParams.pxWidth, boardSizeParams.pxHeight);
-    ctx.fillStyle = BORDER_COLOR;
 
     let xMod = startingX % 8;
     let yMod = startingY % 8;
@@ -141,7 +137,15 @@ function ZoomedOutOverview({ opacity, boardSizeParams }) {
       }
     }
 
-    ctx.fillStyle = BORDER_COLOR;
+    ctx.fillStyle = BOARD_BORDER_COLOR;
+    let yAccountingForTopSide = 0;
+    if (startingY < 0) {
+      yAccountingForTopSide = -startingY * squarePx;
+    }
+    let heightAccountingForBottomSide = ctx.canvas.height;
+    if (endingY > 8000) {
+      heightAccountingForBottomSide -= (endingY - 8000) * squarePx;
+    }
     for (let x = startingX + xOff; x < endingX; x += 8) {
       if (x < 0 || x >= 8000) {
         continue;
@@ -154,7 +158,21 @@ function ZoomedOutOverview({ opacity, boardSizeParams }) {
       });
       const starting = screenX * squarePx - borderHalfWidth;
       const ending = starting + borderHalfWidth * 2;
-      ctx.fillRect(starting, 0, ending - starting, ctx.canvas.height);
+      ctx.fillRect(
+        starting,
+        yAccountingForTopSide,
+        ending - starting,
+        heightAccountingForBottomSide
+      );
+    }
+
+    let xAccountingForLeftSide = 0;
+    if (startingX < 0) {
+      xAccountingForLeftSide = -startingX * squarePx;
+    }
+    let widthAccountingForRightSide = ctx.canvas.width;
+    if (endingX > 8000) {
+      widthAccountingForRightSide -= (endingX - 8000) * squarePx;
     }
     for (let y = startingY + yOff; y < endingY; y += 8) {
       if (y < 0 || y >= 8000) {
@@ -166,9 +184,15 @@ function ZoomedOutOverview({ opacity, boardSizeParams }) {
         startingX,
         startingY,
       });
+
       const starting = screenY * squarePx - borderHalfWidth;
       const ending = starting + borderHalfWidth * 2;
-      ctx.fillRect(0, starting, ctx.canvas.width, ending - starting);
+      ctx.fillRect(
+        xAccountingForLeftSide,
+        starting,
+        widthAccountingForRightSide,
+        ending - starting
+      );
     }
   }, [
     startingX,

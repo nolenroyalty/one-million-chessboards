@@ -26,6 +26,8 @@ export function useElementDimensions(ref) {
           height: bounds.height,
           left: bounds.left,
           top: bounds.top,
+          right: bounds.right,
+          bottom: bounds.bottom,
         });
       }, 50);
     };

@@ -41,11 +41,6 @@ export function computeAnimationDuration({
 }
 
 export function getStartingAndEndingCoords({ coords, width, height }) {
-  // if (width % 2 === 0 || height % 2 === 0) {
-  //   throw new Error(
-  //     `We're lazy so width and height must be odd. width: ${width}, height: ${height}`
-  //   );
-  // }
   const halfWidthSmall = Math.floor(width / 2);
   const halfHeightSmall = Math.floor(height / 2);
   const halfWidthLarge = Math.ceil(width / 2);
@@ -628,10 +623,12 @@ export function computeInitialArguments() {
     return { x: null, y: null, colorPref };
   }
   try {
-    const [x, y] = hash.split(",").map(Number);
-    if (x < 0 || x >= 8000 || y < 0 || y >= 8000 || isNaN(x) || isNaN(y)) {
+    let [x, y] = hash.split(",").map(Number);
+    if (isNaN(x) || isNaN(y)) {
       return { x: null, y: null, colorPref };
     }
+    x = clamp(x, 0, 7999);
+    y = clamp(y, 0, 7999);
     return { x, y, colorPref };
   } catch (e) {
     return { x: null, y: null, colorPref };

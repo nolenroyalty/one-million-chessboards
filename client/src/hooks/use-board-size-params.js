@@ -2,7 +2,7 @@ import React from "react";
 import { useElementDimensions } from "./use-element-dimensions";
 
 const MIN_PIXELS_PER_SQUARE = 28;
-const MAX_NUM_ZOOMED_IN_SQUARES = 36;
+const MAX_NUM_ZOOMED_IN_SQUARES = 35;
 const MIN_NUM_ZOOMED_IN_SQUARES = 8;
 
 function useBoardSizeParams({ outerRef }) {
@@ -43,19 +43,19 @@ function useBoardSizeParams({ outerRef }) {
       let smallCount;
       if (minDist / MIN_PIXELS_PER_SQUARE < MIN_NUM_ZOOMED_IN_SQUARES) {
         squarePx = MIN_PIXELS_PER_SQUARE;
-        largeCount = maxDist / squarePx;
-        smallCount = minDist / squarePx;
+        largeCount = Math.floor(maxDist / squarePx);
+        smallCount = Math.floor(minDist / squarePx);
       } else {
         squarePx = MIN_PIXELS_PER_SQUARE;
-        largeCount = maxDist / squarePx;
-        smallCount = minDist / squarePx;
+        largeCount = Math.floor(maxDist / squarePx);
+        smallCount = Math.floor(minDist / squarePx);
         while (
           largeCount > MAX_NUM_ZOOMED_IN_SQUARES &&
           smallCount > MIN_NUM_ZOOMED_IN_SQUARES
         ) {
           squarePx += 2;
-          largeCount = maxDist / squarePx;
-          smallCount = minDist / squarePx;
+          largeCount = Math.floor(maxDist / squarePx);
+          smallCount = Math.floor(minDist / squarePx);
         }
         largeCount = Math.min(
           Math.floor(largeCount),

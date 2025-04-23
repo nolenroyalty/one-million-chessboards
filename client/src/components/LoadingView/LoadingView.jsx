@@ -30,15 +30,17 @@ function LoadingView({ boardSizeParams }) {
   const { showLargeBoard } = React.useContext(ShowLargeBoardContext);
 
   React.useEffect(() => {
-    pieceHandler.current.subscribe({
+    let ph = pieceHandler.current;
+    ph.subscribe({
       id: "loading-view",
       type: "coords",
       callback: ({ lastSnapshotCoords }) => {
+        // callback is immediately invoked, so no need to set manually
         setLastSnapshotCoords(lastSnapshotCoords);
       },
     });
     return () => {
-      pieceHandler.current.unsubscribe({ id: "loading-view", type: "coords" });
+      ph.unsubscribe({ id: "loading-view", type: "coords" });
     };
   }, [pieceHandler]);
 
