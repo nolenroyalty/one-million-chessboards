@@ -6,9 +6,19 @@ option go_package = "one-million-chessboards/server/protocol;protocol";
 // - shared -
 
 enum MoveType {
-  MOVE_TYPE_NORMAL    = 0;
-  MOVE_TYPE_CASTLE    = 1;
-  MOVE_TYPE_ENPASSANT = 2;
+    MOVE_TYPE_NORMAL    = 0;
+    MOVE_TYPE_CASTLE    = 1;
+    MOVE_TYPE_ENPASSANT = 2;
+}
+
+enum PieceType {
+    PIECE_TYPE_PAWN          = 0;
+    PIECE_TYPE_KNIGHT        = 1;
+    PIECE_TYPE_BISHOP        = 2;
+    PIECE_TYPE_ROOK          = 3;
+    PIECE_TYPE_QUEEN         = 4;
+    PIECE_TYPE_KING          = 5;
+    PIECE_TYPE_PROMOTED_PAWN = 6;
 }
 
 // - client -> server -
@@ -16,24 +26,121 @@ enum MoveType {
 message ClientPing {}
 
 message ClientSubscribe {
-  uint32 centerX = 1;
-  uint32 centerY = 2;
+    uint32 centerX = 1;
+    uint32 centerY = 2;
 }
 
 message ClientMove {
-  uint32 pieceId    = 1;
-  uint32 fromX      = 2;
-  uint32 fromY      = 3;
-  uint32 toX        = 4;
-  uint32 toY        = 5;
-  MoveType moveType = 6;
-  uint32 moveToken  = 7;
+    uint32 pieceId    = 1;
+    uint32 fromX      = 2;
+    uint32 fromY      = 3;
+    uint32 toX        = 4;
+    uint32 toY        = 5;
+    MoveType moveType = 6;
+    uint32 moveToken  = 7;
 }
 
 message ClientMessage {
-  oneof payload {
-    ClientPing      ping      = 1;
-    ClientSubscribe subscribe = 2;
-    ClientMove      move      = 3;
-  }
+    oneof payload {
+        ClientPing      ping      = 1;
+        ClientSubscribe subscribe = 2;
+        ClientMove      move      = 3;
+    }
+}
+
+// - server -> client
+
+message ServerValidMove {
+    uint64 asOfSeqnum = 1;
+    uint32 moveToken = 2;
+    uint32 capturedPieceId = 3;
+}
+
+message ServerInvalidMove {
+    uint32 moveToken = 1;
+}
+
+message ServerPong {}
+
+message PieceCapture {
+    uint32 capturedPieceId = 1;
+    uint64 seqnum = 2;
+}
+
+message PieceDataShared {
+    uint32 id                             = 1;
+    PieceType type                        = 2;
+    bool isWhite                          = 3;
+    bool justDoubleMoved                  = 4;
+    bool kingKiller                       = 5;
+    bool kingPawner                       = 6;
+    bool queenKiller                      = 7;
+    bool queenPawner                      = 8;
+    bool adoptedKiller                    = 9;
+    bool adopted                          = 10;
+    bool hasCapturedPieceTypeOtherThanOwn = 11;
+    uint32 moveCount                      = 12;
+    uint32 captureCount                   = 13;
+}
+
+// Using dx/dy for moves is a pain in the ass because we need to know the actual
+// X and Y for the move, then use the client's current position to back out
+// the dx/dy that we'd pass on. This requires an extra loop and some copying,
+// which I think means it's not worth it.
+//
+// You could imagine doing all of this by only passing moved piece IDs to
+// the client goroutine and then having it do a lookup on those IDs when it
+// processes the move, but I think that probably adds too much read contention
+// to be worth it.
+//
+// If this ends up being a problem we can consider some clever tricks to work around
+// the copying problem and save 2 bytes per move, but I suspect it's not worth it.
+message PieceDataForMove {
+    uint32 x              = 1;
+    uint32 y              = 2;
+    uint64 seqnum         = 3;
+    PieceDataShared piece = 4;
+}
+
+// For snapshots, we use dx and dy instead of a full uint16 x and y because we already
+// have an anchor coordinate for the snapshot, so we can save 2 bytes per piece
+// by just using an offset
+message PieceDataForSnapshot {
+    sint32 dx = 1;
+    sint32 dy = 2;
+    PieceDataShared piece = 3;
+}
+
+message ServerMovesAndCaptures {
+    repeated PieceDataForMove moves = 1;
+    repeated PieceCapture captures = 2;
+}
+
+message ServerStateSnapshot {
+    uint32 xCoord = 1;
+    uint32 yCoord = 2;
+    uint64 seqnum = 3;
+    repeated PieceDataForSnapshot pieces = 4;
+}
+
+message Position {
+    uint32 x = 1;
+    uint32 y = 2;
+}
+
+message ServerInitialState {
+    bool playingWhite = 1;
+    Position position = 2;
+    ServerStateSnapshot snapshot = 3;
+}
+
+message ServerMessage {
+    oneof payload {
+        ServerInitialState initialState         = 1;
+        ServerStateSnapshot snapshot            = 2;
+        ServerMovesAndCaptures movesAndCaptures = 3;
+        ServerValidMove validMove               = 4;
+        ServerInvalidMove invalidMove           = 5;
+        ServerPong pong                         = 6;
+    }
 }

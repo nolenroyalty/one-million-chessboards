@@ -36,17 +36,3 @@ func (move *Move) ExceedsMaxMoveDistance() bool {
 	dy := int32(move.ToY) - int32(move.FromY)
 	return math.Abs(float64(dx)) > MAX_MOVE_DISTANCE || math.Abs(float64(dy)) > MAX_MOVE_DISTANCE
 }
-
-type PieceMove struct {
-	Piece  PieceDataForMove `json:"piece"`
-	Seqnum uint64           `json:"seqnum"`
-}
-
-// PieceCapture represents a capture update to send to clients
-// CR nroyalty: WAIT! We don't ever need to include seqnum in a piece capture!
-// We can always process piece captures because a piece can never be un-captured so they can't
-// be stale! So we never need to include this!!!
-type PieceCapture struct {
-	CapturedPieceID uint32 `json:"capturedPieceId"`
-	Seqnum          uint64 `json:"seqnum"`
-}
