@@ -1,9 +1,5 @@
 import { chess } from "./protoCompiled.js";
 
-console.log(chess.PieceType);
-console.log(chess.PieceType[0]);
-console.log(chess.PieceType[chess.PieceType.PIECE_TYPE_PAWN]);
-
 const MAX_MOVE_DISTANCE = 36;
 
 export function intervalWithJitter({ baseInterval, jitter }) {
@@ -92,8 +88,6 @@ export const TYPE_TO_NAME = {
 export const NAME_TO_TYPE = Object.fromEntries(
   Object.entries(TYPE_TO_NAME).map(([key, value]) => [value, key])
 );
-
-console.log(NAME_TO_TYPE);
 
 export function humanNameForPieceType({ pieceType }) {
   let name = TYPE_TO_NAME[pieceType];
