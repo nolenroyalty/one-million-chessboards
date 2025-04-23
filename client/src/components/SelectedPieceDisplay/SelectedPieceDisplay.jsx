@@ -35,8 +35,8 @@ const Spacer = styled.div`
 `;
 
 const PieceImage = styled.img`
-  width: 80px;
-  height: 80px;
+  width: 70px;
+  height: 70px;
   object-fit: contain;
   filter: drop-shadow(0 0 4px var(--color-cyan-500))
     drop-shadow(0 0 8px var(--color-cyan-500));
@@ -44,6 +44,7 @@ const PieceImage = styled.img`
 
 const PieceImageWrapper = styled.div`
   display: flex;
+  padding: 0.25rem;
   flex-direction: row;
   align-items: center;
   justify-content: center;
