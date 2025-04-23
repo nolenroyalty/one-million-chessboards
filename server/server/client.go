@@ -29,6 +29,8 @@ var zstdPool = sync.Pool{
 	},
 }
 
+var marshalOpt = proto.MarshalOptions{Deterministic: false}
+
 // CR nroyalty: send seqnum with global stats and then updating global stats is
 // pretty easy.
 // CR nroyalty: standardize on a function for sending a message to the client or unsubbing
@@ -70,6 +72,8 @@ type Client struct {
 	isClosed                                       atomic.Bool
 	lastActionTime                                 atomic.Int64
 	playingWhite                                   atomic.Bool
+	moveScratchBuffer                              []byte
+	moveScratchMu                                  sync.Mutex
 }
 
 // CR nroyalty: think HARD about your send channel and how big it should be.
@@ -403,13 +407,16 @@ func (c *Client) MaybeSendMoveUpdates() {
 			},
 		},
 	}
-	message, err := proto.Marshal(m)
+	c.moveScratchMu.Lock()
+	defer c.moveScratchMu.Unlock()
+	buf := c.moveScratchBuffer[:0]
+	buf, err := marshalOpt.MarshalAppend(buf, m)
 	if err != nil {
 		log.Printf("Error marshalling move updates: %v", err)
 		return
 	}
 
-	c.compressAndSend(message, "SendMoveUpdates")
+	c.compressAndSend(buf, "SendMoveUpdates")
 }
 
 func (c *Client) SendInvalidMove(moveToken uint32) {

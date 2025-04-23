@@ -97,7 +97,7 @@ func writeMove(ws *websocket.Conn, pieceID int, fromX int, fromY int, toX int, t
 	ws.WriteMessage(websocket.BinaryMessage, message)
 }
 
-func ParseFrame(buf []byte) (map[string]interface{}, error) {
+func ParseFrame(buf []byte) (*protocol.ServerMessage, error) {
 	if len(buf) < 4 {
 		return nil, errors.New("frame too small")
 	}
@@ -112,12 +112,11 @@ func ParseFrame(buf []byte) (map[string]interface{}, error) {
 			return nil, err
 		}
 	}
-
-	var out map[string]interface{}
-	if err := json.Unmarshal(buf, &out); err != nil {
+	var out protocol.ServerMessage
+	if err := proto.Unmarshal(buf, &out); err != nil {
 		return nil, err
 	}
-	return out, nil
+	return &out, nil
 }
 
 // CR nroyalty: instead of randomly disconnecting, maybe we should just
@@ -153,24 +152,24 @@ func (c *MainCounter) randomlySubscribe(doReconnects bool) {
 				}
 				c.receivedBytes.Add(int64(len(message)))
 				parsed, err := ParseFrame(message)
+
 				if err != nil {
 					goto restart
 				}
-				if parsed["type"] == "initialState" {
+				switch p := parsed.Payload.(type) {
+				case *protocol.ServerMessage_InitialState:
 					c.numberOfSnapshots.Add(1)
 					// position := parsed["position"].(map[string]any)
 					// x := int(position["x"].(float64))
 					// y := int(position["y"].(float64))
 					// log.Printf("Initial position: %d, %d", x, y)
-				}
-				if parsed["type"] == "moveUpdates" {
+				case *protocol.ServerMessage_MovesAndCaptures:
 					c.numberOfMoveUpdates.Add(1)
-					numberOfMoves := len(parsed["moves"].([]any))
+					numberOfMoves := len(p.MovesAndCaptures.Moves)
 					c.numberOfMoves.Add(int64(numberOfMoves))
-					numberOfCaptures := len(parsed["captures"].([]any))
+					numberOfCaptures := len(p.MovesAndCaptures.Captures)
 					c.numberOfCaptures.Add(int64(numberOfCaptures))
-				}
-				if parsed["type"] == "snapshot" {
+				case *protocol.ServerMessage_Snapshot:
 					c.numberOfSnapshots.Add(1)
 				}
 			}
@@ -196,7 +195,15 @@ func (c *MainCounter) ConnectAndLogSizes() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		parsedType := parsed["type"].(string)
+		var parsedType string
+		switch parsed.Payload.(type) {
+		case *protocol.ServerMessage_InitialState:
+			parsedType = "initialState"
+		case *protocol.ServerMessage_MovesAndCaptures:
+			parsedType = "moveUpdates"
+		case *protocol.ServerMessage_Snapshot:
+			parsedType = "snapshot"
+		}
 		size := len(message)
 		log.Printf("Type: %s, Size: %s", parsedType, humanize.Bytes(uint64(size)))
 	}
@@ -276,23 +283,26 @@ func newRandomMover(boardX int) *RandomMover {
 	}
 	ready := make(chan struct{})
 	go func() {
+
 		_, message, err := rm.ws.ReadMessage()
 		if err != nil {
 			log.Printf("Error reading message: %v", err)
 			return
 		}
+
 		parsed, err := ParseFrame(message)
 		if err != nil {
 			log.Printf("Error unmarshalling: %v", err)
 			return
 		}
-		if parsed["type"] == "initialState" {
+		switch p := parsed.Payload.(type) {
+		case *protocol.ServerMessage_InitialState:
 			// log.Printf("Initial state")
-			playingWhite := parsed["playingWhite"].(bool)
+			playingWhite := p.InitialState.PlayingWhite
 			// log.Printf("Playing white: %v", playingWhite)
 			rm.playingWhite = playingWhite
 			close(ready)
-		} else if parsed["type"] == "stateSnapshot" {
+		case *protocol.ServerMessage_Snapshot:
 			log.Printf("State snapshot")
 		}
 	}()
@@ -352,9 +362,9 @@ func (c *MainCounter) runAllRandomMovers() {
 	wg.Wait()
 }
 
-const DO_SUBSCRIBE = false
-const DO_MOVE = true
-const DO_RECONNECTS = false
+const DO_SUBSCRIBE = true
+const DO_MOVE = false
+const DO_RECONNECTS = true
 
 func main() {
 	counter := MainCounter{}
