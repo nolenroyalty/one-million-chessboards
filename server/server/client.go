@@ -197,6 +197,7 @@ func (c *Client) ReadPump() {
 
 	for {
 		_, message, err := c.conn.ReadMessage()
+		c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 		if err != nil {
 			// log.Printf("Error reading message: %v", err)
 			break
@@ -206,7 +207,6 @@ func (c *Client) ReadPump() {
 			log.Printf("Error unmarshalling message: %v", err)
 			continue
 		}
-		c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 		// if err != nil {
 		// 	// log.Printf("Error reading message: %v", err)
 		// 	// if websocket.IsUnexpectedCloseError(err) {

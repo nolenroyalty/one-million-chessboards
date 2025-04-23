@@ -335,7 +335,7 @@ func (c *MainCounter) runRandomMover(boardX int) {
 	rm.subscribe()
 	for i := 0; i < NUMBER_OF_MOVES; i++ {
 		rm.movePawn()
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(4 * time.Millisecond)
 	}
 }
 
@@ -352,7 +352,7 @@ func (c *MainCounter) runAllRandomMovers() {
 	wg.Wait()
 }
 
-const DO_SUBSCRIBE = true
+const DO_SUBSCRIBE = false
 const DO_MOVE = true
 const DO_RECONNECTS = false
 
