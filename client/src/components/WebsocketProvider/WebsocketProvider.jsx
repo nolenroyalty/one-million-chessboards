@@ -39,7 +39,6 @@ function encodeAndSendIfOpen({ ws, msg }) {
 }
 
 function protoSendSubscribe({ ws, coords }) {
-  console.log(`sub: ${coords.x}, ${coords.y}`);
   const msg = chess.ClientMessage.create({
     subscribe: {
       centerX: coords.x,
@@ -307,22 +306,6 @@ function WebsocketProvider({ children }) {
     [pieceHandler]
   );
 
-  const safelySendJSON = React.useCallback((json) => {
-    const ws = websocketRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      try {
-        ws.send(JSON.stringify(json));
-        return true;
-      } catch (e) {
-        console.error("Error sending JSON", e);
-        return false;
-      }
-    } else {
-      console.debug("websocket not open", ws?.readyState);
-    }
-    return false;
-  }, []);
-
   const sendSubscribe = React.useCallback((coords) => {
     protoSendSubscribe({ ws: websocketRef.current, coords });
   }, []);
@@ -348,9 +331,17 @@ function WebsocketProvider({ children }) {
       couldBeACapture,
     }) => {
       const moveToken = pieceHandler.current.getIncrMoveToken();
-      const move = createMoveRequest({ piece, toX, toY, moveType, moveToken });
-      // CR nroyalty: figure out what to do once we move to partysocket...
-      if (safelySendJSON(move)) {
+      if (
+        protoSendMove({
+          ws: websocketRef.current,
+          piece,
+          toX,
+          toY,
+          moveType,
+          moveToken,
+        })
+      ) {
+        // CR nroyalty: figure out what to do once we move to partysocket...
         let incrLocalMoves = true;
         let incrLocalCaptures = false;
         if (capturedPiece) {
@@ -373,7 +364,7 @@ function WebsocketProvider({ children }) {
         });
       }
     },
-    [pieceHandler, safelySendJSON, statsHandler]
+    [pieceHandler, statsHandler]
   );
 
   // CR nroyalty: delete this before rolling to prod...

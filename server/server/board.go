@@ -270,7 +270,6 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 	// Can't move an opponent's piece
 	if move.ClientIsPlayingWhite != movedPiece.IsWhite {
 		if RESPECT_COLOR_REQUIREMENT {
-			log.Printf("Invalid move: Piece is not of the correct color")
 			return MoveResult{Valid: false}
 		}
 	}

@@ -257,13 +257,14 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 		c.BumpActive()
 
 		move := Move{
-			PieceID:   pieceID,
-			FromX:     uint16(fromX),
-			FromY:     uint16(fromY),
-			ToX:       uint16(toX),
-			ToY:       uint16(toY),
-			MoveType:  moveType,
-			MoveToken: moveToken,
+			PieceID:              pieceID,
+			FromX:                uint16(fromX),
+			FromY:                uint16(fromY),
+			ToX:                  uint16(toX),
+			ToY:                  uint16(toY),
+			MoveType:             moveType,
+			MoveToken:            moveToken,
+			ClientIsPlayingWhite: c.playingWhite.Load(),
 		}
 
 		c.server.moveRequests <- MoveRequest{
