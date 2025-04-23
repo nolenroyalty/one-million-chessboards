@@ -1,3 +1,5 @@
+import { chess } from "./protoCompiled.js";
+
 const MAX_MOVE_DISTANCE = 36;
 
 export function intervalWithJitter({ baseInterval, jitter }) {
@@ -5,9 +7,9 @@ export function intervalWithJitter({ baseInterval, jitter }) {
 }
 
 export const MOVE_TYPES = {
-  NORMAL: 0,
-  CASTLE: 1,
-  EN_PASSANT: 2,
+  NORMAL: chess.MoveType.MOVE_TYPE_NORMAL,
+  CASTLE: chess.MoveType.MOVE_TYPE_CASTLE,
+  EN_PASSANT: chess.MoveType.MOVE_TYPE_EN_PASSANT,
 };
 
 export function pieceKey(x, y) {
@@ -70,25 +72,6 @@ export function getZoomedInScreenAbsoluteCoords({
   return {
     x: screenX * boardSizeParams.squarePx,
     y: screenY * boardSizeParams.squarePx,
-  };
-}
-
-export function createMoveRequest({
-  piece,
-  toX,
-  toY,
-  moveType = MOVE_TYPES.NORMAL,
-  moveToken,
-}) {
-  return {
-    type: "move",
-    pieceId: piece.id,
-    fromX: piece.x,
-    fromY: piece.y,
-    toX,
-    toY,
-    moveType,
-    moveToken,
   };
 }
 

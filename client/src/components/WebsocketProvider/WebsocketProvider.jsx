@@ -1,7 +1,7 @@
 import React from "react";
 import HandlersContext from "../HandlersContext/HandlersContext";
 import CurrentColorContext from "../CurrentColorProvider/CurrentColorProvider";
-import { createMoveRequest, computeInitialArguments } from "../../utils";
+import { computeInitialArguments } from "../../utils";
 import CoordsContext from "../CoordsContext/CoordsContext";
 import { decompress } from "fzstd";
 import useStartBot from "../../hooks/use-start-bot";
