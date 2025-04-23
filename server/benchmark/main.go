@@ -126,6 +126,11 @@ func (c *MainCounter) randomlySubscribe(doReconnects bool) {
 		ws, _, err := websocket.DefaultDialer.Dial(getUrl(), nil)
 		done := make(chan struct{})
 
+		if err != nil {
+			time.Sleep(time.Millisecond * 300)
+			goto restart
+		}
+
 		if doReconnects {
 			sleepTimeJitter := time.Duration(rand.Intn(3000)) * time.Millisecond
 			sleepTime := (time.Second * 1) + sleepTimeJitter
@@ -135,10 +140,6 @@ func (c *MainCounter) randomlySubscribe(doReconnects bool) {
 				ws.Close()
 				done <- struct{}{}
 			}()
-		}
-
-		if err != nil {
-			goto restart
 		}
 
 		for {
@@ -363,7 +364,7 @@ func (c *MainCounter) runAllRandomMovers() {
 }
 
 const DO_SUBSCRIBE = true
-const DO_MOVE = false
+const DO_MOVE = true
 const DO_RECONNECTS = true
 
 func main() {
