@@ -1,16 +1,11 @@
 package server
 
-import "math"
+import (
+	"math"
+	"one-million-chessboards/protocol"
+)
 
 const MAX_MOVE_DISTANCE = 36
-
-type MoveType int
-
-const (
-	MoveTypeNormal MoveType = iota
-	MoveTypeCastle
-	MoveTypeEnPassant
-)
 
 type Move struct {
 	PieceID              uint32
@@ -18,7 +13,7 @@ type Move struct {
 	FromY                uint16
 	ToX                  uint16
 	ToY                  uint16
-	MoveType             MoveType
+	MoveType             protocol.MoveType
 	MoveToken            uint32
 	ClientIsPlayingWhite bool
 }
