@@ -2,8 +2,13 @@ import { chess } from "./protoCompiled.js";
 
 const MAX_MOVE_DISTANCE = 36;
 
-export function intervalWithJitter({ baseInterval, jitter }) {
-  return baseInterval + Math.random() * jitter - jitter / 2;
+export function intervalWithJitter({ baseInterval, jitter, error }) {
+  let value = baseInterval + Math.random() * jitter - jitter / 2;
+  if (error) {
+    const errorJitter = 1 + Math.random() * 0.2;
+    value *= 2 * errorJitter;
+  }
+  return value;
 }
 
 export const MOVE_TYPES = {

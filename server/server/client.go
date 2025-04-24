@@ -36,7 +36,7 @@ const (
 	PeriodicUpdateInterval = time.Second * 60
 	activityThreshold      = time.Second * 20
 	// CR nroyalty: remove before release
-	simulatedLatency          = 3 * time.Second
+	simulatedLatency          = 600 * time.Millisecond
 	simulatedJitterMs         = 1
 	maxWaitBeforeSendingMoves = 200 * time.Millisecond
 )

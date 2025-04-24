@@ -7,6 +7,7 @@ import { decompress } from "fzstd";
 import useStartBot from "../../hooks/use-start-bot";
 import { chess } from "../../protoCompiled.js";
 import protobuf from "protobufjs";
+import LastTransitionDebounceDelayContext from "../LastTransitionDebounceDelayContext/LastTransitionDebounceDelayContext";
 // CR nroyalty: replace with partysocket
 
 const ZSTD_MAGIC = [0x28, 0xb5, 0x2f, 0xfd]; // little‑endian
@@ -282,13 +283,71 @@ function useWebsocket({
   ]);
 }
 
-// CR nroyalty: if we wanted to be smart (and we should), we can debounce much
-// more aggressively if we've recently requested a snapshot, and can skip
-// debouncing if we just did a big jump in position!
-const DEBOUNCE_TIME = 100;
+class CoordsDebouncer {
+  constructor({ sendSubscribe, setLastTransitionDebounceDelay }) {
+    this.recentRequests = [];
+    this.requestTimeout = null;
+    this.currentCoords = null;
+    this.sendSubscribe = sendSubscribe;
+    this.setLastTransitionDebounceDelay = setLastTransitionDebounceDelay;
+  }
+
+  enqueueRequest(delay) {
+    this.setLastTransitionDebounceDelay(delay);
+    if (delay === 0) {
+      this.recentRequests.push(performance.now());
+      this.sendSubscribe(this.currentCoords);
+      return;
+    } else {
+      this.requestTimeout = setTimeout(() => {
+        this.recentRequests.push(performance.now());
+        this.sendSubscribe(this.currentCoords);
+        this.requestTimeout = null;
+      }, delay);
+    }
+  }
+
+  updateCoords({ coords }) {
+    this.currentCoords = coords;
+    if (this.requestTimeout) {
+      // we're already waiting to send a request, just update the coords
+      // that we will send for it
+      return;
+    }
+    const now = performance.now();
+    const recentRequests = this.recentRequests.filter(
+      (req) => now - req < 1400
+    );
+    this.recentRequests = recentRequests;
+    if (this.recentRequests.length === 0) {
+      this.enqueueRequest(0);
+    } else {
+      let delay = 500;
+      if (this.recentRequests.length === 1) {
+        delay = 100;
+      } else if (this.recentRequests.length === 2) {
+        delay = 350;
+      }
+      this.enqueueRequest(delay);
+    }
+  }
+
+  stop() {
+    this.recentRequests = [];
+    if (this.requestTimeout) {
+      clearTimeout(this.requestTimeout);
+    }
+  }
+}
+
 function useUpdateCoords({ connected, sendSubscribe }) {
   const { coords } = React.useContext(CoordsContext);
-  const debounceTimeoutRef = React.useRef(null);
+  const { setLastTransitionDebounceDelay } = React.useContext(
+    LastTransitionDebounceDelayContext
+  );
+  const debouncer = React.useRef(
+    new CoordsDebouncer({ sendSubscribe, setLastTransitionDebounceDelay })
+  );
   React.useEffect(() => {
     if (!connected) {
       return;
@@ -296,18 +355,8 @@ function useUpdateCoords({ connected, sendSubscribe }) {
     if (coords.x === null || coords.y === null) {
       return;
     }
-    if (debounceTimeoutRef.current) {
-      clearTimeout(debounceTimeoutRef.current);
-    }
-    debounceTimeoutRef.current = setTimeout(() => {
-      sendSubscribe(coords);
-    }, DEBOUNCE_TIME);
-
-    return () => {
-      if (debounceTimeoutRef.current) {
-        clearTimeout(debounceTimeoutRef.current);
-      }
-    };
+    let db = debouncer.current;
+    db.updateCoords({ coords });
   }, [coords, connected, sendSubscribe]);
 }
 export const WebsocketContext = React.createContext();
@@ -315,6 +364,7 @@ export const WebsocketContext = React.createContext();
 function WebsocketProvider({ children }) {
   const websocketRef = React.useRef(null);
   const [connected, _setConnected] = React.useState(false);
+
   const { pieceHandler, statsHandler } = React.useContext(HandlersContext);
 
   const setConnected = React.useCallback(

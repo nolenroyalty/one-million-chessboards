@@ -66,6 +66,14 @@ const PieceButtonWrapper = styled.button`
     transition: opacity 0.3s cubic-bezier(0.33, 1, 0.68, 1) 0.1s;
     opacity: 0;
   }
+
+  & svg {
+    transform: var(--axe-transform);
+  }
+
+  &:hover > svg {
+    transform: scale(var(--axe-hover-scale));
+  }
 `;
 
 function _Piece({
@@ -90,8 +98,10 @@ function _Piece({
       "--opacity": opacity,
       "--pointer-events": hidden || captured ? "none" : "auto",
       "--cursor": hidden || captured ? "none" : defaultCursor,
+      "--axe-hover-scale": moveable ? 1.2 : 1,
+      "--axe-transform": moveable && selected ? "scale(1.2)" : "scale(1)",
     };
-  }, [size, translate, captured, opacity, hidden, moveable]);
+  }, [size, translate, captured, opacity, hidden, moveable, selected]);
 
   const imgStyle = React.useMemo(() => {
     return {
@@ -115,6 +125,7 @@ function _Piece({
   );
 
   let killsFillColor = null;
+  // CR nroyalty: bump these numbers!
   if (captureCount >= 64) {
     killsFillColor = "var(--color-purple-600)";
   } else if (captureCount >= 32) {
@@ -135,9 +146,11 @@ function _Piece({
         color="var(--color-neutral-900)"
         style={{
           position: "absolute",
-          bottom: "0px",
-          right: "0px",
+          bottom: "1px",
+          right: "1px",
           pointerEvents: "none",
+          transition: "transform 0.3s ease",
+          transformOrigin: "top left",
         }}
       />
     );

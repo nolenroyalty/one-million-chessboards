@@ -11,6 +11,7 @@ class MinimapHandler {
   }
 
   runPollLoop() {
+    let error = false;
     fetch("/api/minimap", { cache: "no-store" })
       .then((res) => {
         if (!res.ok) {
@@ -26,10 +27,12 @@ class MinimapHandler {
       })
       .catch((error) => {
         console.error("Error fetching minimap data:", error);
+        error = true;
       });
     const interval = intervalWithJitter({
       baseInterval: MINIMAP_REFRESH_INTERVAL,
       jitter: MINIMAP_REFRESH_INTERVAL_JITTER,
+      error,
     });
     this.pollLoopTimeout = setTimeout(() => this.runPollLoop(), interval);
   }

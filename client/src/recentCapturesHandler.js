@@ -25,20 +25,28 @@ class RecentCapturesHandler {
     if (this.pollLoopTimeout) {
       clearTimeout(this.pollLoopTimeout);
     }
+    let error = false;
     fetch(`/api/recently-captured/${this.playingWhite ? "white" : "black"}`, {
       cache: "no-store",
     })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+      })
       .then((data) => {
         this.recentCaptures = data.captures;
         this.broadcast();
       })
       .catch((error) => {
         console.error("Error fetching recently captured pieces:", error);
+        error = true;
       });
     const interval = intervalWithJitter({
       baseInterval: BASE_STATS_REFRESH_INTERVAL,
       jitter: INTERVAL_VARIANCE,
+      error,
     });
     this.pollLoopTimeout = setTimeout(() => this.runPollLoop(), interval);
   }

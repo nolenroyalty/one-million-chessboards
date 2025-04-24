@@ -39,6 +39,7 @@ class StatsHandler {
   }
 
   runPollLoop() {
+    let error = false;
     fetch("/api/global-game-stats", { cache: "no-store" })
       .then((res) => {
         if (!res.ok) {
@@ -51,11 +52,13 @@ class StatsHandler {
       })
       .catch((error) => {
         console.error("Error fetching global game stats:", error);
+        error = true;
       });
 
     const interval = intervalWithJitter({
       baseInterval: BASE_STATS_REFRESH_INTERVAL,
       jitter: INTERVAL_VARIANCE,
+      error,
     });
     this.pollLoopTimeout = setTimeout(() => this.runPollLoop(), interval);
   }

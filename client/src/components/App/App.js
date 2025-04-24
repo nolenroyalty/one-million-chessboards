@@ -10,6 +10,7 @@ import { CoordsContextProvider } from "../CoordsContext/CoordsContext";
 import { ShowLargeBoardContextProvider } from "../ShowLargeBoardContext/ShowLargeBoardContext";
 import { SelectedPieceAndSquaresContextProvider } from "../SelectedPieceAndSquaresContext/SelectedPieceAndSquaresContext";
 import { CurrentColorProvider } from "../CurrentColorProvider/CurrentColorProvider";
+import { LastTransitionDebounceDelayProvider } from "../LastTransitionDebounceDelayContext/LastTransitionDebounceDelayContext";
 import WebsocketProvider from "../WebsocketProvider/WebsocketProvider";
 
 const Main = styled.main`
@@ -58,19 +59,21 @@ function App() {
     <HandlersContextProvider>
       <CoordsContextProvider>
         <CurrentColorProvider>
-          <WebsocketProvider>
-            <ShowLargeBoardContextProvider>
-              <SelectedPieceAndSquaresContextProvider>
-                <Main>
-                  <SmallHeader />
-                  <BigHeader />
-                  {/* <ChessPieceColorer /> */}
-                  <Board />
-                  <BoardControls />
-                </Main>
-              </SelectedPieceAndSquaresContextProvider>
-            </ShowLargeBoardContextProvider>
-          </WebsocketProvider>
+          <LastTransitionDebounceDelayProvider>
+            <WebsocketProvider>
+              <ShowLargeBoardContextProvider>
+                <SelectedPieceAndSquaresContextProvider>
+                  <Main>
+                    <SmallHeader />
+                    <BigHeader />
+                    {/* <ChessPieceColorer /> */}
+                    <Board />
+                    <BoardControls />
+                  </Main>
+                </SelectedPieceAndSquaresContextProvider>
+              </ShowLargeBoardContextProvider>
+            </WebsocketProvider>
+          </LastTransitionDebounceDelayProvider>
         </CurrentColorProvider>
       </CoordsContextProvider>
     </HandlersContextProvider>

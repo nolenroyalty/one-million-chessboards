@@ -3,7 +3,7 @@ import styled from "styled-components";
 import HandlersContext from "../HandlersContext/HandlersContext";
 import CoordsContext from "../CoordsContext/CoordsContext";
 import ShowLargeBoardContext from "../ShowLargeBoardContext/ShowLargeBoardContext";
-
+import LastTransitionDebounceDelayContext from "../LastTransitionDebounceDelayContext/LastTransitionDebounceDelayContext";
 const Wrapper = styled.div`
   position: absolute;
   left: 0;
@@ -28,6 +28,9 @@ function LoadingView({ boardSizeParams }) {
     y: null,
   });
   const { showLargeBoard } = React.useContext(ShowLargeBoardContext);
+  const { lastTransitionDebounceDelay } = React.useContext(
+    LastTransitionDebounceDelayContext
+  );
 
   React.useEffect(() => {
     let ph = pieceHandler.current;
@@ -65,12 +68,24 @@ function LoadingView({ boardSizeParams }) {
     return deltaX > xThreshold || deltaY > yThreshold;
   }, [lastSnapshotCoords, coords, showLargeBoard, boardSizeParams]);
 
+  const transitionDelay = React.useMemo(() => {
+    if (!isLoading) {
+      return "0s";
+    } else {
+      if (lastTransitionDebounceDelay < 200) {
+        return "0.2s";
+      } else {
+        return "0s";
+      }
+    }
+  }, [isLoading, lastTransitionDebounceDelay]);
+
   return (
     <Wrapper
       style={{
         "--opacity": isLoading ? 0.8 : 0,
-        "--transition-time": isLoading ? "0.1s" : "0.75s",
-        "--transition-delay": isLoading ? "0s" : "0.2s",
+        "--transition-time": isLoading ? "0.225s" : "0.2s",
+        "--transition-delay": transitionDelay,
       }}
     ></Wrapper>
   );
