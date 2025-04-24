@@ -77,7 +77,7 @@ type Client struct {
 // CR nroyalty: think HARD about your send channel and how big it should be.
 // it needs to be much smaller than the 2048 we used for benchmarking purposes.
 // 64 might still be too large (?)
-func NewClient(conn *websocket.Conn, server *Server) *Client {
+func NewClient(conn *websocket.Conn, server *Server, ipString string) *Client {
 	c := &Client{
 		conn:   conn,
 		server: server,
@@ -90,12 +90,15 @@ func NewClient(conn *websocket.Conn, server *Server) *Client {
 		bufferMu:       sync.Mutex{},
 		lastActionTime: atomic.Int64{},
 		playingWhite:   atomic.Bool{},
-		rpcLogger:      NewRPCLogger("NOLENTESTFIX"),
+		rpcLogger:      NewRPCLogger(ipString),
 	}
 	c.isClosed.Store(false)
 	c.lastActionTime.Store(time.Now().Unix())
 	c.position.Store(Position{X: 0, Y: 0})
 	c.lastSnapshotPosition.Store(Position{X: 0, Y: 0})
+	c.rpcLogger.Info().
+		Str("rpc", "NewClient").
+		Send()
 	return c
 }
 
@@ -230,7 +233,6 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 		moveType := p.Move.MoveType
 		moveToken := p.Move.MoveToken
 
-		log.Printf("Received move: %v", p)
 		c.rpcLogger.Info().
 			Str("rpc", "MovePiece").
 			Send()
@@ -271,6 +273,9 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 		if !CoordInBoundsInt(centerX) || !CoordInBoundsInt(centerY) {
 			return
 		}
+		c.rpcLogger.Info().
+			Str("rpc", "Subscribe").
+			Send()
 		c.BumpActive()
 		c.UpdatePositionAndMaybeSnapshot(Position{X: uint16(centerX), Y: uint16(centerY)})
 	case *protocol.ClientMessage_Ping:
@@ -436,6 +441,9 @@ func (c *Client) SendInvalidMove(moveToken uint32) {
 		log.Printf("Error marshalling invalid move: %v", err)
 		return
 	}
+	c.rpcLogger.Info().
+		Str("rpc", "InvalidMove").
+		Send()
 
 	c.compressAndSend(message, "SendInvalidMove")
 }

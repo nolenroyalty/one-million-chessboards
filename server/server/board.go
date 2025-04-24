@@ -8,21 +8,29 @@ import (
 	"math/rand"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"one-million-chessboards/protocol"
+
+	"github.com/rs/zerolog"
 )
+
+// CR nroyalty: separate out metrics for persistent board (maybe just write a separate
+// persistent board implementation...)
 
 type Board struct {
 	sync.RWMutex
-	pieces              [BOARD_SIZE][BOARD_SIZE]uint64
-	rawRowsPool         sync.Pool
-	nextID              uint32
-	seqNum              uint64
-	totalMoves          atomic.Uint64
-	whitePiecesCaptured atomic.Uint32
-	blackPiecesCaptured atomic.Uint32
-	whiteKingsCaptured  atomic.Uint32
-	blackKingsCaptured  atomic.Uint32
+	pieces                 [BOARD_SIZE][BOARD_SIZE]uint64
+	rawRowsPool            sync.Pool
+	nextID                 uint32
+	seqNum                 uint64
+	totalMoves             atomic.Uint64
+	whitePiecesCaptured    atomic.Uint32
+	blackPiecesCaptured    atomic.Uint32
+	whiteKingsCaptured     atomic.Uint32
+	blackKingsCaptured     atomic.Uint32
+	mutexTimeLogger        zerolog.Logger
+	snapshotDurationLogger zerolog.Logger
 }
 
 type GameStats struct {
@@ -52,6 +60,8 @@ func NewBoard() *Board {
 				return &rows
 			},
 		},
+		mutexTimeLogger:        NewCoreLogger().With().Str("kind", "board").Str("metric", "mutex_time").Logger(),
+		snapshotDurationLogger: NewCoreLogger().With().Str("kind", "board").Str("metric", "snapshot_duration").Logger(),
 	}
 }
 
@@ -354,6 +364,7 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 		rookPiece.MoveCount = 1
 		haveReadLock = false
 		b.RUnlock()
+		now := time.Now()
 		b.Lock()
 		b.pieces[move.FromY][move.FromX] = uint64(EmptyEncodedPiece)
 		b.pieces[rookFromY][rookFromX] = uint64(EmptyEncodedPiece)
@@ -363,6 +374,10 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 		b.seqNum++
 		seqNum := b.seqNum
 		b.Unlock()
+		took := time.Since(now).Nanoseconds()
+		b.mutexTimeLogger.Info().
+			Int64("took_ns", took).
+			Send()
 
 		kingMoveResult := MovedPieceResult{
 			Piece: movedPiece,
@@ -438,6 +453,7 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 		movedPiece.JustDoubleMoved = false
 		haveReadLock = false
 		b.RUnlock()
+		now := time.Now()
 		b.Lock()
 		b.pieces[move.ToY][move.ToX] = uint64(movedPiece.Encode())
 		b.pieces[move.FromY][move.FromX] = uint64(EmptyEncodedPiece)
@@ -445,6 +461,10 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 		b.seqNum++
 		seqNum := b.seqNum
 		b.Unlock()
+		took := time.Since(now).Nanoseconds()
+		b.mutexTimeLogger.Info().
+			Int64("took_ns", took).
+			Send()
 
 		if capturedPiece.IsWhite {
 			b.whitePiecesCaptured.Add(1)
@@ -549,12 +569,17 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 		// Actually apply the move!
 		haveReadLock = false
 		b.RUnlock()
+		now := time.Now()
 		b.Lock()
 		b.pieces[move.FromY][move.FromX] = uint64(EmptyEncodedPiece)
 		b.pieces[move.ToY][move.ToX] = uint64(movedPiece.Encode())
 		b.seqNum++
 		seqNum := b.seqNum
 		b.Unlock()
+		took := time.Since(now).Nanoseconds()
+		b.mutexTimeLogger.Info().
+			Int64("took_ns", took).
+			Send()
 
 		b.totalMoves.Add(1)
 		movedPieceResult := MovedPieceResult{
@@ -604,6 +629,7 @@ func (b *Board) GetStats() GameStats {
 // and use that to figure out the client's position at lock-aquisition time,
 // not lock-request time. Not a huge deal in practice probably.
 func (b *Board) GetBoardSnapshot(pos Position) *protocol.ServerStateSnapshot {
+
 	minX := uint16(0)
 	minY := uint16(0)
 	maxX := uint16(BOARD_SIZE - 1)
@@ -630,12 +656,14 @@ func (b *Board) GetBoardSnapshot(pos Position) *protocol.ServerStateSnapshot {
 	piecesPtr := b.rawRowsPool.Get().(*[][]uint64)
 	pieces := *piecesPtr
 
+	now := time.Now()
 	b.RLock()
 	seqnum := b.seqNum
 	for y := minY; y <= maxY; y++ {
 		copy(pieces[y-minY], b.pieces[y][minX:maxX+1])
 	}
 	b.RUnlock()
+	took := time.Since(now).Nanoseconds()
 
 	// estimate that the slice is half-full?
 	pieceStates := make([]*protocol.PieceDataForSnapshot, 0, (width*height)/2)
@@ -666,6 +694,10 @@ func (b *Board) GetBoardSnapshot(pos Position) *protocol.ServerStateSnapshot {
 		XCoord: uint32(pos.X),
 		YCoord: uint32(pos.Y),
 	}
+
+	b.snapshotDurationLogger.Info().
+		Int64("took_ns", took).
+		Send()
 
 	return snapshot
 }

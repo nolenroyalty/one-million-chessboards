@@ -11,11 +11,13 @@ var (
 	addr      = flag.String("addr", ":8080", "HTTP service address")
 	staticDir = flag.String("static", "./static", "Directory for static files")
 	stateDir  = flag.String("state", "state", "Directory for state files")
+	udpAddr   = flag.String("udp-addr", "127.0.0.1", "UDP address to send logs to")
 )
 
 func main() {
 	flag.Parse()
 
+	server.SetUDPAddress(*udpAddr)
 	s := server.NewServer(*stateDir)
 	s.Run()
 
