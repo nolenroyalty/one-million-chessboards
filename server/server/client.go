@@ -37,7 +37,7 @@ const (
 	PeriodicUpdateInterval = time.Second * 60
 	activityThreshold      = time.Second * 20
 	// CR nroyalty: remove before release
-	simulatedLatency          = 600 * time.Millisecond
+	simulatedLatency          = 350 * time.Millisecond
 	simulatedJitterMs         = 1
 	maxWaitBeforeSendingMoves = 200 * time.Millisecond
 )
@@ -75,13 +75,13 @@ type Client struct {
 }
 
 // CR nroyalty: think HARD about your send channel and how big it should be.
-// it should probably be smaller than 2048, but it's nice for it to be this size
-// for benchmarking purposes.
+// it needs to be much smaller than the 2048 we used for benchmarking purposes.
+// 64 might still be too large (?)
 func NewClient(conn *websocket.Conn, server *Server) *Client {
 	c := &Client{
 		conn:   conn,
 		server: server,
-		send_DO_NOT_DO_RAW_WRITES_OR_YOU_WILL_BE_FIRED: make(chan []byte, 2048),
+		send_DO_NOT_DO_RAW_WRITES_OR_YOU_WILL_BE_FIRED: make(chan []byte, 32),
 		position:       atomic.Value{},
 		moveBuffer:     make([]*protocol.PieceDataForMove, 0, MOVE_BUFFER_SIZE),
 		captureBuffer:  make([]*protocol.PieceCapture, 0, CAPTURE_BUFFER_SIZE),

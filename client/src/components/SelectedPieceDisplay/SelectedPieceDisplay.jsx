@@ -10,11 +10,10 @@ import { QUERY } from "../../constants";
 import BoardControlsPanel from "../BoardControlsPanel/BoardControlsPanel";
 import { ArrowDownUp, Axe } from "lucide-react";
 
-// CR nroyalty: bump these values
 const MAX_CAPTURE_MOVE_COUNT = 4000;
-const FAR_FROM_HOME_DISTANCE = 1;
-const PACIFIST_MOVE_COUNT = 1;
-const SELF_HATING_THRESHOLD = 2;
+const FAR_FROM_HOME_DISTANCE = 100;
+const PACIFIST_MOVE_COUNT = 150;
+const SELF_HATING_THRESHOLD = 10;
 
 const Middle = styled(BoardControlsPanel)`
   flex-grow: 1;

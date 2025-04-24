@@ -31,6 +31,7 @@
     "styled-components": "^6.1.15"
   },
   "devDependencies": {
+    "@parcel/transformer-webmanifest": "^2.13.3",
     "protobufjs": "^7.5.0",
     "protobufjs-cli": "^1.1.3"
   }
