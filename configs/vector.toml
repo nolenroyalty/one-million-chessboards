@@ -1,0 +1,27 @@
+# 1) UDP JSON in
+[sources.game]
+type            = "socket"
+mode            = "udp"
+address         = "0.0.0.0:10514"
+decoding.codec  = "json"          # zerolog already emits JSON
+max_length      = 1024
+
+# 2) OPTIONAL transform: drop insanely large durations, etc.
+#[transforms.filter_bad]
+#type   = "remap"
+#inputs = ["game"]
+
+# 3) Loki sink (best-effort)
+[sinks.loki]
+type                = "loki"
+inputs              = ["game"]
+endpoint            = "http://127.0.0.1:3100" # FIX ME
+encoding.codec      = "json"
+labels.job          = "omc"          # every entry has {job="omc"}
+buffer.type         = "memory"
+buffer.max_events   = 10000          # ~½ s backlog at 20 k l/s
+buffer.when_full    = "drop_newest"  # prefer loss to back-pressure
+request.retry_strategy = "none"
+batch.max_events    = 1000
+batch.timeout_secs  = 1
+batch.when_empty    = "drop"

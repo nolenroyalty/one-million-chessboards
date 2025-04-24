@@ -15,6 +15,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/klauspost/compress/zstd"
+	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -70,6 +71,7 @@ type Client struct {
 	playingWhite                                   atomic.Bool
 	moveScratchBuffer                              []byte
 	moveScratchMu                                  sync.Mutex
+	rpcLogger                                      zerolog.Logger
 }
 
 // CR nroyalty: think HARD about your send channel and how big it should be.
@@ -88,6 +90,7 @@ func NewClient(conn *websocket.Conn, server *Server) *Client {
 		bufferMu:       sync.Mutex{},
 		lastActionTime: atomic.Int64{},
 		playingWhite:   atomic.Bool{},
+		rpcLogger:      NewRPCLogger("NOLENTESTFIX"),
 	}
 	c.isClosed.Store(false)
 	c.lastActionTime.Store(time.Now().Unix())
@@ -226,6 +229,11 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 		toY := p.Move.ToY
 		moveType := p.Move.MoveType
 		moveToken := p.Move.MoveToken
+
+		log.Printf("Received move: %v", p)
+		c.rpcLogger.Info().
+			Str("rpc", "MovePiece").
+			Send()
 
 		if !CoordInBoundsInt(fromX) || !CoordInBoundsInt(fromY) ||
 			!CoordInBoundsInt(toX) || !CoordInBoundsInt(toY) {

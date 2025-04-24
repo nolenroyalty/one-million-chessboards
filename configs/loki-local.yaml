@@ -1,0 +1,56 @@
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  log_level: info          # keep console quiet
+
+common:
+  path_prefix: /tmp/loki          # everything lives here
+  storage:
+    filesystem:
+      chunks_directory: /tmp/loki/chunks
+      rules_directory: /tmp/loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 100
+
+limits_config:
+  enable_multi_variant_queries: true
+  retention_period: 168h        # 7 days
+  reject_old_samples: true
+  reject_old_samples_max_age: 24h
+
+schema_config:
+  configs:
+  - from: 2020-10-24
+    #store: boltdb-shipper
+    store: tsdb
+    object_store: filesystem
+    schema: v13
+    index:
+      prefix: index_
+      period: 24h
+
+#pattern_ingester:
+  #enabled: true
+  #metric_aggregation:
+    #loki_address: localhost:3100
+
+frontend:
+  encoding: protobuf
+
+#compactor:
+  #working_directory: /tmp/loki/compactor
+  #shared_store: filesystem
+  #retention_enabled: true       # honour the 7-day limit
+
+analytics:
+  reporting_enabled: false
