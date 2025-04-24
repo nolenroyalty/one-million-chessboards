@@ -4,7 +4,7 @@ import HandlersContext from "../HandlersContext/HandlersContext";
 import CoordsContext from "../CoordsContext/CoordsContext";
 import SelectedPieceAndSquaresContext from "../SelectedPieceAndSquaresContext/SelectedPieceAndSquaresContext";
 import CurrentColorContext from "../CurrentColorProvider/CurrentColorProvider";
-import { Swords, Star, Crown, Axe } from "lucide-react";
+import { Axe } from "lucide-react";
 import {
   imageForPieceType,
   getStartingAndEndingCoords,
@@ -16,15 +16,17 @@ import {
 } from "../../utils";
 import { RESPECT_COLOR_REQUIREMENT } from "../../constants";
 
-// CR nroyalty:
-// - icon in lower left for kill count of piece (sword, change color)
-// - maybe a star or change the color for sponsored pieces
-// - add sponsored pieces
-
 const MAX_ANIMATION_DURATION = 750;
 const MIN_ANIMATION_DURATION = 350;
 const MAX_DMOVE = 15;
 const CAPTURE_ANIMATION_DURATION = 450;
+
+const KILL_COUNT_THRESHOLDS = {
+  minor: 25,
+  medium: 50,
+  mega: 250,
+  godlike: 1000,
+};
 
 const PieceImg = styled.img`
   width: var(--size);
@@ -125,14 +127,14 @@ function _Piece({
   );
 
   let killsFillColor = null;
-  // CR nroyalty: bump these numbers!
-  if (captureCount >= 64) {
+  // CR nroyalty: tweak these colors?
+  if (captureCount >= KILL_COUNT_THRESHOLDS.godlike) {
     killsFillColor = "var(--color-purple-600)";
-  } else if (captureCount >= 32) {
+  } else if (captureCount >= KILL_COUNT_THRESHOLDS.mega) {
     killsFillColor = "var(--color-blue-500)";
-  } else if (captureCount >= 16) {
+  } else if (captureCount >= KILL_COUNT_THRESHOLDS.medium) {
     killsFillColor = "var(--color-emerald-600)";
-  } else if (captureCount >= 3) {
+  } else if (captureCount >= KILL_COUNT_THRESHOLDS.minor) {
     killsFillColor = "var(--color-gray-400)";
   }
 
