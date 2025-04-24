@@ -308,6 +308,13 @@ class CoordsDebouncer {
   }
 
   updateCoords({ coords }) {
+    if (
+      this.currentCoords &&
+      this.currentCoords.x === coords.x &&
+      this.currentCoords.y === coords.y
+    ) {
+      return;
+    }
     this.currentCoords = coords;
     if (this.requestTimeout) {
       // we're already waiting to send a request, just update the coords
@@ -348,6 +355,7 @@ function useUpdateCoords({ connected, sendSubscribe }) {
   const debouncer = React.useRef(
     new CoordsDebouncer({ sendSubscribe, setLastTransitionDebounceDelay })
   );
+
   React.useEffect(() => {
     if (!connected) {
       return;
