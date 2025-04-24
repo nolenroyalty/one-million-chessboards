@@ -102,7 +102,7 @@ export function frameImageForPieceType({ pieceType }) {
   if (name === "promotedPawn") {
     name = "queen";
   }
-  return `/pieces/frames-artist/${name}.png`;
+  return `/pieces/frames-final/${name}.png`;
 }
 
 export function imageForPieceType({ pieceType, isWhite }) {
