@@ -32,7 +32,7 @@ var decPool = sync.Pool{
 const (
 	localURL = "ws://localhost:8080/ws"
 	prodURL  = "wss://onemillionchessboards.com/ws"
-	useProd  = false
+	useProd  = true
 )
 
 func getUrl() string {

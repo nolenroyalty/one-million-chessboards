@@ -1,9 +1,7 @@
 import React from "react";
 import styled from "styled-components";
-import HandlersContext from "../HandlersContext/HandlersContext";
-import CoordsContext from "../CoordsContext/CoordsContext";
-import ShowLargeBoardContext from "../ShowLargeBoardContext/ShowLargeBoardContext";
 import LastTransitionDebounceDelayContext from "../LastTransitionDebounceDelayContext/LastTransitionDebounceDelayContext";
+import LogicallyLoadingContext from "../LogicallyLoadingContext/LogicallyLoadingContext";
 const Wrapper = styled.div`
   position: absolute;
   left: 0;
@@ -23,14 +21,7 @@ const Wrapper = styled.div`
 const SHOW_DELAY_MS = 200;
 const MIN_DISPLAY_TIME_MS = 250;
 
-function LoadingView({ boardSizeParams }) {
-  const { pieceHandler } = React.useContext(HandlersContext);
-  const { coords } = React.useContext(CoordsContext);
-  const [lastSnapshotCoords, setLastSnapshotCoords] = React.useState({
-    x: null,
-    y: null,
-  });
-  const { showLargeBoard } = React.useContext(ShowLargeBoardContext);
+function LoadingView() {
   const { lastTransitionDebounceDelay } = React.useContext(
     LastTransitionDebounceDelayContext
   );
@@ -38,42 +29,7 @@ function LoadingView({ boardSizeParams }) {
   const showTimerRef = React.useRef(null);
   const hideTimerRef = React.useRef(null);
   const overlayShowTimerRef = React.useRef(null);
-
-  React.useEffect(() => {
-    let ph = pieceHandler.current;
-    ph.subscribe({
-      id: "loading-view",
-      type: "coords",
-      callback: ({ lastSnapshotCoords }) => {
-        // callback is immediately invoked, so no need to set manually
-        setLastSnapshotCoords(lastSnapshotCoords);
-      },
-    });
-    return () => {
-      ph.unsubscribe({ id: "loading-view", type: "coords" });
-    };
-  }, [pieceHandler]);
-
-  const isLogicallyLoading = React.useMemo(() => {
-    const SNAPSHOT_HALF_WIDTH = 47;
-    if (lastSnapshotCoords.x === null || lastSnapshotCoords.y === null) {
-      return true;
-    }
-    if (coords.x === null || coords.y === null) {
-      return true;
-    }
-    const halfWidth = showLargeBoard
-      ? Math.floor(boardSizeParams.zoomedOut.squaresWide / 2)
-      : Math.floor(boardSizeParams.squareWidth / 2);
-    const halfHeight = showLargeBoard
-      ? Math.floor(boardSizeParams.zoomedOut.squaresHigh / 2)
-      : Math.floor(boardSizeParams.squareHeight / 2);
-    const deltaX = Math.abs(lastSnapshotCoords.x - coords.x);
-    const deltaY = Math.abs(lastSnapshotCoords.y - coords.y);
-    const xThreshold = SNAPSHOT_HALF_WIDTH - halfWidth;
-    const yThreshold = SNAPSHOT_HALF_WIDTH - halfHeight;
-    return deltaX > xThreshold || deltaY > yThreshold;
-  }, [lastSnapshotCoords, coords, showLargeBoard, boardSizeParams]);
+  const { isLogicallyLoading } = React.useContext(LogicallyLoadingContext);
 
   React.useEffect(() => {
     if (isLogicallyLoading) {

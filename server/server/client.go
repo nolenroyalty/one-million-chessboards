@@ -5,6 +5,7 @@ package server
 // after getting the lock, instead of the position from when we tried to take the lock.
 
 import (
+	"context"
 	"log"
 	"math"
 	"sync"
@@ -16,10 +17,13 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/klauspost/compress/zstd"
 	"github.com/rs/zerolog"
+	"golang.org/x/time/rate"
 	"google.golang.org/protobuf/proto"
 )
 
 var marshalOpt = proto.MarshalOptions{Deterministic: false}
+
+// CR nroyalty: large global rate-limiter
 
 const (
 	// CR nroyalty: MAKE SURE THIS IS NOT BELOW 60 AND MAYBE MAKE IT HIGHER
@@ -29,7 +33,45 @@ const (
 	simulatedLatency          = 350 * time.Millisecond
 	simulatedJitterMs         = 1
 	maxWaitBeforeSendingMoves = 200 * time.Millisecond
+
+	MAX_SNAPSHOTS_PER_SECOND = 5
+	SNAPSHOT_BURST_LIMIT     = 6
+
+	MAX_SNAPSHOTS_PER_SECOND_SOFT = 3
+	SNAPSHOT_BURST_LIMIT_SOFT     = 4
+
+	MAX_MOVES_PER_SECOND      = 4
+	MOVE_BURST_LIMIT          = 6
+	MAX_MOVES_PER_SECOND_SOFT = 2
+	MOVE_BURST_LIMIT_SOFT     = 3
+
+	MOVE_REJECTION_WINDOW         = 5 * time.Second
+	MAX_MOVE_REJECTIONS_IN_WINDOW = 5
 )
+
+type limits struct {
+	snapshotsPerSecond  int
+	snapshotsBurstLimit int
+	movesPerSecond      int
+	movesBurstLimit     int
+}
+
+func getLimits(soft bool) limits {
+	if soft {
+		return limits{
+			snapshotsPerSecond:  MAX_SNAPSHOTS_PER_SECOND_SOFT,
+			snapshotsBurstLimit: SNAPSHOT_BURST_LIMIT_SOFT,
+			movesPerSecond:      MAX_MOVES_PER_SECOND_SOFT,
+			movesBurstLimit:     MOVE_BURST_LIMIT_SOFT,
+		}
+	}
+	return limits{
+		snapshotsPerSecond:  MAX_SNAPSHOTS_PER_SECOND,
+		snapshotsBurstLimit: SNAPSHOT_BURST_LIMIT,
+		movesPerSecond:      MAX_MOVES_PER_SECOND,
+		movesBurstLimit:     MOVE_BURST_LIMIT,
+	}
+}
 
 func getSimulatedLatency() time.Duration {
 	// jitterInt := rand.Intn(simulatedJitterMs)
@@ -62,31 +104,50 @@ type Client struct {
 	moveScratchMu                                  sync.Mutex
 	rpcLogger                                      zerolog.Logger
 	ipString                                       string
+	snapshotLimiter                                *rate.Limiter
+	moveLimiter                                    *rate.Limiter
+	hardRejectionWindowNS                          atomic.Int64
+	rejectionCount                                 atomic.Int64
+	pendingSnapshot                                atomic.Bool
 }
 
 // CR nroyalty: think HARD about your send channel and how big it should be.
 // it needs to be much smaller than the 2048 we used for benchmarking purposes.
 // 64 might still be too large (?)
 func NewClient(conn *websocket.Conn, server *Server, ipString string, softLimited bool) *Client {
+
+	limits := getLimits(softLimited)
+
+	snapshotLimiter := rate.NewLimiter(rate.Limit(limits.snapshotsPerSecond), limits.snapshotsBurstLimit)
+	moveLimiter := rate.NewLimiter(rate.Limit(limits.movesPerSecond), limits.movesBurstLimit)
+
 	c := &Client{
 		conn:   conn,
 		server: server,
 		send_DO_NOT_DO_RAW_WRITES_OR_YOU_WILL_BE_FIRED: make(chan []byte, 32),
-		position:       atomic.Value{},
-		moveBuffer:     make([]*protocol.PieceDataForMove, 0, MOVE_BUFFER_SIZE),
-		captureBuffer:  make([]*protocol.PieceCapture, 0, CAPTURE_BUFFER_SIZE),
-		done:           make(chan struct{}),
-		isClosed:       atomic.Bool{},
-		bufferMu:       sync.Mutex{},
-		lastActionTime: atomic.Int64{},
-		playingWhite:   atomic.Bool{},
-		rpcLogger:      NewRPCLogger(ipString),
-		ipString:       ipString,
+		position:              atomic.Value{},
+		moveBuffer:            make([]*protocol.PieceDataForMove, 0, MOVE_BUFFER_SIZE),
+		captureBuffer:         make([]*protocol.PieceCapture, 0, CAPTURE_BUFFER_SIZE),
+		done:                  make(chan struct{}),
+		isClosed:              atomic.Bool{},
+		bufferMu:              sync.Mutex{},
+		lastActionTime:        atomic.Int64{},
+		playingWhite:          atomic.Bool{},
+		rpcLogger:             NewRPCLogger(ipString),
+		ipString:              ipString,
+		snapshotLimiter:       snapshotLimiter,
+		moveLimiter:           moveLimiter,
+		hardRejectionWindowNS: atomic.Int64{},
+		rejectionCount:        atomic.Int64{},
+		pendingSnapshot:       atomic.Bool{},
 	}
 	c.rpcLogger.Info().
 		Str("rpc", "NewClient").
 		Send()
 	c.isClosed.Store(false)
+	c.pendingSnapshot.Store(false)
+	c.hardRejectionWindowNS.Store(0)
+	c.rejectionCount.Store(0)
 	c.lastActionTime.Store(time.Now().Unix())
 	c.position.Store(Position{X: 0, Y: 0})
 	c.lastSnapshotPosition.Store(Position{X: 0, Y: 0})
@@ -172,7 +233,15 @@ func (c *Client) UpdatePositionAndMaybeSnapshot(pos Position) {
 	c.server.clientManager.UpdateClientPosition(c, pos)
 	lastSnapshotPosition := c.lastSnapshotPosition.Load().(Position)
 	if shouldSendSnapshot(lastSnapshotPosition, pos) {
-		c.SendStateSnapshot()
+		if c.pendingSnapshot.CompareAndSwap(false, true) {
+			go func() {
+				defer c.pendingSnapshot.Store(false)
+				ctx := context.Background()
+				if err := c.snapshotLimiter.Wait(ctx); err == nil {
+					c.SendStateSnapshot()
+				}
+			}()
+		}
 	}
 }
 
@@ -242,6 +311,26 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 		}
 
 		c.BumpActive()
+
+		if !c.moveLimiter.Allow() {
+			now := time.Now()
+			endOfWindow := now.Add(-1 * MOVE_REJECTION_WINDOW).UnixNano()
+			window := c.hardRejectionWindowNS.Load()
+			if window < endOfWindow {
+				c.hardRejectionWindowNS.Store(now.UnixNano())
+				c.rejectionCount.Store(0)
+			}
+			count := c.rejectionCount.Add(1)
+			if count > MAX_MOVE_REJECTIONS_IN_WINDOW {
+				return
+			} else {
+				c.rpcLogger.Info().
+					Str("rpc", "RateLimitedMove").
+					Send()
+				c.SendInvalidMove(moveToken)
+				return
+			}
+		}
 
 		move := Move{
 			PieceID:              pieceID,

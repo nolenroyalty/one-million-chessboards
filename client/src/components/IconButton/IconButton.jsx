@@ -17,9 +17,11 @@ const Wrapper = styled.button`
     transition: color 0.2s ease-in-out;
   }
 
-  &:hover {
-    svg {
-      color: var(--color-yellow-300);
+  @media (hover: hover) {
+    &:hover {
+      svg {
+        color: var(--color-yellow-300);
+      }
     }
   }
 

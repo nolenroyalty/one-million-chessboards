@@ -4,6 +4,8 @@ import HandlersContext from "../HandlersContext/HandlersContext";
 import CoordsContext from "../CoordsContext/CoordsContext";
 import SelectedPieceAndSquaresContext from "../SelectedPieceAndSquaresContext/SelectedPieceAndSquaresContext";
 import CurrentColorContext from "../CurrentColorProvider/CurrentColorProvider";
+import LogicallyLoadingContext from "../LogicallyLoadingContext/LogicallyLoadingContext";
+
 import { Axe } from "lucide-react";
 import {
   imageForPieceType,
@@ -225,6 +227,11 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
       height: boardSizeParams.squareHeight,
     });
   }, [coords, boardSizeParams]);
+  const { recentlyLogicallyLoading } = React.useContext(
+    LogicallyLoadingContext
+  );
+
+  opacity = recentlyLogicallyLoading ? 0 : opacity;
 
   const piecesRefsMap = React.useRef(new Map());
   const capturedPiecesByIdRef = React.useRef(new Map());
