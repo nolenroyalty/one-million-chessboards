@@ -194,7 +194,8 @@ func (c *Client) compressAndSend(raw []byte, onDrop string, copyIfNoCompress boo
 
 func (c *Client) sendInitialState() {
 	currentPosition := c.position.Load().(Position)
-	snapshot := c.server.board.GetBoardSnapshot(currentPosition)
+	snapshot := c.server.board.GetBoardSnapshot_RETURN_TO_POOL_AFTER_YOU_FUCK(currentPosition)
+	defer ReturnPieceDataFromSnapshotToPool(snapshot)
 
 	m := &protocol.ServerMessage{
 		Payload: &protocol.ServerMessage_InitialState{
@@ -475,7 +476,9 @@ func (c *Client) AddMovesToBuffer(moves []*protocol.PieceDataForMove, capture *p
 
 func (c *Client) SendStateSnapshot() {
 	pos := c.position.Load().(Position)
-	snapshot := c.server.board.GetBoardSnapshot(pos)
+	snapshot := c.server.board.GetBoardSnapshot_RETURN_TO_POOL_AFTER_YOU_FUCK(pos)
+	defer ReturnPieceDataFromSnapshotToPool(snapshot)
+
 	m := &protocol.ServerMessage{
 		Payload: &protocol.ServerMessage_Snapshot{
 			Snapshot: snapshot,

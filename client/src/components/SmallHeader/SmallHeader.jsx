@@ -47,6 +47,7 @@ const DisconnectedDiv = styled.div`
     background-color 0.5s ease-in-out 0.2s;
   min-width: 13ch;
   text-align: center;
+  user-select: none;
 `;
 
 function MaybeShowDisconnected() {

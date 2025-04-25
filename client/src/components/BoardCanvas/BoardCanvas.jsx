@@ -17,6 +17,7 @@ const Canvas = styled.canvas`
   transition: opacity 0.3s ease;
   width: 100%;
   height: 100%;
+  user-select: none;
 `;
 
 function adjustHexColor(hex, amount) {

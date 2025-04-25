@@ -1,6 +1,27 @@
 package server
 
-import "one-million-chessboards/protocol"
+import (
+	"one-million-chessboards/protocol"
+	"sync"
+)
+
+var pieceDataForSnapshotPool = sync.Pool{
+	New: func() any {
+		return &protocol.PieceDataForSnapshot{}
+	},
+}
+
+func ReturnPieceDataFromSnapshotToPool(snapshot *protocol.ServerStateSnapshot) {
+	if snapshot == nil {
+		return
+	}
+
+	for _, piece := range snapshot.Pieces {
+		if piece != nil {
+			pieceDataForSnapshotPool.Put(piece)
+		}
+	}
+}
 
 const (
 	Pawn         = protocol.PieceType_PIECE_TYPE_PAWN
@@ -191,20 +212,39 @@ func NewPiece(id uint32, pieceType protocol.PieceType, isWhite bool) Piece {
 	}
 }
 
-func (p *Piece) ToProtocol() *protocol.PieceDataShared {
-	return &protocol.PieceDataShared{
-		Id:                               p.ID,
-		Type:                             p.Type,
-		IsWhite:                          p.IsWhite,
-		JustDoubleMoved:                  p.JustDoubleMoved,
-		KingKiller:                       p.KingKiller,
-		KingPawner:                       p.KingPawner,
-		QueenKiller:                      p.QueenKiller,
-		QueenPawner:                      p.QueenPawner,
-		AdoptedKiller:                    p.AdoptedKiller,
-		Adopted:                          p.Adopted,
-		MoveCount:                        uint32(p.MoveCount),
-		CaptureCount:                     uint32(p.CaptureCount),
-		HasCapturedPieceTypeOtherThanOwn: p.HasCapturedPieceTypeOtherThanOwn,
+func (p *Piece) FillProtocolData(shared *protocol.PieceDataShared) {
+	shared.Id = p.ID
+	shared.Type = p.Type
+	shared.IsWhite = p.IsWhite
+	shared.JustDoubleMoved = p.JustDoubleMoved
+	shared.KingKiller = p.KingKiller
+	shared.KingPawner = p.KingPawner
+	shared.QueenKiller = p.QueenKiller
+	shared.QueenPawner = p.QueenPawner
+	shared.AdoptedKiller = p.AdoptedKiller
+	shared.Adopted = p.Adopted
+	shared.MoveCount = uint32(p.MoveCount)
+	shared.CaptureCount = uint32(p.CaptureCount)
+	shared.HasCapturedPieceTypeOtherThanOwn = p.HasCapturedPieceTypeOtherThanOwn
+}
+
+// It's really hard to manage the lifecycle of piecedatas that we send to many clients,
+// so we just allocate and let the GC handle it. Hopefully that's ok.
+func (p *Piece) ToProtocolAlloc() *protocol.PieceDataShared {
+	shared := &protocol.PieceDataShared{}
+	p.FillProtocolData(shared)
+	return shared
+}
+
+// A snapshot has an obvious lifecycle and is tied to a single client, and a single
+// snapshot involves many allocations, so using a pool here is prety nice.
+func (p *Piece) ToProtocolForSnapshot(dx, dy int32) *protocol.PieceDataForSnapshot {
+	snapshot := pieceDataForSnapshotPool.Get().(*protocol.PieceDataForSnapshot)
+	if snapshot.Piece == nil {
+		snapshot.Piece = &protocol.PieceDataShared{}
 	}
+	p.FillProtocolData(snapshot.Piece)
+	snapshot.Dx = dx
+	snapshot.Dy = dy
+	return snapshot
 }

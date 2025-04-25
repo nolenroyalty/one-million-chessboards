@@ -42,7 +42,7 @@ export function CoordsContextProvider({ children }) {
             url.hash = `${x},${y}`;
             window.history.replaceState({}, "", url);
             clearStoredHash();
-          }, 120);
+          }, 200);
         }
         return {
           x,

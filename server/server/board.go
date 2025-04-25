@@ -628,7 +628,7 @@ func (b *Board) GetStats() GameStats {
 // CR nroyalty: we could pass in a function that returns the current position
 // and use that to figure out the client's position at lock-aquisition time,
 // not lock-request time. Not a huge deal in practice probably.
-func (b *Board) GetBoardSnapshot(pos Position) *protocol.ServerStateSnapshot {
+func (b *Board) GetBoardSnapshot_RETURN_TO_POOL_AFTER_YOU_FUCK(pos Position) *protocol.ServerStateSnapshot {
 	start := time.Now()
 	minX := uint16(0)
 	minY := uint16(0)
@@ -677,17 +677,14 @@ func (b *Board) GetBoardSnapshot(pos Position) *protocol.ServerStateSnapshot {
 				continue
 			}
 			piece := PieceOfEncodedPiece(encodedPiece)
-			pieceStates = append(pieceStates, &protocol.PieceDataForSnapshot{
-				Dx:    int32(startingDx + int8(x)),
-				Dy:    int32(startingDy + int8(y)),
-				Piece: piece.ToProtocol(),
-			})
+			pieceStates = append(pieceStates, piece.ToProtocolForSnapshot(
+				int32(startingDx+int8(x)),
+				int32(startingDy+int8(y))))
 		}
 	}
 
 	b.rawRowsPool.Put(piecesPtr)
 
-	// CR nroyalty: maybe we want a pool for this too?
 	snapshot := &protocol.ServerStateSnapshot{
 		Pieces: pieceStates,
 		Seqnum: seqnum,

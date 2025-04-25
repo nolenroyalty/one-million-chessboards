@@ -2,7 +2,7 @@ import React from "react";
 import styled from "styled-components";
 import LogicallyLoadingContext from "../LogicallyLoadingContext/LogicallyLoadingContext";
 
-const LoadingInfo = styled.div`
+const LoadingInfo = styled.p`
   position: absolute;
   left: 50%;
   bottom: 0%;
@@ -14,6 +14,7 @@ const LoadingInfo = styled.div`
   z-index: 1000;
   transition: transform 0.3s cubic-bezier(0.45, 0, 0.55, 1);
   min-width: 9ch;
+  user-select: none;
 `;
 
 function LoadingView() {
@@ -83,7 +84,7 @@ function LoadingView() {
 
   return (
     <LoadingInfo style={{ "--translate-y": show ? "0%" : "100%" }}>
-      <div>Loading{loadingDots > 0 ? ".".repeat(loadingDots) : ""}</div>
+      Loading{loadingDots > 0 ? ".".repeat(loadingDots) : ""}
     </LoadingInfo>
   );
 }
