@@ -10,6 +10,7 @@ import useBoardSizeParams from "../../hooks/use-board-size-params";
 import CoordsContext from "../CoordsContext/CoordsContext";
 import ShowLargeBoardContext from "../ShowLargeBoardContext/ShowLargeBoardContext";
 import LoadingView from "../LoadingView/LoadingView";
+import { LogicallyLoadingProvider } from "../LogicallyLoadingContext/LogicallyLoadingContext";
 
 // nroyalty: just in case it comes up: pieces can hang off the edge of the board
 // if the board gets below its min width or min height. Even if its a normal width
@@ -243,39 +244,41 @@ function Board() {
         }}
         ref={sizedInnerRef}
       >
-        <LoadingView boardSizeParams={boardSizeParams} />
-        {coordsAreNotNull && (
-          <>
-            {smallMounted && (
-              <BoardCanvas
-                pxWidth={boardSizeParams.pxWidth}
-                pxHeight={boardSizeParams.pxHeight}
-                boardSizeParams={boardSizeParams}
-                opacity={smallOpacity}
-              />
-            )}
-            {largeMounted && (
-              <ZoomedOutOverview
-                opacity={largeOpacity}
-                boardSizeParams={boardSizeParams}
-              />
-            )}
-            <PanzoomBox />
-            {smallMounted && (
-              <>
-                <PieceDisplay
-                  boardSizeParams={boardSizeParams}
-                  opacity={smallOpacity}
-                  hidden={smallHidden}
-                />
-                <PieceMoveButtons
+        <LogicallyLoadingProvider boardSizeParams={boardSizeParams}>
+          <LoadingView />
+          {coordsAreNotNull && (
+            <>
+              {smallMounted && (
+                <BoardCanvas
+                  pxWidth={boardSizeParams.pxWidth}
+                  pxHeight={boardSizeParams.pxHeight}
                   boardSizeParams={boardSizeParams}
                   opacity={smallOpacity}
                 />
-              </>
-            )}
-          </>
-        )}
+              )}
+              {largeMounted && (
+                <ZoomedOutOverview
+                  opacity={largeOpacity}
+                  boardSizeParams={boardSizeParams}
+                />
+              )}
+              <PanzoomBox />
+              {smallMounted && (
+                <>
+                  <PieceDisplay
+                    boardSizeParams={boardSizeParams}
+                    opacity={smallOpacity}
+                    hidden={smallHidden}
+                  />
+                  <PieceMoveButtons
+                    boardSizeParams={boardSizeParams}
+                    opacity={smallOpacity}
+                  />
+                </>
+              )}
+            </>
+          )}
+        </LogicallyLoadingProvider>
       </SizedInner>
     </Outer>
   );

@@ -1,79 +1,29 @@
 import React from "react";
 import styled from "styled-components";
-import HandlersContext from "../HandlersContext/HandlersContext";
-import CoordsContext from "../CoordsContext/CoordsContext";
-import ShowLargeBoardContext from "../ShowLargeBoardContext/ShowLargeBoardContext";
-import LastTransitionDebounceDelayContext from "../LastTransitionDebounceDelayContext/LastTransitionDebounceDelayContext";
-const Wrapper = styled.div`
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  right: 0;
-  width: 100%;
-  height: 100%;
+import LogicallyLoadingContext from "../LogicallyLoadingContext/LogicallyLoadingContext";
 
+const LoadingInfo = styled.div`
+  position: absolute;
+  left: 50%;
+  bottom: 0%;
+  transform: translate(-50%, var(--translate-y));
   background-color: var(--color-neutral-950);
-  opacity: var(--opacity);
-  transition: opacity 0.75s cubic-bezier(0.32, 0, 0.67, 0);
+  color: var(--color-neutral-50);
+  padding: 10px;
+  border-radius: 0.25rem 0.25rem 0 0;
   z-index: 1000;
-  pointer-events: none;
+  transition: transform 0.3s cubic-bezier(0.45, 0, 0.55, 1);
+  min-width: 9ch;
 `;
 
-const SHOW_DELAY_MS = 200;
-const MIN_DISPLAY_TIME_MS = 250;
+function LoadingView() {
+  const { isLogicallyLoading } = React.useContext(LogicallyLoadingContext);
 
-function LoadingView({ boardSizeParams }) {
-  const { pieceHandler } = React.useContext(HandlersContext);
-  const { coords } = React.useContext(CoordsContext);
-  const [lastSnapshotCoords, setLastSnapshotCoords] = React.useState({
-    x: null,
-    y: null,
-  });
-  const { showLargeBoard } = React.useContext(ShowLargeBoardContext);
-  const { lastTransitionDebounceDelay } = React.useContext(
-    LastTransitionDebounceDelayContext
-  );
-  const [showOverlay, setShowOverlay] = React.useState(false);
   const showTimerRef = React.useRef(null);
   const hideTimerRef = React.useRef(null);
-  const overlayShowTimerRef = React.useRef(null);
-
-  React.useEffect(() => {
-    let ph = pieceHandler.current;
-    ph.subscribe({
-      id: "loading-view",
-      type: "coords",
-      callback: ({ lastSnapshotCoords }) => {
-        // callback is immediately invoked, so no need to set manually
-        setLastSnapshotCoords(lastSnapshotCoords);
-      },
-    });
-    return () => {
-      ph.unsubscribe({ id: "loading-view", type: "coords" });
-    };
-  }, [pieceHandler]);
-
-  const isLogicallyLoading = React.useMemo(() => {
-    const SNAPSHOT_HALF_WIDTH = 47;
-    if (lastSnapshotCoords.x === null || lastSnapshotCoords.y === null) {
-      return true;
-    }
-    if (coords.x === null || coords.y === null) {
-      return true;
-    }
-    const halfWidth = showLargeBoard
-      ? Math.floor(boardSizeParams.zoomedOut.squaresWide / 2)
-      : Math.floor(boardSizeParams.squareWidth / 2);
-    const halfHeight = showLargeBoard
-      ? Math.floor(boardSizeParams.zoomedOut.squaresHigh / 2)
-      : Math.floor(boardSizeParams.squareHeight / 2);
-    const deltaX = Math.abs(lastSnapshotCoords.x - coords.x);
-    const deltaY = Math.abs(lastSnapshotCoords.y - coords.y);
-    const xThreshold = SNAPSHOT_HALF_WIDTH - halfWidth;
-    const yThreshold = SNAPSHOT_HALF_WIDTH - halfHeight;
-    return deltaX > xThreshold || deltaY > yThreshold;
-  }, [lastSnapshotCoords, coords, showLargeBoard, boardSizeParams]);
+  const whenDisplayedRef = React.useRef(0);
+  const [show, setShow] = React.useState(false);
+  const [loadingDots, setLoadingDots] = React.useState(0);
 
   React.useEffect(() => {
     if (isLogicallyLoading) {
@@ -81,54 +31,171 @@ function LoadingView({ boardSizeParams }) {
         clearTimeout(hideTimerRef.current);
         hideTimerRef.current = null;
       }
-
-      // 1. we aren't showing the overlay yet
-      // 2. we don't have a timer running to show the overlay
-      // So set the timer (or show it immediately if we know we'll need to)
-      if (!showOverlay && !showTimerRef.current) {
-        if (lastTransitionDebounceDelay > 0 || true) {
-          setShowOverlay(true);
-          overlayShowTimerRef.current = performance.now();
-        } else {
-          showTimerRef.current = setTimeout(() => {
-            overlayShowTimerRef.current = performance.now();
-            setShowOverlay(true);
-            showTimerRef.current = null;
-          }, SHOW_DELAY_MS);
-        }
-      }
+      showTimerRef.current = setTimeout(() => {
+        whenDisplayedRef.current = performance.now();
+        showTimerRef.current = null;
+        setShow(true);
+      }, 500);
     } else {
       if (showTimerRef.current) {
         clearTimeout(showTimerRef.current);
         showTimerRef.current = null;
-      }
-      // We're showing the overlay AND we don't have a timer running to hide it.
-      if (showOverlay && !hideTimerRef.current) {
-        const timeSinceShown = performance.now() - overlayShowTimerRef.current;
-        // We've already shown it for long enough
-        if (timeSinceShown >= MIN_DISPLAY_TIME_MS) {
-          setShowOverlay(false);
-          hideTimerRef.current = null;
-          overlayShowTimerRef.current = null;
+        setShow(false);
+      } else {
+        const timeSinceShown = performance.now() - whenDisplayedRef.current;
+        whenDisplayedRef.current = 0;
+        if (timeSinceShown < 25) {
+          setShow(false);
+        } else if (timeSinceShown > 320) {
+          setShow(false);
         } else {
-          const delayRemaining = MIN_DISPLAY_TIME_MS - timeSinceShown;
           hideTimerRef.current = setTimeout(() => {
-            setShowOverlay(false);
             hideTimerRef.current = null;
-            overlayShowTimerRef.current = null;
-          }, delayRemaining);
+            setShow(false);
+          }, 320 - timeSinceShown);
         }
       }
     }
-  }, [isLogicallyLoading, lastTransitionDebounceDelay, showOverlay]);
+
+    return () => {
+      if (showTimerRef.current) {
+        clearTimeout(showTimerRef.current);
+        showTimerRef.current = null;
+      }
+      if (hideTimerRef.current) {
+        clearTimeout(hideTimerRef.current);
+        hideTimerRef.current = null;
+      }
+    };
+  }, [isLogicallyLoading]);
+
+  React.useEffect(() => {
+    if (show) {
+      setLoadingDots(0);
+      const interval = setInterval(() => {
+        setLoadingDots((dots) => (dots + 1) % 4);
+      }, 300);
+      return () => {
+        clearInterval(interval);
+      };
+    }
+  }, [show]);
 
   return (
-    <Wrapper
-      style={{
-        "--opacity": showOverlay ? 0.8 : 0,
-      }}
-    ></Wrapper>
+    <LoadingInfo style={{ "--translate-y": show ? "0%" : "100%" }}>
+      <div>Loading{loadingDots > 0 ? ".".repeat(loadingDots) : ""}</div>
+    </LoadingInfo>
   );
 }
+
+// this code just kinda sucked no matter how many times I tried to get the opacity
+// fade in to look ok for all simulated latencies. I think it's just that fading the
+// whole screen is kind of a bad idea unless I can sync it better with fading in the pieces.
+
+// const Wrapper = styled.div`
+//   position: absolute;
+//   left: 0;
+//   top: 0;
+//   bottom: 0;
+//   right: 0;
+//   width: 100%;
+//   height: 100%;
+
+//   background-color: var(--color-neutral-950);
+//   opacity: var(--opacity);
+//   transition: opacity 0.4s cubic-bezier(0.45, 0, 0.55, 1);
+
+//   /* transition: opacity 1s cubic-bezier(1, -0.01, 0.74, 0.93); */
+//   z-index: 1000;
+
+//   pointer-events: none;
+// `;
+// const SHOW_DELAY_MS = 200;
+// const IMMEDIATE_REVERT_IF_UNDER_MS = 200;
+// const MIN_DISPLAY_TIME_OTHERWISE_MS = 1000;
+
+// function LoadingViewOld() {
+//   const [showOverlay, setShowOverlay] = React.useState(false);
+//   const showTimerRef = React.useRef(null);
+//   const hideTimerRef = React.useRef(null);
+//   const overlayShowTimerRef = React.useRef(null);
+//   const { isLogicallyLoading } = React.useContext(LogicallyLoadingContext);
+
+//   React.useEffect(() => {
+//     if (isLogicallyLoading) {
+//       if (hideTimerRef.current) {
+//         clearTimeout(hideTimerRef.current);
+//         hideTimerRef.current = null;
+//       }
+
+//       // 1. we aren't showing the overlay yet
+//       // 2. we don't have a timer running to show the overlay
+//       // So set the timer (or show it immediately if we know we'll need to)
+//       if (!showOverlay && !showTimerRef.current) {
+//         setShowOverlay(true);
+//         overlayShowTimerRef.current = performance.now();
+//         // if (lastTransitionDebounceDelay > 0 || true) {
+//         // } else {
+//         //   showTimerRef.current = setTimeout(() => {
+//         //     overlayShowTimerRef.current = performance.now();
+//         //     setShowOverlay(true);
+//         //     showTimerRef.current = null;
+//         //   }, SHOW_DELAY_MS);
+//         // }
+//       }
+//     } else {
+//       if (showTimerRef.current) {
+//         clearTimeout(showTimerRef.current);
+//         showTimerRef.current = null;
+//       }
+//       // We're showing the overlay AND we don't have a timer running to hide it.
+//       if (showOverlay && !hideTimerRef.current) {
+//         const timeSinceShown = performance.now() - overlayShowTimerRef.current;
+//         // either we got data really fast, or we've been showing it long enough
+//         console.log(timeSinceShown);
+//         if (
+//           timeSinceShown <= IMMEDIATE_REVERT_IF_UNDER_MS ||
+//           timeSinceShown >= MIN_DISPLAY_TIME_OTHERWISE_MS
+//         ) {
+//           console.log("FLIP");
+//           setShowOverlay(false);
+//           hideTimerRef.current = null;
+//           overlayShowTimerRef.current = null;
+//         } else {
+//           // somewhere in between - don't flicker the overlay
+//           const delayRemaining = MIN_DISPLAY_TIME_OTHERWISE_MS - timeSinceShown;
+//           hideTimerRef.current = setTimeout(() => {
+//             setShowOverlay(false);
+//             hideTimerRef.current = null;
+//             overlayShowTimerRef.current = null;
+//           }, delayRemaining);
+//         }
+//       }
+//     }
+
+//     return () => {
+//       if (showTimerRef.current) {
+//         clearTimeout(showTimerRef.current);
+//         showTimerRef.current = null;
+//       }
+//       if (hideTimerRef.current) {
+//         clearTimeout(hideTimerRef.current);
+//         hideTimerRef.current = null;
+//       }
+//       if (overlayShowTimerRef.current) {
+//         overlayShowTimerRef.current = null;
+//       }
+//     };
+//   }, [isLogicallyLoading, showOverlay]);
+
+//   return (
+//     <Wrapper
+//       style={{
+//         "--opacity": showOverlay ? 0.8 : 0,
+//         "--transition-delay": showOverlay ? "0.3s" : "0s",
+//       }}
+//     ></Wrapper>
+//   );
+// }
 
 export default LoadingView;

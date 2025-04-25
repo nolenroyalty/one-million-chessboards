@@ -11,11 +11,14 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/puzpuzpuz/xsync/v4"
 	"github.com/rs/zerolog"
+	"golang.org/x/time/rate"
 )
 
 var json = jsoniter.ConfigCompatibleWithStandardLibrary
@@ -26,6 +29,24 @@ const (
 	ColorPreferenceWhite ColorPreference = iota
 	ColorPreferenceBlack
 	ColorPreferenceRandom
+)
+
+type limitingBucket struct {
+	count            atomic.Int32
+	limiter          *rate.Limiter
+	lastActionTimeNs atomic.Int64
+}
+
+const (
+	SOFT_MAX_CONNECTIONS_PER_IP   = 40
+	SOFT_MAX_CONNECTIONS_PER_IPV6 = 10
+	HARD_MAX_CONNECTIONS_PER_IP   = SOFT_MAX_CONNECTIONS_PER_IP * 3
+	HARD_MAX_CONNECTIONS_PER_IPV6 = SOFT_MAX_CONNECTIONS_PER_IPV6 * 3
+
+	MAX_CONS_PER_SECOND_IPV4   = 5
+	MAX_CONS_PER_SECOND_IPV6   = 5
+	BURST_CONS_PER_SECOND_IPV4 = 10
+	BURST_CONS_PER_SECOND_IPV6 = 5
 )
 
 type Server struct {
@@ -42,6 +63,8 @@ type Server struct {
 	recentBlackCapturesResult jsoniter.RawMessage
 	recentCapturesMutex       sync.RWMutex
 	httpLogger                zerolog.Logger
+	coreLogger                zerolog.Logger
+	limits                    *xsync.Map[string, *limitingBucket]
 }
 
 func NewServer(stateDir string) *Server {
@@ -56,6 +79,8 @@ func NewServer(stateDir string) *Server {
 		moveRequests:      make(chan MoveRequest, 1024),
 		recentCaptures:    NewRecentCaptures(),
 		httpLogger:        httpLogger,
+		coreLogger:        NewCoreLogger(),
+		limits:            xsync.NewMap[string, *limitingBucket](),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -69,11 +94,31 @@ func NewServer(stateDir string) *Server {
 
 func (s *Server) Run() {
 	s.minimapAggregator.Initialize(s.board)
+	go s.ClearOldLimits()
 	go s.processMoves()
 	go s.refreshMinimapPeriodically()
 	s.refreshStatsPeriodically()
 	s.refreshRecentCapturesPeriodically()
 	go s.persistentBoard.Run()
+}
+
+func (s *Server) ClearOldLimits() {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		atLeastOneMinuteAgo := time.Now().Add(-1 * time.Minute).UnixNano()
+		s.limits.Range(func(key string, value *limitingBucket) bool {
+			if value.count.Load() > 0 {
+				return true
+			}
+
+			if value.lastActionTimeNs.Load() < atLeastOneMinuteAgo {
+				s.limits.Delete(key)
+			}
+			return true
+		})
+	}
 }
 
 func (s *Server) refreshRecentCapturesOnce() {
@@ -314,7 +359,7 @@ func (s *Server) GetMaybeRequestedCoords(requestedXCoord int16, requestedYCoord 
 	return Position{X: uint16(requestedXCoord), Y: uint16(requestedYCoord)}
 }
 
-func (s *Server) GetIPString(r *http.Request) string {
+func (s *Server) GetIPString(r *http.Request) (string, bool) {
 	realIp := ""
 	if cfIP := r.Header.Get("CF-Connecting-IP"); cfIP != "" {
 		realIp = cfIP
@@ -333,21 +378,87 @@ func (s *Server) GetIPString(r *http.Request) string {
 	}
 
 	rateLimitIP := realIp
+	ipv6 := false
 	if ip := net.ParseIP(realIp); ip != nil && ip.To4() == nil {
+		ipv6 = true
 		ipv6PrefixLength := 48
 		mask := net.CIDRMask(ipv6PrefixLength, 128)
 		networkAddress := ip.Mask(mask)
 		rateLimitIP = networkAddress.String()
 	}
 
-	return rateLimitIP
+	return rateLimitIP, ipv6
+}
+
+type AddIpResult int
+
+const (
+	AddIpResultSuccess AddIpResult = iota
+	AddIpResultHardLimitExceeded
+	AddIpResultSoftLimitExceeded
+)
+
+func (s *Server) maybeAddNewIp(ipString string, ipv6 bool) AddIpResult {
+	bucket, _ := s.limits.LoadOrCompute(ipString, func() (*limitingBucket, bool) {
+		limit := MAX_CONS_PER_SECOND_IPV4
+		burst := BURST_CONS_PER_SECOND_IPV4
+		if ipv6 {
+			limit = MAX_CONS_PER_SECOND_IPV6
+			burst = BURST_CONS_PER_SECOND_IPV6
+		}
+		limiter := rate.NewLimiter(rate.Limit(limit), burst)
+		bucket := &limitingBucket{
+			count:            atomic.Int32{},
+			lastActionTimeNs: atomic.Int64{},
+			limiter:          limiter}
+
+		bucket.count.Store(0)
+		bucket.lastActionTimeNs.Store(time.Now().UnixNano())
+		return bucket, false
+	})
+
+	if !bucket.limiter.Allow() {
+		return AddIpResultHardLimitExceeded
+	}
+
+	count := bucket.count.Add(1)
+	softLimit := int32(SOFT_MAX_CONNECTIONS_PER_IP)
+	hardLimit := int32(HARD_MAX_CONNECTIONS_PER_IP)
+	if ipv6 {
+		softLimit = int32(SOFT_MAX_CONNECTIONS_PER_IPV6)
+		hardLimit = int32(HARD_MAX_CONNECTIONS_PER_IPV6)
+	}
+	if count > hardLimit {
+		bucket.count.Add(-1)
+		return AddIpResultHardLimitExceeded
+	}
+	if count > softLimit {
+		return AddIpResultSoftLimitExceeded
+	}
+	return AddIpResultSuccess
+
+}
+
+// Called by client when it disconnects
+func (s *Server) DecrementCountForIp(ipString string) {
+	s.limits.Compute(ipString,
+		func(bucket *limitingBucket, loaded bool) (*limitingBucket, xsync.ComputeOp) {
+			if !loaded {
+				log.Printf("Bug? decrement ip count but bucket didn't exist?")
+				return bucket, xsync.CancelOp
+			}
+			bucket.count.Add(-1)
+			bucket.lastActionTimeNs.Store(time.Now().UnixNano())
+			return bucket, xsync.UpdateOp
+		})
 }
 
 func (s *Server) ServeWs(w http.ResponseWriter, r *http.Request) {
-	// CR nroyalty: rate-limit by IP
-	conn, err := s.upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Println(err)
+	ipString, ipv6 := s.GetIPString(r)
+	limitResult := s.maybeAddNewIp(ipString, ipv6)
+	if limitResult == AddIpResultHardLimitExceeded {
+		s.coreLogger.Info().Str("reject", "connection-limit").Str("ip", ipString).Send()
+		http.Error(w, "Too many connections", http.StatusTooManyRequests)
 		return
 	}
 
@@ -380,10 +491,14 @@ func (s *Server) ServeWs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ipString := s.GetIPString(r)
-	// CR nroyalty: check IP for connection rate-limit here?
-	client := NewClient(conn, s, ipString)
+	conn, err := s.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println(err)
+		return
+	}
 
+	softLimited := limitResult == AddIpResultSoftLimitExceeded
+	client := NewClient(conn, s, ipString, softLimited)
 	pos := s.GetMaybeRequestedCoords(requestedXCoord, requestedYCoord)
 	playingWhite := s.DetermineColor(colorPref)
 	s.clientManager.RegisterClient(client, pos, playingWhite)
