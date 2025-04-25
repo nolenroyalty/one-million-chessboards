@@ -7,7 +7,6 @@ import { decompress } from "fzstd";
 import useStartBot from "../../hooks/use-start-bot";
 import { chess } from "../../protoCompiled.js";
 import protobuf from "protobufjs";
-import LastTransitionDebounceDelayContext from "../LastTransitionDebounceDelayContext/LastTransitionDebounceDelayContext";
 // CR nroyalty: replace with partysocket
 
 function parseServerMessage(buf) {
@@ -277,16 +276,14 @@ function useWebsocket({
 
 // CR nroyalty: make sure this never hits rate limits
 class CoordsDebouncer {
-  constructor({ sendSubscribe, setLastTransitionDebounceDelay }) {
+  constructor({ sendSubscribe }) {
     this.recentRequests = [];
     this.requestTimeout = null;
     this.currentCoords = null;
     this.sendSubscribe = sendSubscribe;
-    this.setLastTransitionDebounceDelay = setLastTransitionDebounceDelay;
   }
 
   enqueueRequest(delay) {
-    this.setLastTransitionDebounceDelay(delay);
     if (delay === 0) {
       this.recentRequests.push(performance.now());
       this.sendSubscribe(this.currentCoords);
@@ -322,12 +319,15 @@ class CoordsDebouncer {
     if (this.recentRequests.length === 0) {
       this.enqueueRequest(0);
     } else {
-      let delay = 400;
-      if (this.recentRequests.length === 1) {
-        delay = 50;
-      } else if (this.recentRequests.length === 2) {
-        delay = 100;
-      }
+      const delay = this.recentRequests.length <= 2 ? 50 : 200;
+      console.log(this.recentRequests);
+      console.log(delay);
+      //   let delay = 400;
+      //   if (this.recentRequests.length === 1) {
+      //     delay = 50;
+      //   } else if (this.recentRequests.length === 2) {
+      //     delay = 100;
+      //   }
       this.enqueueRequest(delay);
     }
   }
@@ -342,12 +342,7 @@ class CoordsDebouncer {
 
 function useUpdateCoords({ connected, sendSubscribe }) {
   const { coords } = React.useContext(CoordsContext);
-  const { setLastTransitionDebounceDelay } = React.useContext(
-    LastTransitionDebounceDelayContext
-  );
-  const debouncer = React.useRef(
-    new CoordsDebouncer({ sendSubscribe, setLastTransitionDebounceDelay })
-  );
+  const debouncer = React.useRef(new CoordsDebouncer({ sendSubscribe }));
 
   React.useEffect(() => {
     if (!connected) {

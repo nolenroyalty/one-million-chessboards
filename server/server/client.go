@@ -30,7 +30,7 @@ const (
 	PeriodicUpdateInterval = time.Second * 60
 	activityThreshold      = time.Second * 20
 	// CR nroyalty: remove before release
-	simulatedLatency          = 350 * time.Millisecond
+	simulatedLatency          = 951 * time.Millisecond
 	simulatedJitterMs         = 1
 	maxWaitBeforeSendingMoves = 200 * time.Millisecond
 
@@ -231,14 +231,29 @@ func shouldSendSnapshot(lastSnapshotPosition Position, currentPosition Position)
 func (c *Client) UpdatePositionAndMaybeSnapshot(pos Position) {
 	c.position.Store(pos)
 	c.server.clientManager.UpdateClientPosition(c, pos)
-	lastSnapshotPosition := c.lastSnapshotPosition.Load().(Position)
-	if shouldSendSnapshot(lastSnapshotPosition, pos) {
+	if shouldSendSnapshot(c.lastSnapshotPosition.Load().(Position), pos) {
 		if c.pendingSnapshot.CompareAndSwap(false, true) {
 			go func() {
-				defer c.pendingSnapshot.Store(false)
 				ctx := context.Background()
-				if err := c.snapshotLimiter.Wait(ctx); err == nil {
+
+				for {
+					if err := c.snapshotLimiter.Wait(ctx); err != nil {
+						c.pendingSnapshot.Store(false)
+						return
+					}
+
 					c.SendStateSnapshot()
+
+					c.pendingSnapshot.Store(false)
+
+					if !shouldSendSnapshot(c.lastSnapshotPosition.Load().(Position),
+						c.position.Load().(Position)) {
+						return
+					}
+
+					if !c.pendingSnapshot.CompareAndSwap(false, true) {
+						return
+					}
 				}
 			}()
 		}
@@ -466,6 +481,7 @@ func (c *Client) SendStateSnapshot() {
 		log.Printf("Error marshalling snapshot: %v", err)
 		return
 	}
+
 	c.lastSnapshotPosition.Store(pos)
 	c.compressAndSend(message, "SendStateSnapshot")
 }
