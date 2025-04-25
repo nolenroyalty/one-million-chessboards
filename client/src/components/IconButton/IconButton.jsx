@@ -9,7 +9,7 @@ const Wrapper = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-
+  user-select: none;
   svg {
     width: var(--size);
     height: var(--size);

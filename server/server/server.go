@@ -241,7 +241,7 @@ func (s *Server) processMoves() {
 					X:      uint32(moveResult.MovedPieces[i].ToX),
 					Y:      uint32(moveResult.MovedPieces[i].ToY),
 					Seqnum: moveResult.Seqnum,
-					Piece:  piece.ToProtocol(),
+					Piece:  piece.ToProtocolAlloc(),
 				}
 			}
 

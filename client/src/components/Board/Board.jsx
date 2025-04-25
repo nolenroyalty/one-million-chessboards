@@ -29,6 +29,7 @@ const Outer = styled.div`
   align-items: center;
   justify-content: center;
   flex-grow: 1;
+  user-select: none;
 `;
 
 const fadeIn = keyframes`
@@ -46,6 +47,11 @@ const SizedInner = styled.div`
   overflow: hidden;
   animation: ${fadeIn} 0.5s ease-in-out both;
   position: relative;
+  -webkit-touch-callout: none; /* Safari */
+  -webkit-user-select: none; /* Chrome */
+  -moz-user-select: none; /* Firefox */
+  -ms-user-select: none; /* Internet Explorer/Edge */
+  user-select: none;
 `;
 
 function Board() {
