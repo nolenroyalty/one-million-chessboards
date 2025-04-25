@@ -11,8 +11,8 @@ import BoardControlsPanel from "../BoardControlsPanel/BoardControlsPanel";
 import { ArrowDownUp, Axe } from "lucide-react";
 
 const MAX_CAPTURE_MOVE_COUNT = 4000;
-const FAR_FROM_HOME_DISTANCE = 100;
-const PACIFIST_MOVE_COUNT = 150;
+const FAR_FROM_HOME_DISTANCE = 40;
+const PACIFIST_MOVE_COUNT = 100;
 const SELF_HATING_THRESHOLD = 10;
 
 const Middle = styled(BoardControlsPanel)`
