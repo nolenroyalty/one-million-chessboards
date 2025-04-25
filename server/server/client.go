@@ -61,12 +61,13 @@ type Client struct {
 	moveScratchBuffer                              []byte
 	moveScratchMu                                  sync.Mutex
 	rpcLogger                                      zerolog.Logger
+	ipString                                       string
 }
 
 // CR nroyalty: think HARD about your send channel and how big it should be.
 // it needs to be much smaller than the 2048 we used for benchmarking purposes.
 // 64 might still be too large (?)
-func NewClient(conn *websocket.Conn, server *Server, ipString string) *Client {
+func NewClient(conn *websocket.Conn, server *Server, ipString string, softLimited bool) *Client {
 	c := &Client{
 		conn:   conn,
 		server: server,
@@ -80,14 +81,15 @@ func NewClient(conn *websocket.Conn, server *Server, ipString string) *Client {
 		lastActionTime: atomic.Int64{},
 		playingWhite:   atomic.Bool{},
 		rpcLogger:      NewRPCLogger(ipString),
+		ipString:       ipString,
 	}
+	c.rpcLogger.Info().
+		Str("rpc", "NewClient").
+		Send()
 	c.isClosed.Store(false)
 	c.lastActionTime.Store(time.Now().Unix())
 	c.position.Store(Position{X: 0, Y: 0})
 	c.lastSnapshotPosition.Store(Position{X: 0, Y: 0})
-	c.rpcLogger.Info().
-		Str("rpc", "NewClient").
-		Send()
 	return c
 }
 
@@ -463,4 +465,5 @@ func (c *Client) Close(why string) {
 	close(c.done)
 	c.server.clientManager.UnregisterClient(c)
 	c.conn.Close()
+	c.server.DecrementCountForIp(c.ipString)
 }

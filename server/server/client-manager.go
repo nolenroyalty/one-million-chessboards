@@ -66,14 +66,13 @@ func (cm *ClientManager) RegisterClient(client *Client, pos Position, playingWhi
 	}
 }
 
-func (cm *ClientManager) UnregisterClient(client *Client) int32 {
+func (cm *ClientManager) UnregisterClient(client *Client) {
 	playingWhite := client.playingWhite.Load()
 	if playingWhite {
 		cm.whiteCount.Add(-1)
 	} else {
 		cm.blackCount.Add(-1)
 	}
-	totalClients := cm.whiteCount.Load() + cm.blackCount.Load()
 
 	cm.Lock()
 	defer cm.Unlock()
@@ -83,8 +82,8 @@ func (cm *ClientManager) UnregisterClient(client *Client) int32 {
 			delete(cm.clientsByZone[zone.X][zone.Y], client)
 		}
 	}
+
 	delete(cm.currentZonesForClient, client)
-	return totalClients
 }
 
 func (cm *ClientManager) UpdateClientPosition(client *Client, pos Position) {
