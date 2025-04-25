@@ -1,7 +1,7 @@
 import React from "react";
 import HandlersContext from "../HandlersContext/HandlersContext";
 import CurrentColorContext from "../CurrentColorProvider/CurrentColorProvider";
-import { computeInitialArguments } from "../../utils";
+import { computeInitialArguments, isZstd } from "../../utils";
 import CoordsContext from "../CoordsContext/CoordsContext";
 import { decompress } from "fzstd";
 import useStartBot from "../../hooks/use-start-bot";
@@ -10,18 +10,10 @@ import protobuf from "protobufjs";
 import LastTransitionDebounceDelayContext from "../LastTransitionDebounceDelayContext/LastTransitionDebounceDelayContext";
 // CR nroyalty: replace with partysocket
 
-const ZSTD_MAGIC = [0x28, 0xb5, 0x2f, 0xfd]; // little‑endian
-
 function parseServerMessage(buf) {
   const u8 = new Uint8Array(buf);
 
-  const isZstd =
-    u8[0] === ZSTD_MAGIC[0] &&
-    u8[1] === ZSTD_MAGIC[1] &&
-    u8[2] === ZSTD_MAGIC[2] &&
-    u8[3] === ZSTD_MAGIC[3];
-
-  const payload = isZstd ? decompress(u8) : u8;
+  const payload = isZstd(u8) ? decompress(u8) : u8;
 
   let decoded;
   try {

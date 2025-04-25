@@ -629,7 +629,7 @@ func (b *Board) GetStats() GameStats {
 // and use that to figure out the client's position at lock-aquisition time,
 // not lock-request time. Not a huge deal in practice probably.
 func (b *Board) GetBoardSnapshot(pos Position) *protocol.ServerStateSnapshot {
-
+	start := time.Now()
 	minX := uint16(0)
 	minY := uint16(0)
 	maxX := uint16(BOARD_SIZE - 1)
@@ -656,14 +656,14 @@ func (b *Board) GetBoardSnapshot(pos Position) *protocol.ServerStateSnapshot {
 	piecesPtr := b.rawRowsPool.Get().(*[][]uint64)
 	pieces := *piecesPtr
 
-	now := time.Now()
+	preLock := time.Now()
 	b.RLock()
 	seqnum := b.seqNum
 	for y := minY; y <= maxY; y++ {
 		copy(pieces[y-minY], b.pieces[y][minX:maxX+1])
 	}
 	b.RUnlock()
-	took := time.Since(now).Nanoseconds()
+	lockTook := time.Since(preLock).Nanoseconds()
 
 	// estimate that the slice is half-full?
 	pieceStates := make([]*protocol.PieceDataForSnapshot, 0, (width*height)/2)
@@ -694,9 +694,11 @@ func (b *Board) GetBoardSnapshot(pos Position) *protocol.ServerStateSnapshot {
 		XCoord: uint32(pos.X),
 		YCoord: uint32(pos.Y),
 	}
+	totalTook := time.Since(start).Nanoseconds()
 
 	b.snapshotDurationLogger.Info().
-		Int64("took_ns", took).
+		Int64("snapshot_lock_ns", lockTook).
+		Int64("snapshot_total_ns", totalTook).
 		Send()
 
 	return snapshot

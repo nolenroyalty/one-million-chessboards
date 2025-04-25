@@ -396,8 +396,8 @@ func (s *Server) ServeMinimap(w http.ResponseWriter, r *http.Request) {
 		Send()
 	aggregation := s.minimapAggregator.GetLastAggregation()
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=10, s-maxage=15")
-
+	w.Header().Set("Content-Encoding", "zstd")
+	w.Header().Set("Cache-Control", "public, max-age=2, s-maxage=25")
 	w.Write(aggregation)
 }
 
@@ -406,7 +406,7 @@ func (s *Server) ServeGlobalStats(w http.ResponseWriter, r *http.Request) {
 		Str("rpc", "ServeGlobalStats").
 		Send()
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=1, s-maxage=3")
+	w.Header().Set("Cache-Control", "public, max-age=2, s-maxage=4")
 	s.currentStatsMutex.RLock()
 	defer s.currentStatsMutex.RUnlock()
 	w.Write(s.currentStats)
@@ -417,7 +417,7 @@ func (s *Server) ServeRecentCaptures(w http.ResponseWriter, r *http.Request, whi
 		Str("rpc", "ServeRecentCaptures").
 		Send()
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=1, s-maxage=3")
+	w.Header().Set("Cache-Control", "public, max-age=2, s-maxage=4")
 	s.recentCapturesMutex.RLock()
 	defer s.recentCapturesMutex.RUnlock()
 	if white {

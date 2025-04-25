@@ -25,6 +25,7 @@ func SetUDPAddress(addr string) {
 }
 
 func initSocket() {
+	zerolog.ErrorHandler = func(error) {}
 	dst, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", udpAddr, udpPort)) // Vector listener
 	c, _ := net.DialUDP("udp", nil, dst)
 	_ = c.SetWriteBuffer(4 << 20) // 4 MiB

@@ -2,6 +2,17 @@ import { chess } from "./protoCompiled.js";
 
 const MAX_MOVE_DISTANCE = 36;
 
+const ZSTD_MAGIC = [0x28, 0xb5, 0x2f, 0xfd];
+
+export function isZstd(u8) {
+  return (
+    u8[0] === ZSTD_MAGIC[0] &&
+    u8[1] === ZSTD_MAGIC[1] &&
+    u8[2] === ZSTD_MAGIC[2] &&
+    u8[3] === ZSTD_MAGIC[3]
+  );
+}
+
 export function intervalWithJitter({ baseInterval, jitter, error }) {
   let value = baseInterval + Math.random() * jitter - jitter / 2;
   if (error) {

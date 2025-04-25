@@ -19,17 +19,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-var zstdPool = sync.Pool{
-	New: func() any {
-		enc, _ := zstd.NewWriter(
-			nil,
-			zstd.WithEncoderLevel(zstd.SpeedFastest),
-			zstd.WithEncoderConcurrency(1),
-		)
-		return enc
-	},
-}
-
 var marshalOpt = proto.MarshalOptions{Deterministic: false}
 
 const (
@@ -120,10 +109,10 @@ func (c *Client) compressAndSend(raw []byte, onDrop string) {
 	if len(raw) < minCompressBytes {
 		payload = raw
 	} else {
-		enc := zstdPool.Get().(*zstd.Encoder)
+		enc := GLOBAL_zstdPool.Get().(*zstd.Encoder)
 		enc.Reset(nil)
 		payload = enc.EncodeAll(raw, make([]byte, 0, len(raw)))
-		zstdPool.Put(enc)
+		GLOBAL_zstdPool.Put(enc)
 	}
 	select {
 	case c.send_DO_NOT_DO_RAW_WRITES_OR_YOU_WILL_BE_FIRED <- payload:
