@@ -135,9 +135,9 @@ func (cm *ClientManager) AffectedZonesForAdoption(adoptionRequest *adoptionReque
 	return map[ZoneCoord]struct{}{fromZone: {}, endingZone: {}}
 }
 
-func (cm *ClientManager) AffectedZonesForClearBoard(clearBoardRequest *clearBoardRequest) map[ZoneCoord]struct{} {
-	fromZone := GetZoneCoord(clearBoardRequest.StartingX(), clearBoardRequest.StartingY())
-	endingZone := GetZoneCoord(clearBoardRequest.EndingX(), clearBoardRequest.EndingY())
+func (cm *ClientManager) AffectedZonesForBulkCapture(bulkCaptureRequest *bulkCaptureRequest) map[ZoneCoord]struct{} {
+	fromZone := GetZoneCoord(bulkCaptureRequest.StartingX(), bulkCaptureRequest.StartingY())
+	endingZone := GetZoneCoord(bulkCaptureRequest.EndingX(), bulkCaptureRequest.EndingY())
 
 	if fromZone == endingZone {
 		return map[ZoneCoord]struct{}{fromZone: {}}

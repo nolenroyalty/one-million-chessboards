@@ -1,5 +1,7 @@
 package server
 
+import "strings"
+
 type OnlyColor int
 
 const (
@@ -9,9 +11,9 @@ const (
 )
 
 func OnlyColorFromString(s string) OnlyColor {
-	if s == "white" {
+	if strings.ToLower(s) == "white" {
 		return OnlyColorWhite
-	} else if s == "black" {
+	} else if strings.ToLower(s) == "black" {
 		return OnlyColorBlack
 	}
 	return OnlyColorEither

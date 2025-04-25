@@ -241,13 +241,13 @@ type ClearBoardResult struct {
 	Seqnum         uint64
 }
 
-func (b *Board) DoBulkCapture(clearBoardRequest *clearBoardRequest) *protocol.ServerBulkCapture {
+func (b *Board) DoBulkCapture(bulkCaptureRequest *bulkCaptureRequest) *protocol.ServerBulkCapture {
 	capturedPieces := make([]uint32, 0, 16)
-	onlyColor := clearBoardRequest.OnlyColor()
-	startingX := clearBoardRequest.StartingX()
-	startingY := clearBoardRequest.StartingY()
-	endingX := clearBoardRequest.EndingX()
-	endingY := clearBoardRequest.EndingY()
+	onlyColor := bulkCaptureRequest.OnlyColor()
+	startingX := bulkCaptureRequest.StartingX()
+	startingY := bulkCaptureRequest.StartingY()
+	endingX := bulkCaptureRequest.EndingX()
+	endingY := bulkCaptureRequest.EndingY()
 
 	if startingX >= BOARD_SIZE || startingY >= BOARD_SIZE || endingX >= BOARD_SIZE || endingY >= BOARD_SIZE {
 		log.Printf("BUG: ClearBoard: out of bounds: %d %d %d %d", startingX, startingY, endingX, endingY)

@@ -57,7 +57,7 @@ type Server struct {
 	minimapAggregator         *MinimapAggregator
 	moveRequests              chan MoveRequest
 	adoptionRequests          chan adoptionRequest
-	clearBoardRequests        chan clearBoardRequest
+	bulkCaptureRequests       chan bulkCaptureRequest
 	upgrader                  websocket.Upgrader
 	currentStats              jsoniter.RawMessage
 	currentStatsMutex         sync.RWMutex
@@ -75,17 +75,17 @@ func NewServer(stateDir string) *Server {
 	board := persistentBoard.GetBoardCopy()
 	httpLogger := NewCoreLogger().With().Str("kind", "http").Logger()
 	s := &Server{
-		board:              board,
-		persistentBoard:    persistentBoard,
-		clientManager:      NewClientManager(),
-		minimapAggregator:  NewMinimapAggregator(),
-		moveRequests:       make(chan MoveRequest, 1024),
-		adoptionRequests:   make(chan adoptionRequest, 128),
-		clearBoardRequests: make(chan clearBoardRequest, 16),
-		recentCaptures:     NewRecentCaptures(),
-		httpLogger:         httpLogger,
-		coreLogger:         NewCoreLogger(),
-		limits:             xsync.NewMap[string, *limitingBucket](),
+		board:               board,
+		persistentBoard:     persistentBoard,
+		clientManager:       NewClientManager(),
+		minimapAggregator:   NewMinimapAggregator(),
+		moveRequests:        make(chan MoveRequest, 1024),
+		adoptionRequests:    make(chan adoptionRequest, 128),
+		bulkCaptureRequests: make(chan bulkCaptureRequest, 16),
+		recentCaptures:      NewRecentCaptures(),
+		httpLogger:          httpLogger,
+		coreLogger:          NewCoreLogger(),
+		limits:              xsync.NewMap[string, *limitingBucket](),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -294,9 +294,9 @@ func (s *Server) processMoves() {
 				s.clientManager.ReturnClientMap(interestedClients)
 			}()
 
-		case clearBoardReq := <-s.clearBoardRequests:
+		case bulkCaptureReq := <-s.bulkCaptureRequests:
 			// CR nroyalty: forward to persistent board
-			bulkCaptureMsg := s.board.DoBulkCapture(&clearBoardReq)
+			bulkCaptureMsg := s.board.DoBulkCapture(&bulkCaptureReq)
 
 			go func() {
 				m := &protocol.ServerMessage{
@@ -309,7 +309,7 @@ func (s *Server) processMoves() {
 					log.Printf("Error marshalling bulk capture: %v", err)
 					return
 				}
-				affectedZones := s.clientManager.AffectedZonesForClearBoard(&clearBoardReq)
+				affectedZones := s.clientManager.AffectedZonesForBulkCapture(&bulkCaptureReq)
 				interestedClients := s.clientManager.GetClientsForZones(affectedZones)
 				for client := range interestedClients {
 					client.SendBulkCapture(message)
@@ -635,9 +635,9 @@ func (s *Server) ServeAdoption(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s *Server) ServeClearBoard(w http.ResponseWriter, r *http.Request) {
+func (s *Server) ServeBulkCapture(w http.ResponseWriter, r *http.Request) {
 	s.httpLogger.Info().
-		Str("rpc", "ServeClearBoard").
+		Str("rpc", "ServeBulkCapture").
 		Send()
 
 	if r.Method != http.MethodPost {
@@ -645,13 +645,13 @@ func (s *Server) ServeClearBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type ClearBoardRequest struct {
+	type BulkCaptureRequest struct {
 		X         uint16 `json:"x"`
 		Y         uint16 `json:"y"`
 		OnlyColor string `json:"onlyColor"`
 	}
 
-	var req ClearBoardRequest
+	var req BulkCaptureRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -664,8 +664,8 @@ func (s *Server) ServeClearBoard(w http.ResponseWriter, r *http.Request) {
 
 	oc := OnlyColorFromString(req.OnlyColor)
 
-	clearBoardReq := NewClearBoardRequest(req.X, req.Y, oc)
-	s.clearBoardRequests <- *clearBoardReq
+	bulkCaptureReq := NewBulkCaptureRequest(req.X, req.Y, oc)
+	s.bulkCaptureRequests <- *bulkCaptureReq
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -689,8 +689,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request, staticDir str
 	} else if r.URL.Path == "/internal/adoption" {
 		s.ServeAdoption(w, r)
 		return
-	} else if r.URL.Path == "/internal/clear-board" {
-		s.ServeClearBoard(w, r)
+	} else if r.URL.Path == "/internal/bulk-capture" {
+		s.ServeBulkCapture(w, r)
 		return
 	}
 
