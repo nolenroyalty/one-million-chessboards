@@ -19,6 +19,7 @@ import (
 	"github.com/puzpuzpuz/xsync/v4"
 	"github.com/rs/zerolog"
 	"golang.org/x/time/rate"
+	"google.golang.org/protobuf/proto"
 )
 
 var json = jsoniter.ConfigCompatibleWithStandardLibrary
@@ -55,6 +56,8 @@ type Server struct {
 	clientManager             *ClientManager
 	minimapAggregator         *MinimapAggregator
 	moveRequests              chan MoveRequest
+	adoptionRequests          chan adoptionRequest
+	clearBoardRequests        chan clearBoardRequest
 	upgrader                  websocket.Upgrader
 	currentStats              jsoniter.RawMessage
 	currentStatsMutex         sync.RWMutex
@@ -72,15 +75,17 @@ func NewServer(stateDir string) *Server {
 	board := persistentBoard.GetBoardCopy()
 	httpLogger := NewCoreLogger().With().Str("kind", "http").Logger()
 	s := &Server{
-		board:             board,
-		persistentBoard:   persistentBoard,
-		clientManager:     NewClientManager(),
-		minimapAggregator: NewMinimapAggregator(),
-		moveRequests:      make(chan MoveRequest, 1024),
-		recentCaptures:    NewRecentCaptures(),
-		httpLogger:        httpLogger,
-		coreLogger:        NewCoreLogger(),
-		limits:            xsync.NewMap[string, *limitingBucket](),
+		board:              board,
+		persistentBoard:    persistentBoard,
+		clientManager:      NewClientManager(),
+		minimapAggregator:  NewMinimapAggregator(),
+		moveRequests:       make(chan MoveRequest, 1024),
+		adoptionRequests:   make(chan adoptionRequest, 128),
+		clearBoardRequests: make(chan clearBoardRequest, 16),
+		recentCaptures:     NewRecentCaptures(),
+		httpLogger:         httpLogger,
+		coreLogger:         NewCoreLogger(),
+		limits:             xsync.NewMap[string, *limitingBucket](),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -208,58 +213,110 @@ func (s *Server) refreshStatsPeriodically() {
 }
 
 func (s *Server) processMoves() {
-	for moveReq := range s.moveRequests {
-		moveResult := s.board.ValidateAndApplyMove__NOTTHREADSAFE(moveReq.Move)
-		if !moveResult.Valid {
-			moveReq.Client.SendInvalidMove(moveReq.Move.MoveToken)
-			continue
-		}
-		s.persistentBoard.ApplyMove(moveReq.Move, moveResult.Seqnum)
+	for {
+		select {
+		case moveReq := <-s.moveRequests:
+			moveResult := s.board.ValidateAndApplyMove__NOTTHREADSAFE(moveReq.Move)
+			if !moveResult.Valid {
+				moveReq.Client.SendInvalidMove(moveReq.Move.MoveToken)
+				continue
+			}
+			s.persistentBoard.ApplyMove(moveReq.Move, moveResult.Seqnum)
 
-		if moveResult.CapturedPiece.Piece.IsEmpty() {
-			moveReq.Client.SendValidMove(moveReq.Move.MoveToken, moveResult.Seqnum, 0)
-		} else {
-			moveReq.Client.SendValidMove(moveReq.Move.MoveToken, moveResult.Seqnum, moveResult.CapturedPiece.Piece.ID)
-		}
+			if moveResult.CapturedPiece.Piece.IsEmpty() {
+				moveReq.Client.SendValidMove(moveReq.Move.MoveToken, moveResult.Seqnum, 0)
+			} else {
+				moveReq.Client.SendValidMove(moveReq.Move.MoveToken, moveResult.Seqnum, moveResult.CapturedPiece.Piece.ID)
+			}
 
-		// CR nroyalty: is there a way we can avoid the overhead of re-serializing a move
-		// for each client here? It's annoying that we might end up doing the same serialization
-		// for 100 different clients if they're looking at the same zones.
-		//
-		// CR nroyalty: I THINK this can't actually matter, but there's a bug here where
-		// you castle queenside and that results in us moving a rook that's on the edge
-		// of your vision, but the king isn't in your vision and so we don't tell you about it
-		// I think this is fine...but I need to think about it some more.
-		go func() {
-			s.minimapAggregator.UpdateForMoveResult(moveResult)
-			capturedPiece := moveResult.CapturedPiece
-			movedPieces := make([]*protocol.PieceDataForMove, moveResult.Length)
-			for i := 0; i < int(moveResult.Length); i++ {
-				piece := moveResult.MovedPieces[i].Piece
+			// CR nroyalty: is there a way we can avoid the overhead of re-serializing a move
+			// for each client here? It's annoying that we might end up doing the same serialization
+			// for 100 different clients if they're looking at the same zones.
+			//
+			// CR nroyalty: I THINK this can't actually matter, but there's a bug here where
+			// you castle queenside and that results in us moving a rook that's on the edge
+			// of your vision, but the king isn't in your vision and so we don't tell you about it
+			// I think this is fine...but I need to think about it some more.
+			go func() {
+				s.minimapAggregator.UpdateForMoveResult(moveResult)
+				capturedPiece := moveResult.CapturedPiece
+				movedPieces := make([]*protocol.PieceDataForMove, moveResult.Length)
+				for i := 0; i < int(moveResult.Length); i++ {
+					piece := moveResult.MovedPieces[i].Piece
 
-				movedPieces[i] = &protocol.PieceDataForMove{
-					X:      uint32(moveResult.MovedPieces[i].ToX),
-					Y:      uint32(moveResult.MovedPieces[i].ToY),
-					Seqnum: moveResult.Seqnum,
-					Piece:  piece.ToProtocolAlloc(),
+					movedPieces[i] = &protocol.PieceDataForMove{
+						X:      uint32(moveResult.MovedPieces[i].ToX),
+						Y:      uint32(moveResult.MovedPieces[i].ToY),
+						Seqnum: moveResult.Seqnum,
+						Piece:  piece.ToProtocolAlloc(),
+					}
 				}
-			}
 
-			var pieceCapture *protocol.PieceCapture = nil
-			if !capturedPiece.Piece.IsEmpty() {
-				s.recentCaptures.AddCapture(&moveResult.CapturedPiece)
-				pieceCapture = &protocol.PieceCapture{
-					CapturedPieceId: capturedPiece.Piece.ID,
-					Seqnum:          moveResult.Seqnum,
+				var pieceCapture *protocol.PieceCapture = nil
+				if !capturedPiece.Piece.IsEmpty() {
+					s.recentCaptures.AddCapture(&moveResult.CapturedPiece)
+					pieceCapture = &protocol.PieceCapture{
+						CapturedPieceId: capturedPiece.Piece.ID,
+						Seqnum:          moveResult.Seqnum,
+					}
 				}
-			}
-			affectedZones := s.clientManager.GetAffectedZones(moveReq.Move)
-			interestedClients := s.clientManager.GetClientsForZones(affectedZones)
-			for client := range interestedClients {
-				client.AddMovesToBuffer(movedPieces, pieceCapture)
-			}
-			s.clientManager.ReturnClientMap(interestedClients)
-		}()
+				affectedZones := s.clientManager.GetAffectedZones(moveReq.Move)
+				interestedClients := s.clientManager.GetClientsForZones(affectedZones)
+				for client := range interestedClients {
+					client.AddMovesToBuffer(movedPieces, pieceCapture)
+				}
+				s.clientManager.ReturnClientMap(interestedClients)
+			}()
+
+		case adoptionReq := <-s.adoptionRequests:
+			// CR nroyalty: forward to persistent board
+			adoptedIds := s.board.Adopt(&adoptionReq)
+
+			go func() {
+				affectedZones := s.clientManager.AffectedZonesForAdoption(&adoptionReq)
+				interestedClients := s.clientManager.GetClientsForZones(affectedZones)
+				m := &protocol.ServerMessage{
+					Payload: &protocol.ServerMessage_Adoption{
+						Adoption: &protocol.ServerAdoption{
+							AdoptedIds: adoptedIds,
+						},
+					},
+				}
+				message, err := proto.Marshal(m)
+				if err != nil {
+					log.Printf("Error marshalling adoption: %v", err)
+					return
+				}
+
+				for client := range interestedClients {
+					client.SendAdoption(message)
+				}
+				s.clientManager.ReturnClientMap(interestedClients)
+			}()
+
+		case clearBoardReq := <-s.clearBoardRequests:
+			// CR nroyalty: forward to persistent board
+			bulkCaptureMsg := s.board.DoBulkCapture(&clearBoardReq)
+
+			go func() {
+				m := &protocol.ServerMessage{
+					Payload: &protocol.ServerMessage_BulkCapture{
+						BulkCapture: bulkCaptureMsg,
+					},
+				}
+				message, err := proto.Marshal(m)
+				if err != nil {
+					log.Printf("Error marshalling bulk capture: %v", err)
+					return
+				}
+				affectedZones := s.clientManager.AffectedZonesForClearBoard(&clearBoardReq)
+				interestedClients := s.clientManager.GetClientsForZones(affectedZones)
+				for client := range interestedClients {
+					client.SendBulkCapture(message)
+				}
+				s.clientManager.ReturnClientMap(interestedClients)
+			}()
+		}
 	}
 }
 
@@ -540,6 +597,77 @@ func (s *Server) ServeRecentCaptures(w http.ResponseWriter, r *http.Request, whi
 	} else {
 		w.Write(s.recentBlackCapturesResult)
 	}
+
+}
+
+// CR nroyalty: restrict internal API?
+func (s *Server) ServeAdoption(w http.ResponseWriter, r *http.Request) {
+	s.httpLogger.Info().
+		Str("rpc", "ServeAdoption").
+		Send()
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	type AdoptionRequest struct {
+		X         uint16 `json:"x"`
+		Y         uint16 `json:"y"`
+		OnlyColor string `json:"onlyColor"`
+	}
+
+	var req AdoptionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	oc := OnlyColorFromString(req.OnlyColor)
+
+	if req.X >= BOARD_SIZE || req.Y >= BOARD_SIZE {
+		http.Error(w, "Coordinates out of bounds", http.StatusBadRequest)
+		return
+	}
+
+	adoptionReq := NewAdoptionRequest(req.X, req.Y, oc)
+	s.adoptionRequests <- *adoptionReq
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) ServeClearBoard(w http.ResponseWriter, r *http.Request) {
+	s.httpLogger.Info().
+		Str("rpc", "ServeClearBoard").
+		Send()
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	type ClearBoardRequest struct {
+		X         uint16 `json:"x"`
+		Y         uint16 `json:"y"`
+		OnlyColor string `json:"onlyColor"`
+	}
+
+	var req ClearBoardRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.X >= BOARD_SIZE || req.Y >= BOARD_SIZE {
+		http.Error(w, "Coordinates out of bounds", http.StatusBadRequest)
+		return
+	}
+
+	oc := OnlyColorFromString(req.OnlyColor)
+
+	clearBoardReq := NewClearBoardRequest(req.X, req.Y, oc)
+	s.clearBoardRequests <- *clearBoardReq
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request, staticDir string) {
@@ -557,6 +685,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request, staticDir str
 		return
 	} else if r.URL.Path == "/api/recently-captured/black" {
 		s.ServeRecentCaptures(w, r, false)
+		return
+	} else if r.URL.Path == "/internal/adoption" {
+		s.ServeAdoption(w, r)
+		return
+	} else if r.URL.Path == "/internal/clear-board" {
+		s.ServeClearBoard(w, r)
 		return
 	}
 

@@ -4170,6 +4170,502 @@ export const chess = $root.chess = (() => {
         return ServerInitialState;
     })();
 
+    chess.ServerAdoption = (function() {
+
+        /**
+         * Properties of a ServerAdoption.
+         * @memberof chess
+         * @interface IServerAdoption
+         * @property {Array.<number>|null} [adoptedIds] ServerAdoption adoptedIds
+         */
+
+        /**
+         * Constructs a new ServerAdoption.
+         * @memberof chess
+         * @classdesc Represents a ServerAdoption.
+         * @implements IServerAdoption
+         * @constructor
+         * @param {chess.IServerAdoption=} [properties] Properties to set
+         */
+        function ServerAdoption(properties) {
+            this.adoptedIds = [];
+            if (properties)
+                for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * ServerAdoption adoptedIds.
+         * @member {Array.<number>} adoptedIds
+         * @memberof chess.ServerAdoption
+         * @instance
+         */
+        ServerAdoption.prototype.adoptedIds = $util.emptyArray;
+
+        /**
+         * Creates a new ServerAdoption instance using the specified properties.
+         * @function create
+         * @memberof chess.ServerAdoption
+         * @static
+         * @param {chess.IServerAdoption=} [properties] Properties to set
+         * @returns {chess.ServerAdoption} ServerAdoption instance
+         */
+        ServerAdoption.create = function create(properties) {
+            return new ServerAdoption(properties);
+        };
+
+        /**
+         * Encodes the specified ServerAdoption message. Does not implicitly {@link chess.ServerAdoption.verify|verify} messages.
+         * @function encode
+         * @memberof chess.ServerAdoption
+         * @static
+         * @param {chess.IServerAdoption} message ServerAdoption message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ServerAdoption.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.adoptedIds != null && message.adoptedIds.length) {
+                writer.uint32(/* id 1, wireType 2 =*/10).fork();
+                for (let i = 0; i < message.adoptedIds.length; ++i)
+                    writer.uint32(message.adoptedIds[i]);
+                writer.ldelim();
+            }
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ServerAdoption message, length delimited. Does not implicitly {@link chess.ServerAdoption.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof chess.ServerAdoption
+         * @static
+         * @param {chess.IServerAdoption} message ServerAdoption message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ServerAdoption.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a ServerAdoption message from the specified reader or buffer.
+         * @function decode
+         * @memberof chess.ServerAdoption
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {chess.ServerAdoption} ServerAdoption
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ServerAdoption.decode = function decode(reader, length, error) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            let end = length === undefined ? reader.len : reader.pos + length, message = new $root.chess.ServerAdoption();
+            while (reader.pos < end) {
+                let tag = reader.uint32();
+                if (tag === error)
+                    break;
+                switch (tag >>> 3) {
+                case 1: {
+                        if (!(message.adoptedIds && message.adoptedIds.length))
+                            message.adoptedIds = [];
+                        if ((tag & 7) === 2) {
+                            let end2 = reader.uint32() + reader.pos;
+                            while (reader.pos < end2)
+                                message.adoptedIds.push(reader.uint32());
+                        } else
+                            message.adoptedIds.push(reader.uint32());
+                        break;
+                    }
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a ServerAdoption message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof chess.ServerAdoption
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {chess.ServerAdoption} ServerAdoption
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ServerAdoption.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ServerAdoption message.
+         * @function verify
+         * @memberof chess.ServerAdoption
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ServerAdoption.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.adoptedIds != null && message.hasOwnProperty("adoptedIds")) {
+                if (!Array.isArray(message.adoptedIds))
+                    return "adoptedIds: array expected";
+                for (let i = 0; i < message.adoptedIds.length; ++i)
+                    if (!$util.isInteger(message.adoptedIds[i]))
+                        return "adoptedIds: integer[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a ServerAdoption message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof chess.ServerAdoption
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {chess.ServerAdoption} ServerAdoption
+         */
+        ServerAdoption.fromObject = function fromObject(object) {
+            if (object instanceof $root.chess.ServerAdoption)
+                return object;
+            let message = new $root.chess.ServerAdoption();
+            if (object.adoptedIds) {
+                if (!Array.isArray(object.adoptedIds))
+                    throw TypeError(".chess.ServerAdoption.adoptedIds: array expected");
+                message.adoptedIds = [];
+                for (let i = 0; i < object.adoptedIds.length; ++i)
+                    message.adoptedIds[i] = object.adoptedIds[i] >>> 0;
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ServerAdoption message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof chess.ServerAdoption
+         * @static
+         * @param {chess.ServerAdoption} message ServerAdoption
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ServerAdoption.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            let object = {};
+            if (options.arrays || options.defaults)
+                object.adoptedIds = [];
+            if (message.adoptedIds && message.adoptedIds.length) {
+                object.adoptedIds = [];
+                for (let j = 0; j < message.adoptedIds.length; ++j)
+                    object.adoptedIds[j] = message.adoptedIds[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this ServerAdoption to JSON.
+         * @function toJSON
+         * @memberof chess.ServerAdoption
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ServerAdoption.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the default type url for ServerAdoption
+         * @function getTypeUrl
+         * @memberof chess.ServerAdoption
+         * @static
+         * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns {string} The default type url
+         */
+        ServerAdoption.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+            if (typeUrlPrefix === undefined) {
+                typeUrlPrefix = "type.googleapis.com";
+            }
+            return typeUrlPrefix + "/chess.ServerAdoption";
+        };
+
+        return ServerAdoption;
+    })();
+
+    chess.ServerBulkCapture = (function() {
+
+        /**
+         * Properties of a ServerBulkCapture.
+         * @memberof chess
+         * @interface IServerBulkCapture
+         * @property {number|Long|null} [seqnum] ServerBulkCapture seqnum
+         * @property {Array.<number>|null} [capturedIds] ServerBulkCapture capturedIds
+         */
+
+        /**
+         * Constructs a new ServerBulkCapture.
+         * @memberof chess
+         * @classdesc Represents a ServerBulkCapture.
+         * @implements IServerBulkCapture
+         * @constructor
+         * @param {chess.IServerBulkCapture=} [properties] Properties to set
+         */
+        function ServerBulkCapture(properties) {
+            this.capturedIds = [];
+            if (properties)
+                for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * ServerBulkCapture seqnum.
+         * @member {number|Long} seqnum
+         * @memberof chess.ServerBulkCapture
+         * @instance
+         */
+        ServerBulkCapture.prototype.seqnum = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+        /**
+         * ServerBulkCapture capturedIds.
+         * @member {Array.<number>} capturedIds
+         * @memberof chess.ServerBulkCapture
+         * @instance
+         */
+        ServerBulkCapture.prototype.capturedIds = $util.emptyArray;
+
+        /**
+         * Creates a new ServerBulkCapture instance using the specified properties.
+         * @function create
+         * @memberof chess.ServerBulkCapture
+         * @static
+         * @param {chess.IServerBulkCapture=} [properties] Properties to set
+         * @returns {chess.ServerBulkCapture} ServerBulkCapture instance
+         */
+        ServerBulkCapture.create = function create(properties) {
+            return new ServerBulkCapture(properties);
+        };
+
+        /**
+         * Encodes the specified ServerBulkCapture message. Does not implicitly {@link chess.ServerBulkCapture.verify|verify} messages.
+         * @function encode
+         * @memberof chess.ServerBulkCapture
+         * @static
+         * @param {chess.IServerBulkCapture} message ServerBulkCapture message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ServerBulkCapture.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.seqnum != null && Object.hasOwnProperty.call(message, "seqnum"))
+                writer.uint32(/* id 1, wireType 0 =*/8).uint64(message.seqnum);
+            if (message.capturedIds != null && message.capturedIds.length) {
+                writer.uint32(/* id 2, wireType 2 =*/18).fork();
+                for (let i = 0; i < message.capturedIds.length; ++i)
+                    writer.uint32(message.capturedIds[i]);
+                writer.ldelim();
+            }
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ServerBulkCapture message, length delimited. Does not implicitly {@link chess.ServerBulkCapture.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof chess.ServerBulkCapture
+         * @static
+         * @param {chess.IServerBulkCapture} message ServerBulkCapture message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ServerBulkCapture.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a ServerBulkCapture message from the specified reader or buffer.
+         * @function decode
+         * @memberof chess.ServerBulkCapture
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {chess.ServerBulkCapture} ServerBulkCapture
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ServerBulkCapture.decode = function decode(reader, length, error) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            let end = length === undefined ? reader.len : reader.pos + length, message = new $root.chess.ServerBulkCapture();
+            while (reader.pos < end) {
+                let tag = reader.uint32();
+                if (tag === error)
+                    break;
+                switch (tag >>> 3) {
+                case 1: {
+                        message.seqnum = reader.uint64();
+                        break;
+                    }
+                case 2: {
+                        if (!(message.capturedIds && message.capturedIds.length))
+                            message.capturedIds = [];
+                        if ((tag & 7) === 2) {
+                            let end2 = reader.uint32() + reader.pos;
+                            while (reader.pos < end2)
+                                message.capturedIds.push(reader.uint32());
+                        } else
+                            message.capturedIds.push(reader.uint32());
+                        break;
+                    }
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a ServerBulkCapture message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof chess.ServerBulkCapture
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {chess.ServerBulkCapture} ServerBulkCapture
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ServerBulkCapture.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ServerBulkCapture message.
+         * @function verify
+         * @memberof chess.ServerBulkCapture
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ServerBulkCapture.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.seqnum != null && message.hasOwnProperty("seqnum"))
+                if (!$util.isInteger(message.seqnum) && !(message.seqnum && $util.isInteger(message.seqnum.low) && $util.isInteger(message.seqnum.high)))
+                    return "seqnum: integer|Long expected";
+            if (message.capturedIds != null && message.hasOwnProperty("capturedIds")) {
+                if (!Array.isArray(message.capturedIds))
+                    return "capturedIds: array expected";
+                for (let i = 0; i < message.capturedIds.length; ++i)
+                    if (!$util.isInteger(message.capturedIds[i]))
+                        return "capturedIds: integer[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a ServerBulkCapture message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof chess.ServerBulkCapture
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {chess.ServerBulkCapture} ServerBulkCapture
+         */
+        ServerBulkCapture.fromObject = function fromObject(object) {
+            if (object instanceof $root.chess.ServerBulkCapture)
+                return object;
+            let message = new $root.chess.ServerBulkCapture();
+            if (object.seqnum != null)
+                if ($util.Long)
+                    (message.seqnum = $util.Long.fromValue(object.seqnum)).unsigned = true;
+                else if (typeof object.seqnum === "string")
+                    message.seqnum = parseInt(object.seqnum, 10);
+                else if (typeof object.seqnum === "number")
+                    message.seqnum = object.seqnum;
+                else if (typeof object.seqnum === "object")
+                    message.seqnum = new $util.LongBits(object.seqnum.low >>> 0, object.seqnum.high >>> 0).toNumber(true);
+            if (object.capturedIds) {
+                if (!Array.isArray(object.capturedIds))
+                    throw TypeError(".chess.ServerBulkCapture.capturedIds: array expected");
+                message.capturedIds = [];
+                for (let i = 0; i < object.capturedIds.length; ++i)
+                    message.capturedIds[i] = object.capturedIds[i] >>> 0;
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ServerBulkCapture message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof chess.ServerBulkCapture
+         * @static
+         * @param {chess.ServerBulkCapture} message ServerBulkCapture
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ServerBulkCapture.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            let object = {};
+            if (options.arrays || options.defaults)
+                object.capturedIds = [];
+            if (options.defaults)
+                if ($util.Long) {
+                    let long = new $util.Long(0, 0, true);
+                    object.seqnum = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                } else
+                    object.seqnum = options.longs === String ? "0" : 0;
+            if (message.seqnum != null && message.hasOwnProperty("seqnum"))
+                if (typeof message.seqnum === "number")
+                    object.seqnum = options.longs === String ? String(message.seqnum) : message.seqnum;
+                else
+                    object.seqnum = options.longs === String ? $util.Long.prototype.toString.call(message.seqnum) : options.longs === Number ? new $util.LongBits(message.seqnum.low >>> 0, message.seqnum.high >>> 0).toNumber(true) : message.seqnum;
+            if (message.capturedIds && message.capturedIds.length) {
+                object.capturedIds = [];
+                for (let j = 0; j < message.capturedIds.length; ++j)
+                    object.capturedIds[j] = message.capturedIds[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this ServerBulkCapture to JSON.
+         * @function toJSON
+         * @memberof chess.ServerBulkCapture
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ServerBulkCapture.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the default type url for ServerBulkCapture
+         * @function getTypeUrl
+         * @memberof chess.ServerBulkCapture
+         * @static
+         * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns {string} The default type url
+         */
+        ServerBulkCapture.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+            if (typeUrlPrefix === undefined) {
+                typeUrlPrefix = "type.googleapis.com";
+            }
+            return typeUrlPrefix + "/chess.ServerBulkCapture";
+        };
+
+        return ServerBulkCapture;
+    })();
+
     chess.ServerMessage = (function() {
 
         /**
@@ -4182,6 +4678,8 @@ export const chess = $root.chess = (() => {
          * @property {chess.IServerValidMove|null} [validMove] ServerMessage validMove
          * @property {chess.IServerInvalidMove|null} [invalidMove] ServerMessage invalidMove
          * @property {chess.IServerPong|null} [pong] ServerMessage pong
+         * @property {chess.IServerAdoption|null} [adoption] ServerMessage adoption
+         * @property {chess.IServerBulkCapture|null} [bulkCapture] ServerMessage bulkCapture
          */
 
         /**
@@ -4247,17 +4745,33 @@ export const chess = $root.chess = (() => {
          */
         ServerMessage.prototype.pong = null;
 
+        /**
+         * ServerMessage adoption.
+         * @member {chess.IServerAdoption|null|undefined} adoption
+         * @memberof chess.ServerMessage
+         * @instance
+         */
+        ServerMessage.prototype.adoption = null;
+
+        /**
+         * ServerMessage bulkCapture.
+         * @member {chess.IServerBulkCapture|null|undefined} bulkCapture
+         * @memberof chess.ServerMessage
+         * @instance
+         */
+        ServerMessage.prototype.bulkCapture = null;
+
         // OneOf field names bound to virtual getters and setters
         let $oneOfFields;
 
         /**
          * ServerMessage payload.
-         * @member {"initialState"|"snapshot"|"movesAndCaptures"|"validMove"|"invalidMove"|"pong"|undefined} payload
+         * @member {"initialState"|"snapshot"|"movesAndCaptures"|"validMove"|"invalidMove"|"pong"|"adoption"|"bulkCapture"|undefined} payload
          * @memberof chess.ServerMessage
          * @instance
          */
         Object.defineProperty(ServerMessage.prototype, "payload", {
-            get: $util.oneOfGetter($oneOfFields = ["initialState", "snapshot", "movesAndCaptures", "validMove", "invalidMove", "pong"]),
+            get: $util.oneOfGetter($oneOfFields = ["initialState", "snapshot", "movesAndCaptures", "validMove", "invalidMove", "pong", "adoption", "bulkCapture"]),
             set: $util.oneOfSetter($oneOfFields)
         });
 
@@ -4297,6 +4811,10 @@ export const chess = $root.chess = (() => {
                 $root.chess.ServerInvalidMove.encode(message.invalidMove, writer.uint32(/* id 5, wireType 2 =*/42).fork()).ldelim();
             if (message.pong != null && Object.hasOwnProperty.call(message, "pong"))
                 $root.chess.ServerPong.encode(message.pong, writer.uint32(/* id 6, wireType 2 =*/50).fork()).ldelim();
+            if (message.adoption != null && Object.hasOwnProperty.call(message, "adoption"))
+                $root.chess.ServerAdoption.encode(message.adoption, writer.uint32(/* id 7, wireType 2 =*/58).fork()).ldelim();
+            if (message.bulkCapture != null && Object.hasOwnProperty.call(message, "bulkCapture"))
+                $root.chess.ServerBulkCapture.encode(message.bulkCapture, writer.uint32(/* id 8, wireType 2 =*/66).fork()).ldelim();
             return writer;
         };
 
@@ -4355,6 +4873,14 @@ export const chess = $root.chess = (() => {
                     }
                 case 6: {
                         message.pong = $root.chess.ServerPong.decode(reader, reader.uint32());
+                        break;
+                    }
+                case 7: {
+                        message.adoption = $root.chess.ServerAdoption.decode(reader, reader.uint32());
+                        break;
+                    }
+                case 8: {
+                        message.bulkCapture = $root.chess.ServerBulkCapture.decode(reader, reader.uint32());
                         break;
                     }
                 default:
@@ -4451,6 +4977,26 @@ export const chess = $root.chess = (() => {
                         return "pong." + error;
                 }
             }
+            if (message.adoption != null && message.hasOwnProperty("adoption")) {
+                if (properties.payload === 1)
+                    return "payload: multiple values";
+                properties.payload = 1;
+                {
+                    let error = $root.chess.ServerAdoption.verify(message.adoption);
+                    if (error)
+                        return "adoption." + error;
+                }
+            }
+            if (message.bulkCapture != null && message.hasOwnProperty("bulkCapture")) {
+                if (properties.payload === 1)
+                    return "payload: multiple values";
+                properties.payload = 1;
+                {
+                    let error = $root.chess.ServerBulkCapture.verify(message.bulkCapture);
+                    if (error)
+                        return "bulkCapture." + error;
+                }
+            }
             return null;
         };
 
@@ -4495,6 +5041,16 @@ export const chess = $root.chess = (() => {
                 if (typeof object.pong !== "object")
                     throw TypeError(".chess.ServerMessage.pong: object expected");
                 message.pong = $root.chess.ServerPong.fromObject(object.pong);
+            }
+            if (object.adoption != null) {
+                if (typeof object.adoption !== "object")
+                    throw TypeError(".chess.ServerMessage.adoption: object expected");
+                message.adoption = $root.chess.ServerAdoption.fromObject(object.adoption);
+            }
+            if (object.bulkCapture != null) {
+                if (typeof object.bulkCapture !== "object")
+                    throw TypeError(".chess.ServerMessage.bulkCapture: object expected");
+                message.bulkCapture = $root.chess.ServerBulkCapture.fromObject(object.bulkCapture);
             }
             return message;
         };
@@ -4541,6 +5097,16 @@ export const chess = $root.chess = (() => {
                 object.pong = $root.chess.ServerPong.toObject(message.pong, options);
                 if (options.oneofs)
                     object.payload = "pong";
+            }
+            if (message.adoption != null && message.hasOwnProperty("adoption")) {
+                object.adoption = $root.chess.ServerAdoption.toObject(message.adoption, options);
+                if (options.oneofs)
+                    object.payload = "adoption";
+            }
+            if (message.bulkCapture != null && message.hasOwnProperty("bulkCapture")) {
+                object.bulkCapture = $root.chess.ServerBulkCapture.toObject(message.bulkCapture, options);
+                if (options.oneofs)
+                    object.payload = "bulkCapture";
             }
             return object;
         };

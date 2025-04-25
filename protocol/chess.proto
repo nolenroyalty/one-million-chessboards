@@ -134,6 +134,15 @@ message ServerInitialState {
     ServerStateSnapshot snapshot = 3;
 }
 
+message ServerAdoption {
+    repeated uint32 adoptedIds = 1;
+}
+
+message ServerBulkCapture {
+    uint64 seqnum = 1;
+    repeated uint32 capturedIds = 2;
+}
+
 message ServerMessage {
     oneof payload {
         ServerInitialState initialState         = 1;
@@ -142,5 +151,7 @@ message ServerMessage {
         ServerValidMove validMove               = 4;
         ServerInvalidMove invalidMove           = 5;
         ServerPong pong                         = 6;
+        ServerAdoption adoption                 = 7;
+        ServerBulkCapture bulkCapture           = 8;
     }
 }

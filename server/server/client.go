@@ -573,6 +573,14 @@ func (c *Client) SendValidMove(moveToken uint32, asOfSeqnum uint64, capturedPiec
 	c.compressAndSend(message, "SendValidMove", false)
 }
 
+func (c *Client) SendAdoption(msg []byte) {
+	c.compressAndSend(msg, "SendAdoption", false)
+}
+
+func (c *Client) SendBulkCapture(msg []byte) {
+	c.compressAndSend(msg, "SendBulkCapture", false)
+}
+
 func (c *Client) Close(why string) {
 	if !c.isClosed.CompareAndSwap(false, true) {
 		return

@@ -236,6 +236,117 @@ func (b *Board) satisfiesMoveRules(movedPiece Piece, capturedPiece Piece, move M
 	return true
 }
 
+type ClearBoardResult struct {
+	CapturedPieces []uint32
+	Seqnum         uint64
+}
+
+func (b *Board) DoBulkCapture(clearBoardRequest *clearBoardRequest) *protocol.ServerBulkCapture {
+	capturedPieces := make([]uint32, 0, 16)
+	onlyColor := clearBoardRequest.OnlyColor()
+	startingX := clearBoardRequest.StartingX()
+	startingY := clearBoardRequest.StartingY()
+	endingX := clearBoardRequest.EndingX()
+	endingY := clearBoardRequest.EndingY()
+
+	if startingX >= BOARD_SIZE || startingY >= BOARD_SIZE || endingX >= BOARD_SIZE || endingY >= BOARD_SIZE {
+		log.Printf("BUG: ClearBoard: out of bounds: %d %d %d %d", startingX, startingY, endingX, endingY)
+		return &protocol.ServerBulkCapture{
+			CapturedIds: capturedPieces,
+			Seqnum:      0,
+		}
+	}
+
+	now := time.Now()
+	b.Lock()
+	defer b.Unlock()
+
+	for y := startingY; y < endingY; y++ {
+		for x := startingX; x < endingX; x++ {
+			piece := b.pieces[y][x]
+			if EncodedIsEmpty(EncodedPiece(piece)) {
+				continue
+			}
+			p := PieceOfEncodedPiece(EncodedPiece(piece))
+			if onlyColor == OnlyColorWhite && !p.IsWhite {
+				continue
+			} else if onlyColor == OnlyColorBlack && p.IsWhite {
+				continue
+			}
+
+			if p.IsWhite {
+				b.whitePiecesCaptured.Add(1)
+				if p.Type == King {
+					b.whiteKingsCaptured.Add(1)
+				}
+			} else {
+				b.blackPiecesCaptured.Add(1)
+				if p.Type == King {
+					b.blackKingsCaptured.Add(1)
+				}
+			}
+
+			capturedPieces = append(capturedPieces, p.ID)
+			b.pieces[y][x] = uint64(EmptyEncodedPiece)
+		}
+	}
+	took := time.Since(now).Nanoseconds()
+	b.mutexTimeLogger.Info().
+		Int64("took_ns", took).
+		Bool("is_clear_board", true).
+		Send()
+
+	b.seqNum++
+	seqNum := b.seqNum
+
+	return &protocol.ServerBulkCapture{
+		CapturedIds: capturedPieces,
+		Seqnum:      seqNum,
+	}
+}
+
+func (b *Board) Adopt(adoptionRequest *adoptionRequest) []uint32 {
+	adoptedPieces := make([]uint32, 0, 16)
+	onlyColor := adoptionRequest.OnlyColor()
+	startingX := adoptionRequest.StartingX()
+	startingY := adoptionRequest.StartingY()
+	endingX := adoptionRequest.EndingX()
+	endingY := adoptionRequest.EndingY()
+
+	if startingX >= BOARD_SIZE || startingY >= BOARD_SIZE || endingX >= BOARD_SIZE || endingY >= BOARD_SIZE {
+		log.Printf("BUG: Adopt: out of bounds: %d %d %d %d", startingX, startingY, endingX, endingY)
+		return adoptedPieces
+	}
+
+	now := time.Now()
+	b.Lock()
+	defer b.Unlock()
+
+	for y := startingY; y < endingY; y++ {
+		for x := startingX; x < endingX; x++ {
+			piece := b.pieces[y][x]
+			if EncodedIsEmpty(EncodedPiece(piece)) {
+				continue
+			}
+			p := PieceOfEncodedPiece(EncodedPiece(piece))
+			if onlyColor == OnlyColorWhite && !p.IsWhite {
+				continue
+			} else if onlyColor == OnlyColorBlack && p.IsWhite {
+				continue
+			}
+			p.Adopted = true
+			b.pieces[y][x] = uint64(p.Encode())
+			adoptedPieces = append(adoptedPieces, p.ID)
+		}
+	}
+	took := time.Since(now).Nanoseconds()
+	b.mutexTimeLogger.Info().
+		Int64("took_ns", took).
+		Bool("is_adoption", true).
+		Send()
+	return adoptedPieces
+}
+
 // this can't handle multiple writers because it releases its read lock before
 // acquiring the write lock, which means that if you have multiple writers
 // you may apply an invalid move.

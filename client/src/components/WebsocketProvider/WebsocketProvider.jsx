@@ -173,6 +173,17 @@ function useWebsocket({
           pieceHandler.current.rejectOptimisticMove({
             moveToken: invalid.moveToken,
           });
+        } else if (data.adoption) {
+          const adoption = data.adoption;
+          pieceHandler.current.handleAdoption({
+            adoptedIds: adoption.adoptedIds,
+          });
+        } else if (data.bulkCapture) {
+          const bulkCapture = data.bulkCapture;
+          pieceHandler.current.handleBulkCapture({
+            capturedIds: bulkCapture.capturedIds,
+            seqnum: bulkCapture.seqnum,
+          });
         } else if (data.pong) {
         } else {
           console.debug("unknown message type", data);

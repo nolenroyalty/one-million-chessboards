@@ -120,18 +120,30 @@ func (cm *ClientManager) GetClientsForZones(zones map[ZoneCoord]struct{}) map[*C
 	return resultMap
 }
 
-func (cm *ClientManager) GetAllClients() map[*Client]struct{} {
-	cm.RLock()
-	defer cm.RUnlock()
-	result := make(map[*Client]struct{}, len(cm.currentZonesForClient))
-	for client := range cm.currentZonesForClient {
-		result[client] = struct{}{}
-	}
-	return result
-}
-
 func (cm *ClientManager) ReturnClientMap(m map[*Client]struct{}) {
 	cm.resultPool.Put(m)
+}
+
+func (cm *ClientManager) AffectedZonesForAdoption(adoptionRequest *adoptionRequest) map[ZoneCoord]struct{} {
+	fromZone := GetZoneCoord(adoptionRequest.StartingX(), adoptionRequest.StartingY())
+	endingZone := GetZoneCoord(adoptionRequest.EndingX(), adoptionRequest.EndingY())
+
+	if fromZone == endingZone {
+		return map[ZoneCoord]struct{}{fromZone: {}}
+	}
+
+	return map[ZoneCoord]struct{}{fromZone: {}, endingZone: {}}
+}
+
+func (cm *ClientManager) AffectedZonesForClearBoard(clearBoardRequest *clearBoardRequest) map[ZoneCoord]struct{} {
+	fromZone := GetZoneCoord(clearBoardRequest.StartingX(), clearBoardRequest.StartingY())
+	endingZone := GetZoneCoord(clearBoardRequest.EndingX(), clearBoardRequest.EndingY())
+
+	if fromZone == endingZone {
+		return map[ZoneCoord]struct{}{fromZone: {}}
+	}
+
+	return map[ZoneCoord]struct{}{fromZone: {}, endingZone: {}}
 }
 
 func (cm *ClientManager) GetAffectedZones(move Move) map[ZoneCoord]struct{} {
