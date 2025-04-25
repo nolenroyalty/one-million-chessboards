@@ -15,13 +15,13 @@ const Wrapper = styled.div`
 
   background-color: var(--color-neutral-950);
   opacity: var(--opacity);
-  transition: opacity 0.2s ease-in-out;
+  transition: opacity 0.75s cubic-bezier(0.32, 0, 0.67, 0);
   z-index: 1000;
   pointer-events: none;
 `;
 
-const SHOW_DELAY_MS = 150;
-const MIN_DISPLAY_TIME_MS = 350;
+const SHOW_DELAY_MS = 200;
+const MIN_DISPLAY_TIME_MS = 250;
 
 function LoadingView({ boardSizeParams }) {
   const { pieceHandler } = React.useContext(HandlersContext);
@@ -86,13 +86,13 @@ function LoadingView({ boardSizeParams }) {
       // 2. we don't have a timer running to show the overlay
       // So set the timer (or show it immediately if we know we'll need to)
       if (!showOverlay && !showTimerRef.current) {
-        if (lastTransitionDebounceDelay >= SHOW_DELAY_MS) {
+        if (lastTransitionDebounceDelay > 0 || true) {
           setShowOverlay(true);
           overlayShowTimerRef.current = performance.now();
         } else {
           showTimerRef.current = setTimeout(() => {
-            setShowOverlay(true);
             overlayShowTimerRef.current = performance.now();
+            setShowOverlay(true);
             showTimerRef.current = null;
           }, SHOW_DELAY_MS);
         }

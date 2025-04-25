@@ -4,15 +4,18 @@ import (
 	"log"
 	"math"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/http/pprof"
 	"one-million-chessboards/protocol"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/rs/zerolog"
 )
 
 var json = jsoniter.ConfigCompatibleWithStandardLibrary
@@ -38,11 +41,13 @@ type Server struct {
 	recentWhiteCapturesResult jsoniter.RawMessage
 	recentBlackCapturesResult jsoniter.RawMessage
 	recentCapturesMutex       sync.RWMutex
+	httpLogger                zerolog.Logger
 }
 
 func NewServer(stateDir string) *Server {
 	persistentBoard := NewPersistentBoard(stateDir)
 	board := persistentBoard.GetBoardCopy()
+	httpLogger := NewCoreLogger().With().Str("kind", "http").Logger()
 	s := &Server{
 		board:             board,
 		persistentBoard:   persistentBoard,
@@ -50,6 +55,7 @@ func NewServer(stateDir string) *Server {
 		minimapAggregator: NewMinimapAggregator(),
 		moveRequests:      make(chan MoveRequest, 1024),
 		recentCaptures:    NewRecentCaptures(),
+		httpLogger:        httpLogger,
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -76,21 +82,19 @@ func (s *Server) refreshRecentCapturesOnce() {
 	}
 	recentCapturesResult := s.recentCaptures.GetRecentCaptures()
 	s.recentCapturesMutex.Lock()
+	defer s.recentCapturesMutex.Unlock()
 	whiteSerialized, err := json.Marshal(res{Captures: recentCapturesResult.WhiteCaptures})
 	if err != nil {
 		log.Printf("Error marshalling recent captures: %v", err)
-		return
 	} else {
 		s.recentWhiteCapturesResult = whiteSerialized
 	}
 	blackSerialized, err := json.Marshal(res{Captures: recentCapturesResult.BlackCaptures})
 	if err != nil {
 		log.Printf("Error marshalling recent captures: %v", err)
-		return
 	} else {
 		s.recentBlackCapturesResult = blackSerialized
 	}
-	s.recentCapturesMutex.Unlock()
 }
 
 func (s *Server) refreshRecentCapturesPeriodically() {
@@ -310,6 +314,35 @@ func (s *Server) GetMaybeRequestedCoords(requestedXCoord int16, requestedYCoord 
 	return Position{X: uint16(requestedXCoord), Y: uint16(requestedYCoord)}
 }
 
+func (s *Server) GetIPString(r *http.Request) string {
+	realIp := ""
+	if cfIP := r.Header.Get("CF-Connecting-IP"); cfIP != "" {
+		realIp = cfIP
+	} else if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		xffParts := strings.Split(xff, ",")
+		if len(xffParts) > 0 {
+			realIp = xffParts[0]
+		}
+	} else {
+		ip, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			realIp = "UNKNOWN"
+		} else {
+			realIp = ip
+		}
+	}
+
+	rateLimitIP := realIp
+	if ip := net.ParseIP(realIp); ip != nil && ip.To4() == nil {
+		ipv6PrefixLength := 48
+		mask := net.CIDRMask(ipv6PrefixLength, 128)
+		networkAddress := ip.Mask(mask)
+		rateLimitIP = networkAddress.String()
+	}
+
+	return rateLimitIP
+}
+
 func (s *Server) ServeWs(w http.ResponseWriter, r *http.Request) {
 	// CR nroyalty: rate-limit by IP
 	conn, err := s.upgrader.Upgrade(w, r, nil)
@@ -347,7 +380,9 @@ func (s *Server) ServeWs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	client := NewClient(conn, s)
+	ipString := s.GetIPString(r)
+	// CR nroyalty: check IP for connection rate-limit here?
+	client := NewClient(conn, s, ipString)
 
 	pos := s.GetMaybeRequestedCoords(requestedXCoord, requestedYCoord)
 	playingWhite := s.DetermineColor(colorPref)
@@ -356,27 +391,35 @@ func (s *Server) ServeWs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) ServeMinimap(w http.ResponseWriter, r *http.Request) {
-	// log.Printf("serving minimap")
+	s.httpLogger.Info().
+		Str("rpc", "ServeMinimap").
+		Send()
 	aggregation := s.minimapAggregator.GetLastAggregation()
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=10, s-maxage=15")
-
+	w.Header().Set("Content-Encoding", "zstd")
+	w.Header().Set("Cache-Control", "public, max-age=2, s-maxage=25")
 	w.Write(aggregation)
 }
 
 func (s *Server) ServeGlobalStats(w http.ResponseWriter, r *http.Request) {
-	// log.Printf("serving global stats")
+	s.httpLogger.Info().
+		Str("rpc", "ServeGlobalStats").
+		Send()
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=1, s-maxage=3")
+	w.Header().Set("Cache-Control", "public, max-age=2, s-maxage=4")
 	s.currentStatsMutex.RLock()
 	defer s.currentStatsMutex.RUnlock()
 	w.Write(s.currentStats)
 }
 
 func (s *Server) ServeRecentCaptures(w http.ResponseWriter, r *http.Request, white bool) {
-	// log.Printf("serving recent captures")
+	s.httpLogger.Info().
+		Str("rpc", "ServeRecentCaptures").
+		Send()
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=1, s-maxage=3")
+	w.Header().Set("Cache-Control", "public, max-age=2, s-maxage=4")
+	s.recentCapturesMutex.RLock()
+	defer s.recentCapturesMutex.RUnlock()
 	if white {
 		w.Write(s.recentWhiteCapturesResult)
 	} else {

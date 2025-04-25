@@ -15,19 +15,9 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/klauspost/compress/zstd"
+	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/proto"
 )
-
-var zstdPool = sync.Pool{
-	New: func() any {
-		enc, _ := zstd.NewWriter(
-			nil,
-			zstd.WithEncoderLevel(zstd.SpeedFastest),
-			zstd.WithEncoderConcurrency(1),
-		)
-		return enc
-	},
-}
 
 var marshalOpt = proto.MarshalOptions{Deterministic: false}
 
@@ -70,12 +60,13 @@ type Client struct {
 	playingWhite                                   atomic.Bool
 	moveScratchBuffer                              []byte
 	moveScratchMu                                  sync.Mutex
+	rpcLogger                                      zerolog.Logger
 }
 
 // CR nroyalty: think HARD about your send channel and how big it should be.
 // it needs to be much smaller than the 2048 we used for benchmarking purposes.
 // 64 might still be too large (?)
-func NewClient(conn *websocket.Conn, server *Server) *Client {
+func NewClient(conn *websocket.Conn, server *Server, ipString string) *Client {
 	c := &Client{
 		conn:   conn,
 		server: server,
@@ -88,11 +79,15 @@ func NewClient(conn *websocket.Conn, server *Server) *Client {
 		bufferMu:       sync.Mutex{},
 		lastActionTime: atomic.Int64{},
 		playingWhite:   atomic.Bool{},
+		rpcLogger:      NewRPCLogger(ipString),
 	}
 	c.isClosed.Store(false)
 	c.lastActionTime.Store(time.Now().Unix())
 	c.position.Store(Position{X: 0, Y: 0})
 	c.lastSnapshotPosition.Store(Position{X: 0, Y: 0})
+	c.rpcLogger.Info().
+		Str("rpc", "NewClient").
+		Send()
 	return c
 }
 
@@ -114,10 +109,10 @@ func (c *Client) compressAndSend(raw []byte, onDrop string) {
 	if len(raw) < minCompressBytes {
 		payload = raw
 	} else {
-		enc := zstdPool.Get().(*zstd.Encoder)
+		enc := GLOBAL_zstdPool.Get().(*zstd.Encoder)
 		enc.Reset(nil)
 		payload = enc.EncodeAll(raw, make([]byte, 0, len(raw)))
-		zstdPool.Put(enc)
+		GLOBAL_zstdPool.Put(enc)
 	}
 	select {
 	case c.send_DO_NOT_DO_RAW_WRITES_OR_YOU_WILL_BE_FIRED <- payload:
@@ -227,6 +222,10 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 		moveType := p.Move.MoveType
 		moveToken := p.Move.MoveToken
 
+		c.rpcLogger.Info().
+			Str("rpc", "MovePiece").
+			Send()
+
 		if !CoordInBoundsInt(fromX) || !CoordInBoundsInt(fromY) ||
 			!CoordInBoundsInt(toX) || !CoordInBoundsInt(toY) {
 			log.Printf("Invalid move: %v", p)
@@ -263,6 +262,9 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 		if !CoordInBoundsInt(centerX) || !CoordInBoundsInt(centerY) {
 			return
 		}
+		c.rpcLogger.Info().
+			Str("rpc", "Subscribe").
+			Send()
 		c.BumpActive()
 		c.UpdatePositionAndMaybeSnapshot(Position{X: uint16(centerX), Y: uint16(centerY)})
 	case *protocol.ClientMessage_Ping:
@@ -428,6 +430,9 @@ func (c *Client) SendInvalidMove(moveToken uint32) {
 		log.Printf("Error marshalling invalid move: %v", err)
 		return
 	}
+	c.rpcLogger.Info().
+		Str("rpc", "InvalidMove").
+		Send()
 
 	c.compressAndSend(message, "SendInvalidMove")
 }

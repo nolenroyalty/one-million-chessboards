@@ -1,6 +1,11 @@
 package server
 
-import "time"
+import (
+	"sync"
+	"time"
+
+	"github.com/klauspost/compress/zstd"
+)
 
 const (
 	BOARD_SIZE                  = 8000
@@ -18,3 +23,14 @@ const (
 	STATS_REFRESH_INTERVAL      = time.Second * 1
 	CAPTURE_REFRESH_INTERVAL    = time.Second * 1
 )
+
+var GLOBAL_zstdPool = sync.Pool{
+	New: func() any {
+		enc, _ := zstd.NewWriter(
+			nil,
+			zstd.WithEncoderLevel(zstd.SpeedFastest),
+			zstd.WithEncoderConcurrency(1),
+		)
+		return enc
+	},
+}

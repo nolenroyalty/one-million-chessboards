@@ -5,7 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	jsoniter "github.com/json-iterator/go"
+	"github.com/klauspost/compress/zstd"
 )
 
 // The original intention here was to do substantially more aggressive packing of this
@@ -15,6 +15,7 @@ import (
 // clients poll it with GETs every 30s or so.
 //
 // Given that, it's kind of a funny half-optimized format. But I think that's fine.
+// It also happens to compress very very well lol
 
 const CELL_SIZE = 5
 const NUMBER_OF_CELLS = 1000 / CELL_SIZE
@@ -107,7 +108,7 @@ func (m *MinimapAggregator) Initialize(board *Board) {
 	m.createAndStoreAggregation()
 }
 
-func (m *MinimapAggregator) createAndStoreAggregation() jsoniter.RawMessage {
+func (m *MinimapAggregator) createAndStoreAggregation() []byte {
 	m.Lock()
 	snapshot := m.cells
 	m.Unlock()
@@ -139,8 +140,12 @@ func (m *MinimapAggregator) createAndStoreAggregation() jsoniter.RawMessage {
 		log.Printf("Error marshalling aggregation response: %v", err)
 		return nil
 	}
-	m.lastAggregation.Store(jsonResponse)
-	return jsonResponse
+	enc := GLOBAL_zstdPool.Get().(*zstd.Encoder)
+	enc.Reset(nil)
+	ret := enc.EncodeAll(jsonResponse, make([]byte, 0, len(jsonResponse)))
+	GLOBAL_zstdPool.Put(enc)
+	m.lastAggregation.Store(ret)
+	return ret
 }
 
 // assumes that the lock is already held!
@@ -199,6 +204,6 @@ func (m *MinimapAggregator) UpdateForMoveResult(moveResult MoveResult) {
 	}
 }
 
-func (m *MinimapAggregator) GetLastAggregation() jsoniter.RawMessage {
-	return jsoniter.RawMessage(m.lastAggregation.Load().([]byte))
+func (m *MinimapAggregator) GetLastAggregation() []byte {
+	return m.lastAggregation.Load().([]byte)
 }
