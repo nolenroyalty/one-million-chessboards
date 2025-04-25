@@ -274,7 +274,6 @@ function useWebsocket({
   ]);
 }
 
-// CR nroyalty: make sure this never hits rate limits
 class CoordsDebouncer {
   constructor({ sendSubscribe }) {
     this.recentRequests = [];
@@ -319,15 +318,7 @@ class CoordsDebouncer {
     if (this.recentRequests.length === 0) {
       this.enqueueRequest(0);
     } else {
-      const delay = this.recentRequests.length <= 2 ? 50 : 200;
-      console.log(this.recentRequests);
-      console.log(delay);
-      //   let delay = 400;
-      //   if (this.recentRequests.length === 1) {
-      //     delay = 50;
-      //   } else if (this.recentRequests.length === 2) {
-      //     delay = 100;
-      //   }
+      const delay = this.recentRequests.length <= 2 ? 50 : 250;
       this.enqueueRequest(delay);
     }
   }

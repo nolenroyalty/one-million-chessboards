@@ -32,7 +32,7 @@ const (
 	// CR nroyalty: remove before release
 	simulatedLatency          = 951 * time.Millisecond
 	simulatedJitterMs         = 1
-	maxWaitBeforeSendingMoves = 200 * time.Millisecond
+	maxWaitBeforeSendingMoves = 225 * time.Millisecond
 
 	MAX_SNAPSHOTS_PER_SECOND = 5
 	SNAPSHOT_BURST_LIMIT     = 6
@@ -167,10 +167,15 @@ func (c *Client) Run(playingWhite bool, pos Position) {
 
 const minCompressBytes = 64
 
-func (c *Client) compressAndSend(raw []byte, onDrop string) {
+func (c *Client) compressAndSend(raw []byte, onDrop string, copyIfNoCompress bool) {
 	var payload []byte
 	if len(raw) < minCompressBytes {
-		payload = raw
+		if copyIfNoCompress {
+			payload = make([]byte, len(raw))
+			copy(payload, raw)
+		} else {
+			payload = raw
+		}
 	} else {
 		enc := GLOBAL_zstdPool.Get().(*zstd.Encoder)
 		enc.Reset(nil)
@@ -205,7 +210,7 @@ func (c *Client) sendInitialState() {
 		log.Printf("Error marshalling initial state: %v", err)
 		return
 	}
-	c.compressAndSend(message, "sendInitialState")
+	c.compressAndSend(message, "sendInitialState", false)
 }
 
 func (c *Client) IsActive() bool {
@@ -384,7 +389,7 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 			log.Printf("Error marshalling app pong: %v", err)
 			return
 		}
-		c.compressAndSend(message, "app-ping")
+		c.compressAndSend(message, "app-ping", false)
 	default:
 		log.Printf("Unknown message type: %v", p)
 	}
@@ -402,8 +407,8 @@ func (c *Client) WritePump() {
 		select {
 		case message, ok := <-c.send_DO_NOT_DO_RAW_WRITES_OR_YOU_WILL_BE_FIRED:
 			if !ok {
-				// Channel closed, server shutdown
-				log.Printf("!!Channel closed, server shutdown!!")
+				// Channel closed - shouldn't happen?
+				log.Printf("!!Send channel unexpectedly closed!!")
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
@@ -483,7 +488,7 @@ func (c *Client) SendStateSnapshot() {
 	}
 
 	c.lastSnapshotPosition.Store(pos)
-	c.compressAndSend(message, "SendStateSnapshot")
+	c.compressAndSend(message, "SendStateSnapshot", false)
 }
 
 func (c *Client) MaybeSendMoveUpdates() {
@@ -521,7 +526,9 @@ func (c *Client) MaybeSendMoveUpdates() {
 		return
 	}
 
-	c.compressAndSend(buf, "SendMoveUpdates")
+	// if we don't compress, we should copy the buffer because we
+	// may reuse it for the next send
+	c.compressAndSend(buf, "SendMoveUpdates", true)
 }
 
 func (c *Client) SendInvalidMove(moveToken uint32) {
@@ -541,7 +548,7 @@ func (c *Client) SendInvalidMove(moveToken uint32) {
 		Str("rpc", "InvalidMove").
 		Send()
 
-	c.compressAndSend(message, "SendInvalidMove")
+	c.compressAndSend(message, "SendInvalidMove", false)
 }
 
 func (c *Client) SendValidMove(moveToken uint32, asOfSeqnum uint64, capturedPieceId uint32) {
@@ -560,7 +567,7 @@ func (c *Client) SendValidMove(moveToken uint32, asOfSeqnum uint64, capturedPiec
 		return
 	}
 
-	c.compressAndSend(message, "SendValidMove")
+	c.compressAndSend(message, "SendValidMove", false)
 }
 
 func (c *Client) Close(why string) {
@@ -568,7 +575,7 @@ func (c *Client) Close(why string) {
 		return
 	}
 	close(c.done)
+	c.server.DecrementCountForIp(c.ipString)
 	c.server.clientManager.UnregisterClient(c)
 	c.conn.Close()
-	c.server.DecrementCountForIp(c.ipString)
 }
