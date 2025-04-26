@@ -159,7 +159,7 @@ func (btd *BoardToDiskHandler) saveToFile(s *Snapshot) error {
 	name := fmt.Sprintf("board-ts:%d-seq:%d.bin", now.UnixNano(), s.Header.SeqNum)
 	filename := filepath.Join(btd.stateDir, name)
 	err := WriteFileAtomic(filename, func(writer io.Writer) error {
-		buf := bufio.NewWriterSize(writer, 64*1024*1024)
+		buf := bufio.NewWriterSize(writer, 128*1024*1024)
 		ie := binary.Write(buf, binary.LittleEndian, &s.Header)
 		if ie != nil {
 			return ie
@@ -186,7 +186,7 @@ func (s *Snapshot) initializeFromFile(filename string) error {
 		return err
 	}
 	defer file.Close()
-	reader := bufio.NewReaderSize(file, 64*1024*1024)
+	reader := bufio.NewReaderSize(file, 128*1024*1024)
 	err = binary.Read(reader, binary.LittleEndian, &s.Header)
 	if err != nil {
 		return err

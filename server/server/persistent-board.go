@@ -209,7 +209,7 @@ func GetSortedSnapshotFilenames(stateDir, prefix string) ([]FileWithSeqnumAndTim
 }
 
 func NewFakePersistentBoard() *PersistentBoard {
-	board := NewBoard()
+	board := NewBoard(true)
 	pb := &PersistentBoard{board: board,
 		movesToApply:           make(chan Move, 8192),
 		stateDir:               "",
@@ -224,7 +224,7 @@ func NewPersistentBoard(stateDir string) *PersistentBoard {
 	if disabled {
 		return NewFakePersistentBoard()
 	}
-	board := NewBoard()
+	board := NewBoard(true)
 	pb := &PersistentBoard{board: board,
 		movesToApply:           make(chan Move, 8192),
 		stateDir:               stateDir,
@@ -309,7 +309,7 @@ func NewPersistentBoard(stateDir string) *PersistentBoard {
 }
 
 func (pb *PersistentBoard) GetBoardCopy() *Board {
-	board := NewBoard()
+	board := NewBoard(true)
 	board.nextID = pb.board.nextID
 	board.seqNum = pb.board.seqNum
 	board.totalMoves.Store(pb.board.totalMoves.Load())
