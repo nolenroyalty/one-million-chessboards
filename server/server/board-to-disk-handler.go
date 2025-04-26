@@ -279,6 +279,11 @@ func (btd *BoardToDiskHandler) SortedSnapshotFilenames() (file *string, err erro
 }
 
 func NewBoardToDiskHandler(stateDir string) (*BoardToDiskHandler, error) {
+	gob.Register(Move{})
+	gob.Register(adoptionRequest{})
+	gob.Register(bulkCaptureRequest{})
+	gob.Register(boardToDiskRequest{})
+
 	btd := &BoardToDiskHandler{
 		stateDir:            stateDir,
 		requests:            make(chan boardToDiskRequest, 16384),
@@ -362,14 +367,43 @@ func writeRequestsToDisk(
 	return WriteFileAtomic(path, func(writer io.Writer) error {
 		buf := bufio.NewWriterSize(writer, 2*1024*1024)
 		enc := gob.NewEncoder(buf)
-		for _, req := range toWrite {
-			err := enc.Encode(req)
-			if err != nil {
-				return err
-			}
+		err := enc.Encode(toWrite)
+		if err != nil {
+			return err
 		}
+		enc.Encode(toWrite)
 		return buf.Flush()
 	})
+}
+
+func ReadAndPrintRequestsFromFile(filename string) error {
+	file, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	reader := bufio.NewReaderSize(file, 4*1024*1024)
+	dec := gob.NewDecoder(reader)
+	requests := make([]boardToDiskRequest, 0, 128)
+	err = dec.Decode(&requests)
+	if err != nil {
+		return err
+	}
+	for _, req := range requests {
+		s := ""
+		switch {
+		case req.Move != nil:
+			s = req.Move.ToString()
+		case req.AdoptionRequest != nil:
+			s = req.AdoptionRequest.ToString()
+		case req.BulkCaptureRequest != nil:
+			s = req.BulkCaptureRequest.ToString()
+		default:
+			s = fmt.Sprintf("UNKNOWN REQ: %v", req)
+		}
+		fmt.Println(s)
+	}
+	return nil
 }
 
 func (btd *BoardToDiskHandler) maybeSerializeCurrentRequests(blocking bool) error {
@@ -385,7 +419,6 @@ func (btd *BoardToDiskHandler) maybeSerializeCurrentRequests(blocking bool) erro
 	now := time.Now()
 	name := fmt.Sprintf("moves-ts:%d-startseq:%d-endseq:%d.bin", now.UnixNano(), firstSeqnum, lastSeqnum)
 	path := filepath.Join(btd.stateDir, name)
-	log.Printf("write to %s", path)
 	if blocking {
 		return writeRequestsToDisk(path, toWrite, firstSeqnum, lastSeqnum)
 	} else {

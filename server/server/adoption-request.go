@@ -1,6 +1,9 @@
 package server
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 type OnlyColor int
 
@@ -51,4 +54,10 @@ func (r *adoptionRequest) EndingY() uint16 {
 
 func (r *adoptionRequest) OnlyColor() OnlyColor {
 	return r.Color
+}
+
+func (r *adoptionRequest) ToString() string {
+	x1, y1 := r.StartingX(), r.StartingY()
+	x2, y2 := r.EndingX(), r.EndingY()
+	return fmt.Sprintf("AD: [%d, %d] -> [%d, %d]", x1, y1, x2, y2)
 }
