@@ -20,25 +20,25 @@ func OnlyColorFromString(s string) OnlyColor {
 }
 
 type adoptionRequest struct {
-	boardX    uint16
-	boardY    uint16
-	onlyColor OnlyColor
+	BoardX uint16
+	BoardY uint16
+	Color  OnlyColor
 }
 
 func NewAdoptionRequest(xcoord uint16, ycoord uint16, onlyColor OnlyColor) *adoptionRequest {
 	return &adoptionRequest{
-		boardX:    xcoord / SINGLE_BOARD_SIZE,
-		boardY:    ycoord / SINGLE_BOARD_SIZE,
-		onlyColor: onlyColor,
+		BoardX: xcoord / SINGLE_BOARD_SIZE,
+		BoardY: ycoord / SINGLE_BOARD_SIZE,
+		Color:  onlyColor,
 	}
 }
 
 func (r *adoptionRequest) StartingX() uint16 {
-	return r.boardX * SINGLE_BOARD_SIZE
+	return r.BoardX * SINGLE_BOARD_SIZE
 }
 
 func (r *adoptionRequest) StartingY() uint16 {
-	return r.boardY * SINGLE_BOARD_SIZE
+	return r.BoardY * SINGLE_BOARD_SIZE
 }
 
 func (r *adoptionRequest) EndingX() uint16 {
@@ -50,5 +50,5 @@ func (r *adoptionRequest) EndingY() uint16 {
 }
 
 func (r *adoptionRequest) OnlyColor() OnlyColor {
-	return r.onlyColor
+	return r.Color
 }

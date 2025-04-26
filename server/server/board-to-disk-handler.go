@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"encoding/binary"
+	"encoding/gob"
 	"fmt"
 	"io"
 	"log"
@@ -12,6 +13,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+)
+
+const (
+	BOARD_SERIALIZATION_INTERVAL = time.Second * 30
+	MOVE_SERIALIZATION_INTERVAL  = time.Second * 5
+	MAX_MOVES_TO_SERIALIZE       = 5000
 )
 
 /*
@@ -81,10 +88,11 @@ func decodeCoords(coords uint32) (x uint16, y uint16) {
 }
 
 type BoardToDiskHandler struct {
-	board    *Board
-	requests chan boardToDiskRequest
-	stateDir string
-	done     chan struct{}
+	board               *Board
+	requests            chan boardToDiskRequest
+	stateDir            string
+	done                chan struct{}
+	requestsToSerialize []boardToDiskRequest
 }
 
 type SnapshotHeader struct {
@@ -272,10 +280,11 @@ func (btd *BoardToDiskHandler) SortedSnapshotFilenames() (file *string, err erro
 
 func NewBoardToDiskHandler(stateDir string) (*BoardToDiskHandler, error) {
 	btd := &BoardToDiskHandler{
-		stateDir: stateDir,
-		requests: make(chan boardToDiskRequest, 16384),
-		done:     make(chan struct{}, 1),
-		board:    NewBoard(false),
+		stateDir:            stateDir,
+		requests:            make(chan boardToDiskRequest, 16384),
+		done:                make(chan struct{}, 1),
+		board:               NewBoard(false),
+		requestsToSerialize: make([]boardToDiskRequest, 0, MAX_MOVES_TO_SERIALIZE),
 	}
 	lastFile, err := btd.SortedSnapshotFilenames()
 	if err != nil {
@@ -339,24 +348,77 @@ func (btd *BoardToDiskHandler) apply(req boardToDiskRequest) {
 			context := fmt.Sprintf("Received invalid bulk capture req %v", req.BulkCaptureRequest)
 			btd.panicWithContext(context)
 		}
-
+	default:
+		log.Printf("Unrecognized req? %v", req)
 	}
 }
 
-const BOARD_SERIALIZATION_INTERVAL = time.Second * 30
-const MOVE_SERIALIZATION_INTERVAL = time.Second * 5
+func writeRequestsToDisk(
+	path string,
+	toWrite []boardToDiskRequest,
+	firstSeqnum uint64,
+	lastSeqnum uint64,
+) error {
+	return WriteFileAtomic(path, func(writer io.Writer) error {
+		buf := bufio.NewWriterSize(writer, 2*1024*1024)
+		enc := gob.NewEncoder(buf)
+		for _, req := range toWrite {
+			err := enc.Encode(req)
+			if err != nil {
+				return err
+			}
+		}
+		return buf.Flush()
+	})
+}
+
+func (btd *BoardToDiskHandler) maybeSerializeCurrentRequests(blocking bool) error {
+	if len(btd.requestsToSerialize) == 0 {
+		log.Printf("nothing to do")
+		return nil
+	}
+	toWrite := make([]boardToDiskRequest, len(btd.requestsToSerialize))
+	copy(toWrite, btd.requestsToSerialize)
+	btd.requestsToSerialize = btd.requestsToSerialize[:0]
+	firstSeqnum := btd.board.seqNum
+	lastSeqnum := firstSeqnum + uint64(len(toWrite))
+	now := time.Now()
+	name := fmt.Sprintf("moves-ts:%d-startseq:%d-endseq:%d.bin", now.UnixNano(), firstSeqnum, lastSeqnum)
+	path := filepath.Join(btd.stateDir, name)
+	log.Printf("write to %s", path)
+	if blocking {
+		return writeRequestsToDisk(path, toWrite, firstSeqnum, lastSeqnum)
+	} else {
+		go func() {
+			err := writeRequestsToDisk(path, toWrite, firstSeqnum, lastSeqnum)
+			if err != nil {
+				log.Printf("ERROR WRITING MOVES %v", err)
+			}
+		}()
+		return nil
+	}
+}
 
 func (btd *BoardToDiskHandler) RunForever() {
-	t := time.NewTicker(BOARD_SERIALIZATION_INTERVAL)
+	boardSerializationTicker := time.NewTicker(BOARD_SERIALIZATION_INTERVAL)
+	requestSerializationTicker := time.NewTicker(MOVE_SERIALIZATION_INTERVAL)
+
 	for {
 		select {
 		case req := <-btd.requests:
 			btd.apply(req)
-		case <-t.C:
+			btd.requestsToSerialize = append(btd.requestsToSerialize, req)
+			if len(btd.requestsToSerialize) > MAX_MOVES_TO_SERIALIZE {
+				// CR nroyalty: log here?
+				btd.maybeSerializeCurrentRequests(false)
+			}
+		case <-boardSerializationTicker.C:
 			snap := btd.getSnapshot()
 			go func() {
 				btd.saveToFile(snap)
 			}()
+		case <-requestSerializationTicker.C:
+			btd.maybeSerializeCurrentRequests(false)
 		case <-btd.done:
 			log.Printf("Ending BTD loop")
 			return

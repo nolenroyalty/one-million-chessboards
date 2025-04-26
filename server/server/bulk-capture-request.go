@@ -1,25 +1,25 @@
 package server
 
 type bulkCaptureRequest struct {
-	boardX    uint16
-	boardY    uint16
-	onlyColor OnlyColor
+	BoardX uint16
+	BoardY uint16
+	Color  OnlyColor
 }
 
 func NewBulkCaptureRequest(xcoord uint16, ycoord uint16, onlyColor OnlyColor) *bulkCaptureRequest {
 	return &bulkCaptureRequest{
-		boardX:    xcoord / SINGLE_BOARD_SIZE,
-		boardY:    ycoord / SINGLE_BOARD_SIZE,
-		onlyColor: onlyColor,
+		BoardX: xcoord / SINGLE_BOARD_SIZE,
+		BoardY: ycoord / SINGLE_BOARD_SIZE,
+		Color:  onlyColor,
 	}
 }
 
 func (r *bulkCaptureRequest) StartingX() uint16 {
-	return r.boardX * SINGLE_BOARD_SIZE
+	return r.BoardX * SINGLE_BOARD_SIZE
 }
 
 func (r *bulkCaptureRequest) StartingY() uint16 {
-	return r.boardY * SINGLE_BOARD_SIZE
+	return r.BoardY * SINGLE_BOARD_SIZE
 }
 
 func (r *bulkCaptureRequest) EndingX() uint16 {
@@ -31,5 +31,5 @@ func (r *bulkCaptureRequest) EndingY() uint16 {
 }
 
 func (r *bulkCaptureRequest) OnlyColor() OnlyColor {
-	return r.onlyColor
+	return r.Color
 }
