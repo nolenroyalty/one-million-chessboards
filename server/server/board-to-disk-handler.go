@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"encoding/gob"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -13,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
 const (
@@ -20,6 +23,8 @@ const (
 	MOVE_SERIALIZATION_INTERVAL  = time.Second * 5
 	MAX_MOVES_TO_SERIALIZE       = 5000
 )
+
+var doNotSaveState = flag.Bool("do-not-save-state", false, "Don't save state to disk")
 
 /*
 1. Duplicate board. It's not worth the trouble of re-implementing the logic; doing things
@@ -93,6 +98,7 @@ type BoardToDiskHandler struct {
 	stateDir            string
 	done                chan struct{}
 	requestsToSerialize []boardToDiskRequest
+	logger              zerolog.Logger
 }
 
 type SnapshotHeader struct {
@@ -158,11 +164,15 @@ func (btd *BoardToDiskHandler) getSnapshot() (snapshot *Snapshot) {
 	}
 	snapshot.Header.PieceCount = uint32(actualSize)
 	elapsed := time.Since(start)
-	log.Printf("Time taken to get full-board snapshot: %s", elapsed)
+	btd.logger.Info().Int64("get_full_board_snapshot_ms", elapsed.Milliseconds()).Send()
 	return
 }
 
 func (btd *BoardToDiskHandler) saveToFile(s *Snapshot) error {
+	if *doNotSaveState {
+		return nil
+	}
+
 	now := time.Now()
 	name := fmt.Sprintf("board-ts:%d-seq:%d.bin", now.UnixNano(), s.Header.SeqNum)
 	filename := filepath.Join(btd.stateDir, name)
@@ -179,12 +189,12 @@ func (btd *BoardToDiskHandler) saveToFile(s *Snapshot) error {
 		return buf.Flush()
 	})
 	if err != nil {
-		// CR nroyalty: use logger here
+		btd.logger.Error().Str("error_kind", "writing_to_file").AnErr("err", err).Send()
 		log.Printf("ERROR writing board snapshot to file %s: %v", filename, err)
 		return err
 	}
 	elapsed := time.Since(now)
-	log.Printf("Time taken to save board snapshot: %s", elapsed)
+	btd.logger.Info().Int64("save_board_snapshot_ms", elapsed.Milliseconds()).Send()
 	return nil
 }
 
@@ -290,6 +300,7 @@ func NewBoardToDiskHandler(stateDir string) (*BoardToDiskHandler, error) {
 		done:                make(chan struct{}, 1),
 		board:               NewBoard(false),
 		requestsToSerialize: make([]boardToDiskRequest, 0, MAX_MOVES_TO_SERIALIZE),
+		logger:              NewCoreLogger().With().Str("kind", "btd-handler").Logger(),
 	}
 	lastFile, err := btd.SortedSnapshotFilenames()
 	if err != nil {
@@ -364,6 +375,9 @@ func writeRequestsToDisk(
 	firstSeqnum uint64,
 	lastSeqnum uint64,
 ) error {
+	if *doNotSaveState {
+		return nil
+	}
 	return WriteFileAtomic(path, func(writer io.Writer) error {
 		buf := bufio.NewWriterSize(writer, 2*1024*1024)
 		enc := gob.NewEncoder(buf)
@@ -442,7 +456,7 @@ func (btd *BoardToDiskHandler) RunForever() {
 			btd.apply(req)
 			btd.requestsToSerialize = append(btd.requestsToSerialize, req)
 			if len(btd.requestsToSerialize) > MAX_MOVES_TO_SERIALIZE {
-				// CR nroyalty: log here?
+				btd.logger.Info().Str("action", "serialize_early").Send()
 				btd.maybeSerializeCurrentRequests(false)
 			}
 		case <-boardSerializationTicker.C:
