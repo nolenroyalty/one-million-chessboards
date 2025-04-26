@@ -9,8 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
-	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -19,14 +17,14 @@ import (
 // board setup.
 
 const (
-	snapshotInterval      = time.Second * 600
+	snapshotInterval      = time.Second * 10
 	moveSerializeInterval = time.Second * 5
 	maxMovesToSerialize   = 2500
 	snapshotPrefix        = "board"
 	movePrefix            = "moves"
 	suffix                = ".bin"
 	// CR nroyalty: un-disable!
-	disabled = true
+	disabled = false
 )
 
 type PersistentBoard struct {
@@ -63,45 +61,6 @@ type BoardSnapshot struct {
 	PiecesWithCoords    []PieceWithCoords
 }
 
-type FileWithSeqnumAndTimestamp struct {
-	prefix        string
-	lastSeqnum    uint64
-	timestampNano int64
-}
-
-func (f *FileWithSeqnumAndTimestamp) toFilename() string {
-	return fmt.Sprintf("%s-%d-%d.bin", f.prefix, f.lastSeqnum, f.timestampNano)
-}
-
-func (f *FileWithSeqnumAndTimestamp) ofFilename(filename string, expectedPrefix string) error {
-	withoutExt := strings.TrimSuffix(filepath.Base(filename), ".bin")
-	parts := strings.Split(withoutExt, "-")
-
-	if len(parts) < 3 {
-		return fmt.Errorf("invalid filename: %s", filename)
-	}
-	prefix := parts[0]
-	if prefix != expectedPrefix {
-		return fmt.Errorf("invalid prefix: %s", prefix)
-	}
-	seqNum := parts[1]
-	seqNumInt, err := strconv.ParseUint(seqNum, 10, 64)
-	if err != nil {
-		log.Printf("Error parsing seqNum: %v", err)
-		return err
-	}
-	timestampNano := parts[2]
-	timestampNanoInt, err := strconv.ParseInt(timestampNano, 10, 64)
-	if err != nil {
-		log.Printf("Error parsing timestampNano: %v", err)
-		return err
-	}
-	f.prefix = prefix
-	f.lastSeqnum = seqNumInt
-	f.timestampNano = timestampNanoInt
-	return nil
-}
-
 func (b *Board) getFullSnapshot() BoardSnapshot {
 	start := time.Now()
 	snapshot := BoardSnapshot{
@@ -112,7 +71,8 @@ func (b *Board) getFullSnapshot() BoardSnapshot {
 		BlackPiecesCaptured: b.blackPiecesCaptured.Load(),
 		WhiteKingsCaptured:  b.whiteKingsCaptured.Load(),
 		BlackKingsCaptured:  b.blackKingsCaptured.Load(),
-		PiecesWithCoords:    make([]PieceWithCoords, 0, BOARD_SIZE*BOARD_SIZE),
+		// PiecesWithCoords coould never exceed half of the board...
+		PiecesWithCoords: make([]PieceWithCoords, 0, BOARD_SIZE*BOARD_SIZE/2),
 	}
 	for y := uint16(0); y < BOARD_SIZE; y++ {
 		for x := uint16(0); x < BOARD_SIZE; x++ {
@@ -146,11 +106,14 @@ func (s *BoardSnapshot) SaveToFile(stateDir string, baseFilename string, seqNum 
 			WhiteKingsCaptured:  s.WhiteKingsCaptured,
 			BlackKingsCaptured:  s.BlackKingsCaptured,
 		}
-		bufferedWriter := bufio.NewWriterSize(writer, 8*1024*1024)
+		bufferedWriter := bufio.NewWriterSize(writer, 128*1024*1024)
+		// enc := gob.NewEncoder(bufferedWriter)
+		// enc.Encode(s)
 		binary.Write(bufferedWriter, binary.LittleEndian, header)
-		for i := range s.PiecesWithCoords {
-			binary.Write(bufferedWriter, binary.LittleEndian, s.PiecesWithCoords[i])
-		}
+		binary.Write(bufferedWriter, binary.LittleEndian, s.PiecesWithCoords)
+		// for i := range s.PiecesWithCoords {
+		// 	binary.Write(bufferedWriter, binary.LittleEndian, s.PiecesWithCoords[i])
+		// }
 		return bufferedWriter.Flush()
 	})
 
@@ -186,12 +149,14 @@ func (b *Board) LoadFromSnapshotFile(filename string) error {
 	b.blackKingsCaptured.Store(header.BlackKingsCaptured)
 	log.Printf("Loaded board from snapshot file: seqnum %d, nextid %d, totalmoves %d, whitepiecescaptured %d, blackpiecescaptured %d, whitekingscaptured %d, blackkingscaptured %d", header.Seqnum, header.NextID, header.TotalMoves, header.WhitePiecesCaptured, header.BlackPiecesCaptured, header.WhiteKingsCaptured, header.BlackKingsCaptured)
 
+	// CR nroyalty: this isn't necessary??
 	for y := uint16(0); y < BOARD_SIZE; y++ {
 		for x := uint16(0); x < BOARD_SIZE; x++ {
 			b.pieces[y][x] = uint64(EmptyEncodedPiece)
 		}
 	}
 
+	// CR nroyalty: make sure this plays nice with writing as a list
 	pieceWithCoords := PieceWithCoords{}
 	for {
 		err = binary.Read(reader, binary.LittleEndian, &pieceWithCoords)
@@ -209,6 +174,7 @@ func (b *Board) LoadFromSnapshotFile(filename string) error {
 	return nil
 }
 
+// CR nroyalty: move to other file
 func GetSortedSnapshotFilenames(stateDir, prefix string) ([]FileWithSeqnumAndTimestamp, error) {
 	files, err := filepath.Glob(filepath.Join(stateDir, fmt.Sprintf("%s-*.bin", prefix)))
 	if err != nil {
@@ -294,6 +260,8 @@ func NewPersistentBoard(stateDir string) *PersistentBoard {
 		panic(err)
 	}
 
+	// CR nroyalty: this will incorrectly apply moves that have a seqnum < the last snapshot
+	// if other moves in the same file have a seqnum >= the last snapshot
 	for _, moveFilename := range moveFilenames {
 		if moveFilename.lastSeqnum < pb.lastSerializedSeqnum.Load() {
 			log.Printf("Skipping move file %s because seqNum %d is less than lastSeqnum %d", moveFilename.toFilename(), moveFilename.lastSeqnum, pb.lastSerializedSeqnum.Load())
@@ -350,9 +318,7 @@ func (pb *PersistentBoard) GetBoardCopy() *Board {
 	board.whiteKingsCaptured.Store(pb.board.whiteKingsCaptured.Load())
 	board.blackKingsCaptured.Store(pb.board.blackKingsCaptured.Load())
 	for y := uint16(0); y < BOARD_SIZE; y++ {
-		for x := uint16(0); x < BOARD_SIZE; x++ {
-			board.pieces[y][x] = pb.board.pieces[y][x]
-		}
+		copy(board.pieces[y][:], pb.board.pieces[y][:])
 	}
 	return board
 }

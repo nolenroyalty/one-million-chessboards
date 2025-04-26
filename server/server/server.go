@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"log"
 	"math"
 	"math/rand"
@@ -51,8 +52,9 @@ const (
 )
 
 type Server struct {
+	// persistentBoard           *PersistentBoard
 	board                     *Board
-	persistentBoard           *PersistentBoard
+	boardToDiskHandler        *BoardToDiskHandler
 	clientManager             *ClientManager
 	minimapAggregator         *MinimapAggregator
 	moveRequests              chan MoveRequest
@@ -71,12 +73,18 @@ type Server struct {
 }
 
 func NewServer(stateDir string) *Server {
-	persistentBoard := NewPersistentBoard(stateDir)
-	board := persistentBoard.GetBoardCopy()
+	// persistentBoard := NewPersistentBoard(stateDir)
+	boardToDiskHandler, err := NewBoardToDiskHandler(stateDir)
+	if err != nil {
+		panic(fmt.Sprintf("Error getting btd: %s", err))
+	}
+	board := boardToDiskHandler.GetLiveBoard()
+	// board := persistentBoard.GetBoardCopy()
 	httpLogger := NewCoreLogger().With().Str("kind", "http").Logger()
 	s := &Server{
+		// persistentBoard:     persistentBoard,
 		board:               board,
-		persistentBoard:     persistentBoard,
+		boardToDiskHandler:  boardToDiskHandler,
 		clientManager:       NewClientManager(),
 		minimapAggregator:   NewMinimapAggregator(),
 		moveRequests:        make(chan MoveRequest, 1024),
@@ -104,7 +112,8 @@ func (s *Server) Run() {
 	go s.refreshMinimapPeriodically()
 	s.refreshStatsPeriodically()
 	s.refreshRecentCapturesPeriodically()
-	go s.persistentBoard.Run()
+	// go s.persistentBoard.Run()
+	go s.boardToDiskHandler.RunForever()
 }
 
 func (s *Server) ClearOldLimits() {
@@ -221,7 +230,8 @@ func (s *Server) processMoves() {
 				moveReq.Client.SendInvalidMove(moveReq.Move.MoveToken)
 				continue
 			}
-			s.persistentBoard.ApplyMove(moveReq.Move, moveResult.Seqnum)
+			// s.persistentBoard.ApplyMove(moveReq.Move, moveResult.Seqnum)
+			s.boardToDiskHandler.AddMove(&moveReq.Move)
 
 			if moveResult.CapturedPiece.Piece.IsEmpty() {
 				moveReq.Client.SendValidMove(moveReq.Move.MoveToken, moveResult.Seqnum, 0)
@@ -269,8 +279,11 @@ func (s *Server) processMoves() {
 			}()
 
 		case adoptionReq := <-s.adoptionRequests:
-			// CR nroyalty: forward to persistent board
-			adoptedIds := s.board.Adopt(&adoptionReq)
+			adoptionResult, err := s.board.Adopt(&adoptionReq)
+			if err != nil || adoptionResult == nil {
+				continue
+			}
+			s.boardToDiskHandler.AddAdoption(&adoptionReq)
 
 			go func() {
 				affectedZones := s.clientManager.AffectedZonesForAdoption(&adoptionReq)
@@ -278,7 +291,7 @@ func (s *Server) processMoves() {
 				m := &protocol.ServerMessage{
 					Payload: &protocol.ServerMessage_Adoption{
 						Adoption: &protocol.ServerAdoption{
-							AdoptedIds: adoptedIds,
+							AdoptedIds: adoptionResult.AdoptedPieces,
 						},
 					},
 				}
@@ -295,8 +308,11 @@ func (s *Server) processMoves() {
 			}()
 
 		case bulkCaptureReq := <-s.bulkCaptureRequests:
-			// CR nroyalty: forward to persistent board
-			bulkCaptureMsg := s.board.DoBulkCapture(&bulkCaptureReq)
+			bulkCaptureMsg, err := s.board.DoBulkCapture(&bulkCaptureReq)
+			if err != nil || bulkCaptureMsg == nil {
+				continue
+			}
+			s.boardToDiskHandler.AddBulkCapture(&bulkCaptureReq)
 
 			go func() {
 				m := &protocol.ServerMessage{
@@ -360,14 +376,17 @@ func (s *Server) DetermineColor(colorPref ColorPreference) bool {
 	return applyColorPref(colorPref)
 }
 
-var DEFAULT_COORD_ARRAY = [][]int{
-	{500, 500},
-	{2000, 2000},
-	{4500, 4500},
-	{3000, 1500},
-	{1000, 2000},
-	{2000, 1000},
-}
+// nroyalty: I *think* doing this is actually a bad idea, since these zones
+// would get cleared out quickly over time. Let's just rely on active client
+// positions (which we could also serve up as an endpoint?)
+// var DEFAULT_COORD_ARRAY = [][]int{
+// 	{500, 500},
+// 	{2000, 2000},
+// 	{4500, 4500},
+// 	{3000, 1500},
+// 	{1000, 2000},
+// 	{2000, 1000},
+// }
 
 const (
 	BOARD_EDGE_BUFFER = 20
@@ -390,18 +409,15 @@ func IncrOrDecrPosition(n uint16) uint16 {
 }
 
 func (s *Server) GetDefaultCoords() Position {
-	activeClientPositions := s.clientManager.GetSomeActiveClientPositions(100)
-
-	if len(activeClientPositions) == 0 {
-		idx := rand.Intn(len(DEFAULT_COORD_ARRAY))
-		return Position{X: uint16(DEFAULT_COORD_ARRAY[idx][0]), Y: uint16(DEFAULT_COORD_ARRAY[idx][1])}
+	if pos, ok := s.clientManager.GetRandomActiveClientPosition(); ok {
+		pos.X = IncrOrDecrPosition(pos.X)
+		pos.Y = IncrOrDecrPosition(pos.Y)
+		return pos
 	}
 
-	idx := rand.Intn(len(activeClientPositions))
-	pos := activeClientPositions[idx]
-	pos.X = IncrOrDecrPosition(pos.X)
-	pos.Y = IncrOrDecrPosition(pos.Y)
-	return pos
+	x := 500 + rand.Intn(BOARD_SIZE-1000)
+	y := 500 + rand.Intn(BOARD_SIZE-1000)
+	return Position{X: uint16(x), Y: uint16(y)}
 }
 
 func (s *Server) GetMaybeRequestedCoords(requestedXCoord int16, requestedYCoord int16) Position {

@@ -3,6 +3,7 @@ package server
 // CR nroyalty: remove log lines here before shipping to prod?
 
 import (
+	"fmt"
 	"log"
 	"math"
 	"math/rand"
@@ -24,6 +25,7 @@ type Board struct {
 	rawRowsPool            sync.Pool
 	nextID                 uint32
 	seqNum                 uint64
+	doLogging              bool
 	totalMoves             atomic.Uint64
 	whitePiecesCaptured    atomic.Uint32
 	blackPiecesCaptured    atomic.Uint32
@@ -42,7 +44,31 @@ type GameStats struct {
 	Seqnum               uint64
 }
 
-func NewBoard() *Board {
+func (b *Board) getCopy() {
+	t := time.NewTicker(4 * time.Second)
+	defer t.Stop()
+
+	for range t.C {
+		slice := make([]uint64, 0, BOARD_SIZE*BOARD_SIZE/2)
+		b.RLock()
+		now := time.Now()
+		// copy := b.pieces
+		for y := uint16(0); y < BOARD_SIZE; y++ {
+			for x := uint16(0); x < BOARD_SIZE; x++ {
+				raw := b.pieces[y][x]
+				if !EncodedIsEmpty(EncodedPiece(raw)) {
+					slice = append(slice, raw)
+				}
+			}
+		}
+		took := time.Since(now)
+		log.Printf("took %dms to copy board", took.Milliseconds())
+		log.Printf("%d %d", slice[0], slice[1])
+		b.RUnlock()
+	}
+}
+
+func NewBoard(doLogging bool) *Board {
 	return &Board{
 		nextID:              1,
 		seqNum:              uint64(1),
@@ -51,6 +77,7 @@ func NewBoard() *Board {
 		blackPiecesCaptured: atomic.Uint32{},
 		whiteKingsCaptured:  atomic.Uint32{},
 		blackKingsCaptured:  atomic.Uint32{},
+		doLogging:           doLogging,
 		rawRowsPool: sync.Pool{
 			New: func() any {
 				rows := make([][]uint64, VIEW_DIAMETER)
@@ -236,12 +263,7 @@ func (b *Board) satisfiesMoveRules(movedPiece Piece, capturedPiece Piece, move M
 	return true
 }
 
-type ClearBoardResult struct {
-	CapturedPieces []uint32
-	Seqnum         uint64
-}
-
-func (b *Board) DoBulkCapture(bulkCaptureRequest *bulkCaptureRequest) *protocol.ServerBulkCapture {
+func (b *Board) DoBulkCapture(bulkCaptureRequest *bulkCaptureRequest) (*protocol.ServerBulkCapture, error) {
 	capturedPieces := make([]uint32, 0, 16)
 	onlyColor := bulkCaptureRequest.OnlyColor()
 	startingX := bulkCaptureRequest.StartingX()
@@ -251,10 +273,7 @@ func (b *Board) DoBulkCapture(bulkCaptureRequest *bulkCaptureRequest) *protocol.
 
 	if startingX >= BOARD_SIZE || startingY >= BOARD_SIZE || endingX >= BOARD_SIZE || endingY >= BOARD_SIZE {
 		log.Printf("BUG: ClearBoard: out of bounds: %d %d %d %d", startingX, startingY, endingX, endingY)
-		return &protocol.ServerBulkCapture{
-			CapturedIds: capturedPieces,
-			Seqnum:      0,
-		}
+		return nil, fmt.Errorf("out of bounds: %d %d %d %d", startingX, startingY, endingX, endingY)
 	}
 
 	now := time.Now()
@@ -302,10 +321,15 @@ func (b *Board) DoBulkCapture(bulkCaptureRequest *bulkCaptureRequest) *protocol.
 	return &protocol.ServerBulkCapture{
 		CapturedIds: capturedPieces,
 		Seqnum:      seqNum,
-	}
+	}, nil
 }
 
-func (b *Board) Adopt(adoptionRequest *adoptionRequest) []uint32 {
+type AdoptionResult struct {
+	AdoptedPieces []uint32
+	Seqnum        uint64
+}
+
+func (b *Board) Adopt(adoptionRequest *adoptionRequest) (*AdoptionResult, error) {
 	adoptedPieces := make([]uint32, 0, 16)
 	onlyColor := adoptionRequest.OnlyColor()
 	startingX := adoptionRequest.StartingX()
@@ -315,7 +339,7 @@ func (b *Board) Adopt(adoptionRequest *adoptionRequest) []uint32 {
 
 	if startingX >= BOARD_SIZE || startingY >= BOARD_SIZE || endingX >= BOARD_SIZE || endingY >= BOARD_SIZE {
 		log.Printf("BUG: Adopt: out of bounds: %d %d %d %d", startingX, startingY, endingX, endingY)
-		return adoptedPieces
+		return nil, fmt.Errorf("out of bounds: %d %d %d %d", startingX, startingY, endingX, endingY)
 	}
 
 	now := time.Now()
@@ -344,7 +368,14 @@ func (b *Board) Adopt(adoptionRequest *adoptionRequest) []uint32 {
 		Int64("took_ns", took).
 		Bool("is_adoption", true).
 		Send()
-	return adoptedPieces
+
+	b.seqNum++
+	seqNum := b.seqNum
+
+	return &AdoptionResult{
+		AdoptedPieces: adoptedPieces,
+		Seqnum:        seqNum,
+	}, nil
 }
 
 // this can't handle multiple writers because it releases its read lock before

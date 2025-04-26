@@ -5,6 +5,7 @@ package server
 
 import (
 	"log"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 )
@@ -170,23 +171,39 @@ func (cm *ClientManager) GetBlackCount() int32 {
 	return cm.blackCount.Load()
 }
 
-func (cm *ClientManager) GetSomeActiveClientPositions(maxCount int) []Position {
-	activeClients := make([]Position, 0, maxCount)
+func (cm *ClientManager) GetRandomActiveClientPosition() (Position, bool) {
 	cm.RLock()
 	defer cm.RUnlock()
-	count := 0
+
+	// Reservoir sampling with k=1
+	var selectedClient *Client
+	activeCount := 0
+	totalCount := 0
+	const maxActiveClientsToConsider = 100
+	const maxTotalClientsToConsider = 500
+
 	for client := range cm.currentZonesForClient {
-		if client.IsActive() {
-			count++
-			pos := client.position.Load().(Position)
-			activeClients = append(activeClients, pos)
-		}
-		if count >= maxCount {
+		totalCount++
+		if totalCount > maxTotalClientsToConsider {
 			break
+		}
+		if client.IsActive() {
+			activeCount++
+			// With probability 1/count, replace the selected client
+			if rand.Intn(activeCount) == 0 {
+				selectedClient = client
+			}
+			if activeCount >= maxActiveClientsToConsider {
+				break
+			}
 		}
 	}
 
-	return activeClients
+	if selectedClient == nil {
+		return Position{}, false
+	}
+
+	return selectedClient.position.Load().(Position), true
 }
 
 func GetZoneCoord(x, y uint16) ZoneCoord {
