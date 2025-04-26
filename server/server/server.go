@@ -52,7 +52,6 @@ const (
 )
 
 type Server struct {
-	// persistentBoard           *PersistentBoard
 	board                     *Board
 	boardToDiskHandler        *BoardToDiskHandler
 	clientManager             *ClientManager
@@ -73,16 +72,13 @@ type Server struct {
 }
 
 func NewServer(stateDir string) *Server {
-	// persistentBoard := NewPersistentBoard(stateDir)
 	boardToDiskHandler, err := NewBoardToDiskHandler(stateDir)
 	if err != nil {
 		panic(fmt.Sprintf("Error getting btd: %s", err))
 	}
 	board := boardToDiskHandler.GetLiveBoard()
-	// board := persistentBoard.GetBoardCopy()
 	httpLogger := NewCoreLogger().With().Str("kind", "http").Logger()
 	s := &Server{
-		// persistentBoard:     persistentBoard,
 		board:               board,
 		boardToDiskHandler:  boardToDiskHandler,
 		clientManager:       NewClientManager(),
@@ -112,7 +108,6 @@ func (s *Server) Run() {
 	go s.refreshMinimapPeriodically()
 	s.refreshStatsPeriodically()
 	s.refreshRecentCapturesPeriodically()
-	// go s.persistentBoard.Run()
 	go s.boardToDiskHandler.RunForever()
 }
 
@@ -230,7 +225,6 @@ func (s *Server) processMoves() {
 				moveReq.Client.SendInvalidMove(moveReq.Move.MoveToken)
 				continue
 			}
-			// s.persistentBoard.ApplyMove(moveReq.Move, moveResult.Seqnum)
 			s.boardToDiskHandler.AddMove(&moveReq.Move)
 
 			if moveResult.CapturedPiece.Piece.IsEmpty() {

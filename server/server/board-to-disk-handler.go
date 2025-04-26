@@ -343,10 +343,11 @@ func (btd *BoardToDiskHandler) apply(req boardToDiskRequest) {
 	}
 }
 
-const SERIALIZATION_INTERVAL = time.Second * 30
+const BOARD_SERIALIZATION_INTERVAL = time.Second * 30
+const MOVE_SERIALIZATION_INTERVAL = time.Second * 5
 
 func (btd *BoardToDiskHandler) RunForever() {
-	t := time.NewTicker(SERIALIZATION_INTERVAL)
+	t := time.NewTicker(BOARD_SERIALIZATION_INTERVAL)
 	for {
 		select {
 		case req := <-btd.requests:

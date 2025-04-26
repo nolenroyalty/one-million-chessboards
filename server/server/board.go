@@ -21,18 +21,18 @@ import (
 
 type Board struct {
 	sync.RWMutex
-	pieces                 [BOARD_SIZE][BOARD_SIZE]uint64
-	rawRowsPool            sync.Pool
-	nextID                 uint32
-	seqNum                 uint64
-	doLogging              bool
-	totalMoves             atomic.Uint64
-	whitePiecesCaptured    atomic.Uint32
-	blackPiecesCaptured    atomic.Uint32
-	whiteKingsCaptured     atomic.Uint32
-	blackKingsCaptured     atomic.Uint32
-	mutexTimeLogger        zerolog.Logger
-	snapshotDurationLogger zerolog.Logger
+	pieces                                    [BOARD_SIZE][BOARD_SIZE]uint64
+	rawRowsPool                               sync.Pool
+	nextID                                    uint32
+	seqNum                                    uint64
+	doLogging                                 bool
+	totalMoves                                atomic.Uint64
+	whitePiecesCaptured                       atomic.Uint32
+	blackPiecesCaptured                       atomic.Uint32
+	whiteKingsCaptured                        atomic.Uint32
+	blackKingsCaptured                        atomic.Uint32
+	mutexTimeLogger_USEHELPERS_YOUFUCK        zerolog.Logger
+	snapshotDurationLogger_USEHELPERS_YOUFUCK zerolog.Logger
 }
 
 type GameStats struct {
@@ -87,8 +87,34 @@ func NewBoard(doLogging bool) *Board {
 				return &rows
 			},
 		},
-		mutexTimeLogger:        NewCoreLogger().With().Str("kind", "board").Str("metric", "mutex_time").Logger(),
-		snapshotDurationLogger: NewCoreLogger().With().Str("kind", "board").Str("metric", "snapshot_duration").Logger(),
+		mutexTimeLogger_USEHELPERS_YOUFUCK:        NewCoreLogger().With().Str("kind", "board").Str("metric", "mutex_time").Logger(),
+		snapshotDurationLogger_USEHELPERS_YOUFUCK: NewCoreLogger().With().Str("kind", "board").Str("metric", "snapshot_duration").Logger(),
+	}
+}
+
+func (b *Board) maybeLogSpecialMutexAction(took int64, kind string) {
+	if b.doLogging {
+		b.mutexTimeLogger_USEHELPERS_YOUFUCK.Info().
+			Int64("took_ns", took).
+			Bool(kind, true).
+			Send()
+	}
+}
+
+func (b *Board) maybeLogMutexDuration(took int64) {
+	if b.doLogging {
+		b.mutexTimeLogger_USEHELPERS_YOUFUCK.Info().
+			Int64("took_ns", took).
+			Send()
+	}
+}
+
+func (b *Board) maybeLogSnapshotDuration(lockTook, totalTook int64) {
+	if b.doLogging {
+		b.snapshotDurationLogger_USEHELPERS_YOUFUCK.Info().
+			Int64("snapshot_lock_ns", lockTook).
+			Int64("snapshot_total_ns", totalTook).
+			Send()
 	}
 }
 
@@ -310,10 +336,7 @@ func (b *Board) DoBulkCapture(bulkCaptureRequest *bulkCaptureRequest) (*protocol
 		}
 	}
 	took := time.Since(now).Nanoseconds()
-	b.mutexTimeLogger.Info().
-		Int64("took_ns", took).
-		Bool("is_clear_board", true).
-		Send()
+	b.maybeLogSpecialMutexAction(took, "is_clear_board")
 
 	b.seqNum++
 	seqNum := b.seqNum
@@ -364,10 +387,7 @@ func (b *Board) Adopt(adoptionRequest *adoptionRequest) (*AdoptionResult, error)
 		}
 	}
 	took := time.Since(now).Nanoseconds()
-	b.mutexTimeLogger.Info().
-		Int64("took_ns", took).
-		Bool("is_adoption", true).
-		Send()
+	b.maybeLogSpecialMutexAction(took, "is_adoption")
 
 	b.seqNum++
 	seqNum := b.seqNum
@@ -517,9 +537,7 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 		seqNum := b.seqNum
 		b.Unlock()
 		took := time.Since(now).Nanoseconds()
-		b.mutexTimeLogger.Info().
-			Int64("took_ns", took).
-			Send()
+		b.maybeLogMutexDuration(took)
 
 		kingMoveResult := MovedPieceResult{
 			Piece: movedPiece,
@@ -604,9 +622,7 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 		seqNum := b.seqNum
 		b.Unlock()
 		took := time.Since(now).Nanoseconds()
-		b.mutexTimeLogger.Info().
-			Int64("took_ns", took).
-			Send()
+		b.maybeLogMutexDuration(took)
 
 		if capturedPiece.IsWhite {
 			b.whitePiecesCaptured.Add(1)
@@ -719,9 +735,7 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 		seqNum := b.seqNum
 		b.Unlock()
 		took := time.Since(now).Nanoseconds()
-		b.mutexTimeLogger.Info().
-			Int64("took_ns", took).
-			Send()
+		b.maybeLogMutexDuration(took)
 
 		b.totalMoves.Add(1)
 		movedPieceResult := MovedPieceResult{
@@ -835,11 +849,7 @@ func (b *Board) GetBoardSnapshot_RETURN_TO_POOL_AFTER_YOU_FUCK(pos Position) *pr
 	}
 	totalTook := time.Since(start).Nanoseconds()
 
-	b.snapshotDurationLogger.Info().
-		Int64("snapshot_lock_ns", lockTook).
-		Int64("snapshot_total_ns", totalTook).
-		Send()
-
+	b.maybeLogSnapshotDuration(lockTook, totalTook)
 	return snapshot
 }
 
