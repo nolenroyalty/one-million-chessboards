@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"math"
 	"one-million-chessboards/protocol"
 )
@@ -16,6 +17,44 @@ type Move struct {
 	MoveType             protocol.MoveType
 	MoveToken            uint32
 	ClientIsPlayingWhite bool
+}
+
+func (m *Move) ToString() string {
+	typeString := "MOVETYPE-UNKNOWN"
+	switch {
+	case m.MoveType == protocol.MoveType_MOVE_TYPE_CASTLE:
+		typeString = "CASTLE"
+	case m.MoveType == protocol.MoveType_MOVE_TYPE_EN_PASSANT:
+		typeString = "ENPASSANT"
+	case m.MoveType == protocol.MoveType_MOVE_TYPE_NORMAL:
+		typeString = "NORMAL"
+	}
+	colorString := "BLACK"
+	if m.ClientIsPlayingWhite {
+		colorString = "WHITE"
+	}
+	idMod := (m.PieceID - 1) % 16
+	kindString := "KIND-UNKNOWN"
+	// gross
+	if idMod <= 7 {
+		kindString = "PAWN"
+	} else if idMod == 8 || idMod == 15 {
+		kindString = "ROOK"
+	} else if idMod == 9 || idMod == 14 {
+		kindString = "KNIGHT"
+	} else if idMod == 10 || idMod == 13 {
+		kindString = "BISHOP"
+	} else if idMod == 11 {
+		kindString = "QUEEN"
+	} else if idMod == 12 {
+		kindString = "KING"
+	}
+
+	return fmt.Sprintf("MO: %s %s [%s] (%d, %d) -> (%d %d)",
+		colorString,
+		kindString,
+		typeString,
+		m.FromX, m.FromY, m.ToX, m.ToY)
 }
 
 type MoveRequest struct {

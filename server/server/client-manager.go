@@ -5,6 +5,7 @@ package server
 
 import (
 	"log"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 )
@@ -120,18 +121,30 @@ func (cm *ClientManager) GetClientsForZones(zones map[ZoneCoord]struct{}) map[*C
 	return resultMap
 }
 
-func (cm *ClientManager) GetAllClients() map[*Client]struct{} {
-	cm.RLock()
-	defer cm.RUnlock()
-	result := make(map[*Client]struct{}, len(cm.currentZonesForClient))
-	for client := range cm.currentZonesForClient {
-		result[client] = struct{}{}
-	}
-	return result
-}
-
 func (cm *ClientManager) ReturnClientMap(m map[*Client]struct{}) {
 	cm.resultPool.Put(m)
+}
+
+func (cm *ClientManager) AffectedZonesForAdoption(adoptionRequest *adoptionRequest) map[ZoneCoord]struct{} {
+	fromZone := GetZoneCoord(adoptionRequest.StartingX(), adoptionRequest.StartingY())
+	endingZone := GetZoneCoord(adoptionRequest.EndingX(), adoptionRequest.EndingY())
+
+	if fromZone == endingZone {
+		return map[ZoneCoord]struct{}{fromZone: {}}
+	}
+
+	return map[ZoneCoord]struct{}{fromZone: {}, endingZone: {}}
+}
+
+func (cm *ClientManager) AffectedZonesForBulkCapture(bulkCaptureRequest *bulkCaptureRequest) map[ZoneCoord]struct{} {
+	fromZone := GetZoneCoord(bulkCaptureRequest.StartingX(), bulkCaptureRequest.StartingY())
+	endingZone := GetZoneCoord(bulkCaptureRequest.EndingX(), bulkCaptureRequest.EndingY())
+
+	if fromZone == endingZone {
+		return map[ZoneCoord]struct{}{fromZone: {}}
+	}
+
+	return map[ZoneCoord]struct{}{fromZone: {}, endingZone: {}}
 }
 
 func (cm *ClientManager) GetAffectedZones(move Move) map[ZoneCoord]struct{} {
@@ -158,23 +171,39 @@ func (cm *ClientManager) GetBlackCount() int32 {
 	return cm.blackCount.Load()
 }
 
-func (cm *ClientManager) GetSomeActiveClientPositions(maxCount int) []Position {
-	activeClients := make([]Position, 0, maxCount)
+func (cm *ClientManager) GetRandomActiveClientPosition() (Position, bool) {
 	cm.RLock()
 	defer cm.RUnlock()
-	count := 0
+
+	// Reservoir sampling with k=1
+	var selectedClient *Client
+	activeCount := 0
+	totalCount := 0
+	const maxActiveClientsToConsider = 100
+	const maxTotalClientsToConsider = 500
+
 	for client := range cm.currentZonesForClient {
-		if client.IsActive() {
-			count++
-			pos := client.position.Load().(Position)
-			activeClients = append(activeClients, pos)
-		}
-		if count >= maxCount {
+		totalCount++
+		if totalCount > maxTotalClientsToConsider {
 			break
+		}
+		if client.IsActive() {
+			activeCount++
+			// With probability 1/count, replace the selected client
+			if rand.Intn(activeCount) == 0 {
+				selectedClient = client
+			}
+			if activeCount >= maxActiveClientsToConsider {
+				break
+			}
 		}
 	}
 
-	return activeClients
+	if selectedClient == nil {
+		return Position{}, false
+	}
+
+	return selectedClient.position.Load().(Position), true
 }
 
 func GetZoneCoord(x, y uint16) ZoneCoord {

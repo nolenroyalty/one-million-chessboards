@@ -1116,6 +1116,102 @@ func (x *ServerInitialState) GetSnapshot() *ServerStateSnapshot {
 	return nil
 }
 
+type ServerAdoption struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AdoptedIds    []uint32               `protobuf:"varint,1,rep,packed,name=adoptedIds,proto3" json:"adoptedIds,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ServerAdoption) Reset() {
+	*x = ServerAdoption{}
+	mi := &file_chess_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ServerAdoption) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServerAdoption) ProtoMessage() {}
+
+func (x *ServerAdoption) ProtoReflect() protoreflect.Message {
+	mi := &file_chess_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServerAdoption.ProtoReflect.Descriptor instead.
+func (*ServerAdoption) Descriptor() ([]byte, []int) {
+	return file_chess_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ServerAdoption) GetAdoptedIds() []uint32 {
+	if x != nil {
+		return x.AdoptedIds
+	}
+	return nil
+}
+
+type ServerBulkCapture struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Seqnum        uint64                 `protobuf:"varint,1,opt,name=seqnum,proto3" json:"seqnum,omitempty"`
+	CapturedIds   []uint32               `protobuf:"varint,2,rep,packed,name=capturedIds,proto3" json:"capturedIds,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ServerBulkCapture) Reset() {
+	*x = ServerBulkCapture{}
+	mi := &file_chess_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ServerBulkCapture) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServerBulkCapture) ProtoMessage() {}
+
+func (x *ServerBulkCapture) ProtoReflect() protoreflect.Message {
+	mi := &file_chess_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServerBulkCapture.ProtoReflect.Descriptor instead.
+func (*ServerBulkCapture) Descriptor() ([]byte, []int) {
+	return file_chess_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ServerBulkCapture) GetSeqnum() uint64 {
+	if x != nil {
+		return x.Seqnum
+	}
+	return 0
+}
+
+func (x *ServerBulkCapture) GetCapturedIds() []uint32 {
+	if x != nil {
+		return x.CapturedIds
+	}
+	return nil
+}
+
 type ServerMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Payload:
@@ -1126,6 +1222,8 @@ type ServerMessage struct {
 	//	*ServerMessage_ValidMove
 	//	*ServerMessage_InvalidMove
 	//	*ServerMessage_Pong
+	//	*ServerMessage_Adoption
+	//	*ServerMessage_BulkCapture
 	Payload       isServerMessage_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1133,7 +1231,7 @@ type ServerMessage struct {
 
 func (x *ServerMessage) Reset() {
 	*x = ServerMessage{}
-	mi := &file_chess_proto_msgTypes[15]
+	mi := &file_chess_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1145,7 +1243,7 @@ func (x *ServerMessage) String() string {
 func (*ServerMessage) ProtoMessage() {}
 
 func (x *ServerMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_chess_proto_msgTypes[15]
+	mi := &file_chess_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1158,7 +1256,7 @@ func (x *ServerMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerMessage.ProtoReflect.Descriptor instead.
 func (*ServerMessage) Descriptor() ([]byte, []int) {
-	return file_chess_proto_rawDescGZIP(), []int{15}
+	return file_chess_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ServerMessage) GetPayload() isServerMessage_Payload {
@@ -1222,6 +1320,24 @@ func (x *ServerMessage) GetPong() *ServerPong {
 	return nil
 }
 
+func (x *ServerMessage) GetAdoption() *ServerAdoption {
+	if x != nil {
+		if x, ok := x.Payload.(*ServerMessage_Adoption); ok {
+			return x.Adoption
+		}
+	}
+	return nil
+}
+
+func (x *ServerMessage) GetBulkCapture() *ServerBulkCapture {
+	if x != nil {
+		if x, ok := x.Payload.(*ServerMessage_BulkCapture); ok {
+			return x.BulkCapture
+		}
+	}
+	return nil
+}
+
 type isServerMessage_Payload interface {
 	isServerMessage_Payload()
 }
@@ -1250,6 +1366,14 @@ type ServerMessage_Pong struct {
 	Pong *ServerPong `protobuf:"bytes,6,opt,name=pong,proto3,oneof"`
 }
 
+type ServerMessage_Adoption struct {
+	Adoption *ServerAdoption `protobuf:"bytes,7,opt,name=adoption,proto3,oneof"`
+}
+
+type ServerMessage_BulkCapture struct {
+	BulkCapture *ServerBulkCapture `protobuf:"bytes,8,opt,name=bulkCapture,proto3,oneof"`
+}
+
 func (*ServerMessage_InitialState) isServerMessage_Payload() {}
 
 func (*ServerMessage_Snapshot) isServerMessage_Payload() {}
@@ -1261,6 +1385,10 @@ func (*ServerMessage_ValidMove) isServerMessage_Payload() {}
 func (*ServerMessage_InvalidMove) isServerMessage_Payload() {}
 
 func (*ServerMessage_Pong) isServerMessage_Payload() {}
+
+func (*ServerMessage_Adoption) isServerMessage_Payload() {}
+
+func (*ServerMessage_BulkCapture) isServerMessage_Payload() {}
 
 var File_chess_proto protoreflect.FileDescriptor
 
@@ -1341,14 +1469,23 @@ const file_chess_proto_rawDesc = "" +
 	"\x12ServerInitialState\x12\"\n" +
 	"\fplayingWhite\x18\x01 \x01(\bR\fplayingWhite\x12+\n" +
 	"\bposition\x18\x02 \x01(\v2\x0f.chess.PositionR\bposition\x126\n" +
-	"\bsnapshot\x18\x03 \x01(\v2\x1a.chess.ServerStateSnapshotR\bsnapshot\"\x81\x03\n" +
+	"\bsnapshot\x18\x03 \x01(\v2\x1a.chess.ServerStateSnapshotR\bsnapshot\"0\n" +
+	"\x0eServerAdoption\x12\x1e\n" +
+	"\n" +
+	"adoptedIds\x18\x01 \x03(\rR\n" +
+	"adoptedIds\"M\n" +
+	"\x11ServerBulkCapture\x12\x16\n" +
+	"\x06seqnum\x18\x01 \x01(\x04R\x06seqnum\x12 \n" +
+	"\vcapturedIds\x18\x02 \x03(\rR\vcapturedIds\"\xf4\x03\n" +
 	"\rServerMessage\x12?\n" +
 	"\finitialState\x18\x01 \x01(\v2\x19.chess.ServerInitialStateH\x00R\finitialState\x128\n" +
 	"\bsnapshot\x18\x02 \x01(\v2\x1a.chess.ServerStateSnapshotH\x00R\bsnapshot\x12K\n" +
 	"\x10movesAndCaptures\x18\x03 \x01(\v2\x1d.chess.ServerMovesAndCapturesH\x00R\x10movesAndCaptures\x126\n" +
 	"\tvalidMove\x18\x04 \x01(\v2\x16.chess.ServerValidMoveH\x00R\tvalidMove\x12<\n" +
 	"\vinvalidMove\x18\x05 \x01(\v2\x18.chess.ServerInvalidMoveH\x00R\vinvalidMove\x12'\n" +
-	"\x04pong\x18\x06 \x01(\v2\x11.chess.ServerPongH\x00R\x04pongB\t\n" +
+	"\x04pong\x18\x06 \x01(\v2\x11.chess.ServerPongH\x00R\x04pong\x123\n" +
+	"\badoption\x18\a \x01(\v2\x15.chess.ServerAdoptionH\x00R\badoption\x12<\n" +
+	"\vbulkCapture\x18\b \x01(\v2\x18.chess.ServerBulkCaptureH\x00R\vbulkCaptureB\t\n" +
 	"\apayload*P\n" +
 	"\bMoveType\x12\x14\n" +
 	"\x10MOVE_TYPE_NORMAL\x10\x00\x12\x14\n" +
@@ -1376,7 +1513,7 @@ func file_chess_proto_rawDescGZIP() []byte {
 }
 
 var file_chess_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_chess_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_chess_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_chess_proto_goTypes = []any{
 	(MoveType)(0),                  // 0: chess.MoveType
 	(PieceType)(0),                 // 1: chess.PieceType
@@ -1395,7 +1532,9 @@ var file_chess_proto_goTypes = []any{
 	(*ServerStateSnapshot)(nil),    // 14: chess.ServerStateSnapshot
 	(*Position)(nil),               // 15: chess.Position
 	(*ServerInitialState)(nil),     // 16: chess.ServerInitialState
-	(*ServerMessage)(nil),          // 17: chess.ServerMessage
+	(*ServerAdoption)(nil),         // 17: chess.ServerAdoption
+	(*ServerBulkCapture)(nil),      // 18: chess.ServerBulkCapture
+	(*ServerMessage)(nil),          // 19: chess.ServerMessage
 }
 var file_chess_proto_depIdxs = []int32{
 	0,  // 0: chess.ClientMove.moveType:type_name -> chess.MoveType
@@ -1416,11 +1555,13 @@ var file_chess_proto_depIdxs = []int32{
 	6,  // 15: chess.ServerMessage.validMove:type_name -> chess.ServerValidMove
 	7,  // 16: chess.ServerMessage.invalidMove:type_name -> chess.ServerInvalidMove
 	8,  // 17: chess.ServerMessage.pong:type_name -> chess.ServerPong
-	18, // [18:18] is the sub-list for method output_type
-	18, // [18:18] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	17, // 18: chess.ServerMessage.adoption:type_name -> chess.ServerAdoption
+	18, // 19: chess.ServerMessage.bulkCapture:type_name -> chess.ServerBulkCapture
+	20, // [20:20] is the sub-list for method output_type
+	20, // [20:20] is the sub-list for method input_type
+	20, // [20:20] is the sub-list for extension type_name
+	20, // [20:20] is the sub-list for extension extendee
+	0,  // [0:20] is the sub-list for field type_name
 }
 
 func init() { file_chess_proto_init() }
@@ -1433,13 +1574,15 @@ func file_chess_proto_init() {
 		(*ClientMessage_Subscribe)(nil),
 		(*ClientMessage_Move)(nil),
 	}
-	file_chess_proto_msgTypes[15].OneofWrappers = []any{
+	file_chess_proto_msgTypes[17].OneofWrappers = []any{
 		(*ServerMessage_InitialState)(nil),
 		(*ServerMessage_Snapshot)(nil),
 		(*ServerMessage_MovesAndCaptures)(nil),
 		(*ServerMessage_ValidMove)(nil),
 		(*ServerMessage_InvalidMove)(nil),
 		(*ServerMessage_Pong)(nil),
+		(*ServerMessage_Adoption)(nil),
+		(*ServerMessage_BulkCapture)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1447,7 +1590,7 @@ func file_chess_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_chess_proto_rawDesc), len(file_chess_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   16,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
