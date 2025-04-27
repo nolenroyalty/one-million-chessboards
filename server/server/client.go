@@ -34,10 +34,10 @@ const (
 	simulatedJitterMs         = 1
 	maxWaitBeforeSendingMoves = 225 * time.Millisecond
 
-	MAX_SNAPSHOTS_PER_SECOND = 5
+	MAX_SNAPSHOTS_PER_SECOND = 3
 	SNAPSHOT_BURST_LIMIT     = 6
 
-	MAX_SNAPSHOTS_PER_SECOND_SOFT = 3
+	MAX_SNAPSHOTS_PER_SECOND_SOFT = 2
 	SNAPSHOT_BURST_LIMIT_SOFT     = 4
 
 	MAX_MOVES_PER_SECOND      = 4
@@ -45,8 +45,8 @@ const (
 	MAX_MOVES_PER_SECOND_SOFT = 2
 	MOVE_BURST_LIMIT_SOFT     = 3
 
-	MOVE_REJECTION_WINDOW         = 5 * time.Second
-	MAX_MOVE_REJECTIONS_IN_WINDOW = 5
+	MOVE_REJECTION_RATE_LIMITING_WINDOW         = 5 * time.Second
+	MAX_MOVE_REJECTION_MESSAGES_IF_RATE_LIMITED = 5
 )
 
 type limits struct {
@@ -350,14 +350,14 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 
 		if !c.moveLimiter.Allow() {
 			now := time.Now()
-			endOfWindow := now.Add(-1 * MOVE_REJECTION_WINDOW).UnixNano()
+			endOfWindow := now.Add(-1 * MOVE_REJECTION_RATE_LIMITING_WINDOW).UnixNano()
 			window := c.hardRejectionWindowNS.Load()
 			if window < endOfWindow {
 				c.hardRejectionWindowNS.Store(now.UnixNano())
 				c.rejectionCount.Store(0)
 			}
 			count := c.rejectionCount.Add(1)
-			if count > MAX_MOVE_REJECTIONS_IN_WINDOW {
+			if count > MAX_MOVE_REJECTION_MESSAGES_IF_RATE_LIMITED {
 				return
 			} else {
 				c.rpcLogger.Info().

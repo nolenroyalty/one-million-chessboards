@@ -432,7 +432,6 @@ func ReadAndPrintRequestsFromFile(filename string) error {
 
 func (btd *BoardToDiskHandler) maybeSerializeCurrentRequests(blocking bool) error {
 	if len(btd.requestsToSerialize) == 0 {
-		log.Printf("nothing to do")
 		return nil
 	}
 	toWrite := make([]boardToDiskRequest, len(btd.requestsToSerialize))
