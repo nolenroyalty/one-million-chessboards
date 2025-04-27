@@ -347,10 +347,13 @@ func (s *Server) processMoves() {
 			// for each client here? It's annoying that we might end up doing the same serialization
 			// for 100 different clients if they're looking at the same zones.
 			//
-			// CR nroyalty: I THINK this can't actually matter, but there's a bug here where
+			// CR-someday nroyalty: I THINK this can't actually matter, but there's a bug here where
 			// you castle queenside and that results in us moving a rook that's on the edge
 			// of your vision, but the king isn't in your vision and so we don't tell you about it
 			// I think this is fine...but I need to think about it some more.
+			//
+			// nroyalty: lol I found a funny client rendering bug (or set of bugs) as a result
+			// of testing this, but I failed to actually test it. Let's not worry about it.
 			go func() {
 				s.minimapAggregator.UpdateForMoveResult(moveResult)
 				capturedPiece := moveResult.CapturedPiece

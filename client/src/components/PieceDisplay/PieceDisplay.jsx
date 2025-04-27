@@ -114,6 +114,7 @@ function _Piece({
   moveable,
   captureCount,
   justAppeared,
+  isWhite,
 }) {
   const style = React.useMemo(() => {
     const defaultCursor = moveable ? "pointer" : "default";
@@ -149,7 +150,6 @@ function _Piece({
   );
 
   let killsFillColor = null;
-  // CR nroyalty: tweak these colors?
   if (captureCount >= KILL_COUNT_THRESHOLDS.godlike) {
     killsFillColor = "var(--color-purple-600)";
   } else if (captureCount >= KILL_COUNT_THRESHOLDS.mega) {
@@ -157,7 +157,11 @@ function _Piece({
   } else if (captureCount >= KILL_COUNT_THRESHOLDS.medium) {
     killsFillColor = "var(--color-emerald-600)";
   } else if (captureCount >= KILL_COUNT_THRESHOLDS.minor) {
-    killsFillColor = "var(--color-gray-400)";
+    if (isWhite) {
+      killsFillColor = "var(--color-gray-400)";
+    } else {
+      killsFillColor = "var(--color-gray-200)";
+    }
   }
 
   let KillsIcon = null;
@@ -751,6 +755,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
           moveable={moveable}
           justAppeared={justAppeared}
           captureCount={piece.captureCount}
+          isWhite={piece.isWhite}
         />
       );
     }
