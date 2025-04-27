@@ -318,7 +318,6 @@ func CoordInBoundsInt(coord uint32) bool {
 	return coord < BOARD_SIZE
 }
 
-// CR nroyalty: RATE LIMITS HERE!!
 func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 	switch p := msg.Payload.(type) {
 	case *protocol.ClientMessage_Move:
@@ -380,9 +379,15 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 			ClientIsPlayingWhite: c.playingWhite.Load(),
 		}
 
-		c.server.moveRequests <- MoveRequest{
+		req := MoveRequest{
 			Move:   move,
 			Client: c,
+		}
+
+		select {
+		case c.server.moveRequests <- req:
+		case <-c.clientCtx.Done():
+			return
 		}
 	case *protocol.ClientMessage_Subscribe:
 		centerX := p.Subscribe.CenterX
