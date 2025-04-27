@@ -1100,6 +1100,25 @@ class PieceHandler {
     });
   }
 
+  handleAdoption({ adoptedIds }) {
+    adoptedIds.forEach((id) => {
+      const piece = this.piecesById.get(id);
+      if (piece) {
+        piece.adopted = true;
+      }
+    });
+  }
+
+  handleBulkCapture({ capturedIds, seqnum }) {
+    const captures = capturedIds.map((id) => {
+      return {
+        capturedPieceId: id,
+        seqnum,
+      };
+    });
+    this.handleMoves({ moves: [], captures });
+  }
+
   handleMoves({ moves, captures }) {
     const receivedAt = performance.now();
     const animationsByPieceId = new Map();

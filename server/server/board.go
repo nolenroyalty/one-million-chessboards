@@ -3,6 +3,7 @@ package server
 // CR nroyalty: remove log lines here before shipping to prod?
 
 import (
+	"fmt"
 	"log"
 	"math"
 	"math/rand"
@@ -20,17 +21,18 @@ import (
 
 type Board struct {
 	sync.RWMutex
-	pieces                 [BOARD_SIZE][BOARD_SIZE]uint64
-	rawRowsPool            sync.Pool
-	nextID                 uint32
-	seqNum                 uint64
-	totalMoves             atomic.Uint64
-	whitePiecesCaptured    atomic.Uint32
-	blackPiecesCaptured    atomic.Uint32
-	whiteKingsCaptured     atomic.Uint32
-	blackKingsCaptured     atomic.Uint32
-	mutexTimeLogger        zerolog.Logger
-	snapshotDurationLogger zerolog.Logger
+	pieces                                    [BOARD_SIZE][BOARD_SIZE]uint64
+	rawRowsPool                               sync.Pool
+	nextID                                    uint32
+	seqNum                                    uint64
+	doLogging                                 bool
+	totalMoves                                atomic.Uint64
+	whitePiecesCaptured                       atomic.Uint32
+	blackPiecesCaptured                       atomic.Uint32
+	whiteKingsCaptured                        atomic.Uint32
+	blackKingsCaptured                        atomic.Uint32
+	mutexTimeLogger_USEHELPERS_YOUFUCK        zerolog.Logger
+	snapshotDurationLogger_USEHELPERS_YOUFUCK zerolog.Logger
 }
 
 type GameStats struct {
@@ -42,7 +44,7 @@ type GameStats struct {
 	Seqnum               uint64
 }
 
-func NewBoard() *Board {
+func NewBoard(doLogging bool) *Board {
 	return &Board{
 		nextID:              1,
 		seqNum:              uint64(1),
@@ -51,6 +53,7 @@ func NewBoard() *Board {
 		blackPiecesCaptured: atomic.Uint32{},
 		whiteKingsCaptured:  atomic.Uint32{},
 		blackKingsCaptured:  atomic.Uint32{},
+		doLogging:           doLogging,
 		rawRowsPool: sync.Pool{
 			New: func() any {
 				rows := make([][]uint64, VIEW_DIAMETER)
@@ -60,8 +63,34 @@ func NewBoard() *Board {
 				return &rows
 			},
 		},
-		mutexTimeLogger:        NewCoreLogger().With().Str("kind", "board").Str("metric", "mutex_time").Logger(),
-		snapshotDurationLogger: NewCoreLogger().With().Str("kind", "board").Str("metric", "snapshot_duration").Logger(),
+		mutexTimeLogger_USEHELPERS_YOUFUCK:        NewCoreLogger().With().Str("kind", "board").Str("metric", "mutex_time").Logger(),
+		snapshotDurationLogger_USEHELPERS_YOUFUCK: NewCoreLogger().With().Str("kind", "board").Str("metric", "snapshot_duration").Logger(),
+	}
+}
+
+func (b *Board) maybeLogSpecialMutexAction(took int64, kind string) {
+	if b.doLogging {
+		b.mutexTimeLogger_USEHELPERS_YOUFUCK.Info().
+			Int64("took_ns", took).
+			Bool(kind, true).
+			Send()
+	}
+}
+
+func (b *Board) maybeLogMutexDuration(took int64) {
+	if b.doLogging {
+		b.mutexTimeLogger_USEHELPERS_YOUFUCK.Info().
+			Int64("took_ns", took).
+			Send()
+	}
+}
+
+func (b *Board) maybeLogSnapshotDuration(lockTook, totalTook int64) {
+	if b.doLogging {
+		b.snapshotDurationLogger_USEHELPERS_YOUFUCK.Info().
+			Int64("snapshot_lock_ns", lockTook).
+			Int64("snapshot_total_ns", totalTook).
+			Send()
 	}
 }
 
@@ -236,6 +265,115 @@ func (b *Board) satisfiesMoveRules(movedPiece Piece, capturedPiece Piece, move M
 	return true
 }
 
+func (b *Board) DoBulkCapture(bulkCaptureRequest *bulkCaptureRequest) (*protocol.ServerBulkCapture, error) {
+	capturedPieces := make([]uint32, 0, 16)
+	onlyColor := bulkCaptureRequest.OnlyColor()
+	startingX := bulkCaptureRequest.StartingX()
+	startingY := bulkCaptureRequest.StartingY()
+	endingX := bulkCaptureRequest.EndingX()
+	endingY := bulkCaptureRequest.EndingY()
+
+	if startingX >= BOARD_SIZE || startingY >= BOARD_SIZE || endingX >= BOARD_SIZE || endingY >= BOARD_SIZE {
+		log.Printf("BUG: ClearBoard: out of bounds: %d %d %d %d", startingX, startingY, endingX, endingY)
+		return nil, fmt.Errorf("out of bounds: %d %d %d %d", startingX, startingY, endingX, endingY)
+	}
+
+	now := time.Now()
+	b.Lock()
+	defer b.Unlock()
+
+	for y := startingY; y < endingY; y++ {
+		for x := startingX; x < endingX; x++ {
+			piece := b.pieces[y][x]
+			if EncodedIsEmpty(EncodedPiece(piece)) {
+				continue
+			}
+			p := PieceOfEncodedPiece(EncodedPiece(piece))
+			if onlyColor == OnlyColorWhite && !p.IsWhite {
+				continue
+			} else if onlyColor == OnlyColorBlack && p.IsWhite {
+				continue
+			}
+
+			if p.IsWhite {
+				b.whitePiecesCaptured.Add(1)
+				if p.Type == King {
+					b.whiteKingsCaptured.Add(1)
+				}
+			} else {
+				b.blackPiecesCaptured.Add(1)
+				if p.Type == King {
+					b.blackKingsCaptured.Add(1)
+				}
+			}
+
+			capturedPieces = append(capturedPieces, p.ID)
+			b.pieces[y][x] = uint64(EmptyEncodedPiece)
+		}
+	}
+	took := time.Since(now).Nanoseconds()
+	b.maybeLogSpecialMutexAction(took, "is_clear_board")
+
+	b.seqNum++
+	seqNum := b.seqNum
+
+	return &protocol.ServerBulkCapture{
+		CapturedIds: capturedPieces,
+		Seqnum:      seqNum,
+	}, nil
+}
+
+type AdoptionResult struct {
+	AdoptedPieces []uint32
+	Seqnum        uint64
+}
+
+func (b *Board) Adopt(adoptionRequest *adoptionRequest) (*AdoptionResult, error) {
+	adoptedPieces := make([]uint32, 0, 16)
+	onlyColor := adoptionRequest.OnlyColor()
+	startingX := adoptionRequest.StartingX()
+	startingY := adoptionRequest.StartingY()
+	endingX := adoptionRequest.EndingX()
+	endingY := adoptionRequest.EndingY()
+
+	if startingX >= BOARD_SIZE || startingY >= BOARD_SIZE || endingX >= BOARD_SIZE || endingY >= BOARD_SIZE {
+		log.Printf("BUG: Adopt: out of bounds: %d %d %d %d", startingX, startingY, endingX, endingY)
+		return nil, fmt.Errorf("out of bounds: %d %d %d %d", startingX, startingY, endingX, endingY)
+	}
+
+	now := time.Now()
+	b.Lock()
+	defer b.Unlock()
+
+	for y := startingY; y < endingY; y++ {
+		for x := startingX; x < endingX; x++ {
+			piece := b.pieces[y][x]
+			if EncodedIsEmpty(EncodedPiece(piece)) {
+				continue
+			}
+			p := PieceOfEncodedPiece(EncodedPiece(piece))
+			if onlyColor == OnlyColorWhite && !p.IsWhite {
+				continue
+			} else if onlyColor == OnlyColorBlack && p.IsWhite {
+				continue
+			}
+			p.Adopted = true
+			b.pieces[y][x] = uint64(p.Encode())
+			adoptedPieces = append(adoptedPieces, p.ID)
+		}
+	}
+	took := time.Since(now).Nanoseconds()
+	b.maybeLogSpecialMutexAction(took, "is_adoption")
+
+	b.seqNum++
+	seqNum := b.seqNum
+
+	return &AdoptionResult{
+		AdoptedPieces: adoptedPieces,
+		Seqnum:        seqNum,
+	}, nil
+}
+
 // this can't handle multiple writers because it releases its read lock before
 // acquiring the write lock, which means that if you have multiple writers
 // you may apply an invalid move.
@@ -375,9 +513,7 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 		seqNum := b.seqNum
 		b.Unlock()
 		took := time.Since(now).Nanoseconds()
-		b.mutexTimeLogger.Info().
-			Int64("took_ns", took).
-			Send()
+		b.maybeLogMutexDuration(took)
 
 		kingMoveResult := MovedPieceResult{
 			Piece: movedPiece,
@@ -462,9 +598,7 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 		seqNum := b.seqNum
 		b.Unlock()
 		took := time.Since(now).Nanoseconds()
-		b.mutexTimeLogger.Info().
-			Int64("took_ns", took).
-			Send()
+		b.maybeLogMutexDuration(took)
 
 		if capturedPiece.IsWhite {
 			b.whitePiecesCaptured.Add(1)
@@ -577,9 +711,7 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 		seqNum := b.seqNum
 		b.Unlock()
 		took := time.Since(now).Nanoseconds()
-		b.mutexTimeLogger.Info().
-			Int64("took_ns", took).
-			Send()
+		b.maybeLogMutexDuration(took)
 
 		b.totalMoves.Add(1)
 		movedPieceResult := MovedPieceResult{
@@ -693,11 +825,7 @@ func (b *Board) GetBoardSnapshot_RETURN_TO_POOL_AFTER_YOU_FUCK(pos Position) *pr
 	}
 	totalTook := time.Since(start).Nanoseconds()
 
-	b.snapshotDurationLogger.Info().
-		Int64("snapshot_lock_ns", lockTook).
-		Int64("snapshot_total_ns", totalTook).
-		Send()
-
+	b.maybeLogSnapshotDuration(lockTook, totalTook)
 	return snapshot
 }
 

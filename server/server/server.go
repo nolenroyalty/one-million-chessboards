@@ -1,6 +1,8 @@
 package server
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"math"
 	"math/rand"
@@ -19,6 +21,7 @@ import (
 	"github.com/puzpuzpuz/xsync/v4"
 	"github.com/rs/zerolog"
 	"golang.org/x/time/rate"
+	"google.golang.org/protobuf/proto"
 )
 
 var json = jsoniter.ConfigCompatibleWithStandardLibrary
@@ -51,10 +54,12 @@ const (
 
 type Server struct {
 	board                     *Board
-	persistentBoard           *PersistentBoard
+	boardToDiskHandler        *BoardToDiskHandler
 	clientManager             *ClientManager
 	minimapAggregator         *MinimapAggregator
 	moveRequests              chan MoveRequest
+	adoptionRequests          chan adoptionRequest
+	bulkCaptureRequests       chan bulkCaptureRequest
 	upgrader                  websocket.Upgrader
 	currentStats              jsoniter.RawMessage
 	currentStatsMutex         sync.RWMutex
@@ -65,29 +70,54 @@ type Server struct {
 	httpLogger                zerolog.Logger
 	coreLogger                zerolog.Logger
 	limits                    *xsync.Map[string, *limitingBucket]
+	backgroundJobCtx          context.Context
+	backgroundJobCancel       context.CancelFunc
+	backgroundJobWg           *sync.WaitGroup
+	clientWg                  *sync.WaitGroup
+	rootClientCtx             context.Context
+	rootClientCancel          context.CancelFunc
+	shutdownBegan             atomic.Bool
 }
 
 func NewServer(stateDir string) *Server {
-	persistentBoard := NewPersistentBoard(stateDir)
-	board := persistentBoard.GetBoardCopy()
+	boardToDiskHandler, err := NewBoardToDiskHandler(stateDir)
+	if err != nil {
+		panic(fmt.Sprintf("Error getting btd: %s", err))
+	}
+	backgroundJobCtx, backgroundJobCancel := context.WithCancel(context.Background())
+	backgroundJobWg := &sync.WaitGroup{}
+
+	rootClientCtx, rootClientCancel := context.WithCancel(context.Background())
+	clientWg := &sync.WaitGroup{}
+
+	board := boardToDiskHandler.GetLiveBoard()
 	httpLogger := NewCoreLogger().With().Str("kind", "http").Logger()
 	s := &Server{
-		board:             board,
-		persistentBoard:   persistentBoard,
-		clientManager:     NewClientManager(),
-		minimapAggregator: NewMinimapAggregator(),
-		moveRequests:      make(chan MoveRequest, 1024),
-		recentCaptures:    NewRecentCaptures(),
-		httpLogger:        httpLogger,
-		coreLogger:        NewCoreLogger(),
-		limits:            xsync.NewMap[string, *limitingBucket](),
+		board:               board,
+		boardToDiskHandler:  boardToDiskHandler,
+		clientManager:       NewClientManager(),
+		minimapAggregator:   NewMinimapAggregator(),
+		moveRequests:        make(chan MoveRequest, 1024),
+		adoptionRequests:    make(chan adoptionRequest, 128),
+		bulkCaptureRequests: make(chan bulkCaptureRequest, 16),
+		recentCaptures:      NewRecentCaptures(),
+		httpLogger:          httpLogger,
+		coreLogger:          NewCoreLogger(),
+		limits:              xsync.NewMap[string, *limitingBucket](),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
 			CheckOrigin: func(r *http.Request) bool {
+				// CR nroyalty: fix??
 				return true // Allow all origins for now
 			},
 		},
+		backgroundJobCtx:    backgroundJobCtx,
+		backgroundJobCancel: backgroundJobCancel,
+		backgroundJobWg:     backgroundJobWg,
+		rootClientCtx:       rootClientCtx,
+		rootClientCancel:    rootClientCancel,
+		clientWg:            clientWg,
 	}
 	return s
 }
@@ -99,25 +129,67 @@ func (s *Server) Run() {
 	go s.refreshMinimapPeriodically()
 	s.refreshStatsPeriodically()
 	s.refreshRecentCapturesPeriodically()
-	go s.persistentBoard.Run()
+	go s.boardToDiskHandler.RunForever()
+}
+
+// https://stackoverflow.com/questions/32840687/timeout-for-waitgroup-wait
+func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
+	c := make(chan struct{})
+	go func() {
+		defer close(c)
+		wg.Wait()
+	}()
+	select {
+	case <-c:
+		return false // completed normally
+	case <-time.After(timeout):
+		return true // timed out
+	}
+}
+
+func (s *Server) GracefulShutdown() {
+	if s.shutdownBegan.CompareAndSwap(false, true) {
+		log.Printf("GRACEFUL SHUTDOWN: Waiting for clients to finish")
+		s.rootClientCancel()
+		if waitTimeout(s.clientWg, 5*time.Second) {
+			log.Printf("GRACEFUL SHUTDOWN: Clients did not finish in time, continuing")
+		} else {
+			log.Printf("GRACEFUL SHUTDOWN: Clients finished")
+		}
+
+		log.Printf("GRACEFUL SHUTDOWN: Waiting for background jobs to finish")
+		s.backgroundJobCancel()
+		s.backgroundJobWg.Wait()
+		log.Printf("GRACEFUL SHUTDOWN: 	Background jobs finished, shutting down BTD")
+		s.boardToDiskHandler.GracefulShutdown()
+	}
 }
 
 func (s *Server) ClearOldLimits() {
 	ticker := time.NewTicker(1 * time.Minute)
-	defer ticker.Stop()
+	s.backgroundJobWg.Add(1)
+	defer func() {
+		ticker.Stop()
+		s.backgroundJobWg.Done()
+	}()
 
-	for range ticker.C {
-		atLeastOneMinuteAgo := time.Now().Add(-1 * time.Minute).UnixNano()
-		s.limits.Range(func(key string, value *limitingBucket) bool {
-			if value.count.Load() > 0 {
+	for {
+		select {
+		case <-s.backgroundJobCtx.Done():
+			return
+		case <-ticker.C:
+			atLeastOneMinuteAgo := time.Now().Add(-1 * time.Minute).UnixNano()
+			s.limits.Range(func(key string, value *limitingBucket) bool {
+				if value.count.Load() > 0 {
+					return true
+				}
+
+				if value.lastActionTimeNs.Load() < atLeastOneMinuteAgo {
+					s.limits.Delete(key)
+				}
 				return true
-			}
-
-			if value.lastActionTimeNs.Load() < atLeastOneMinuteAgo {
-				s.limits.Delete(key)
-			}
-			return true
-		})
+			})
+		}
 	}
 }
 
@@ -146,20 +218,38 @@ func (s *Server) refreshRecentCapturesPeriodically() {
 	s.refreshRecentCapturesOnce()
 	go func() {
 		ticker := time.NewTicker(CAPTURE_REFRESH_INTERVAL)
-		defer ticker.Stop()
+		s.backgroundJobWg.Add(1)
+		defer func() {
+			ticker.Stop()
+			s.backgroundJobWg.Done()
+		}()
 
-		for range ticker.C {
-			s.refreshRecentCapturesOnce()
+		for {
+			select {
+			case <-s.backgroundJobCtx.Done():
+				return
+			case <-ticker.C:
+				s.refreshRecentCapturesOnce()
+			}
 		}
 	}()
 }
 
 func (s *Server) refreshMinimapPeriodically() {
 	ticker := time.NewTicker(MINIMAP_REFRESH_INTERVAL)
-	defer ticker.Stop()
+	s.backgroundJobWg.Add(1)
+	defer func() {
+		ticker.Stop()
+		s.backgroundJobWg.Done()
+	}()
 
-	for range ticker.C {
-		s.minimapAggregator.createAndStoreAggregation()
+	for {
+		select {
+		case <-s.backgroundJobCtx.Done():
+			return
+		case <-ticker.C:
+			s.minimapAggregator.createAndStoreAggregation()
+		}
 	}
 }
 
@@ -199,67 +289,140 @@ func (s *Server) refreshStatsPeriodically() {
 	s.refreshStatsOnce()
 	go func() {
 		ticker := time.NewTicker(STATS_REFRESH_INTERVAL)
-		defer ticker.Stop()
+		s.backgroundJobWg.Add(1)
+		defer func() {
+			ticker.Stop()
+			s.backgroundJobWg.Done()
+		}()
 
-		for range ticker.C {
-			s.refreshStatsOnce()
+		for {
+			select {
+			case <-s.backgroundJobCtx.Done():
+				return
+			case <-ticker.C:
+				s.refreshStatsOnce()
+			}
 		}
 	}()
 }
 
 func (s *Server) processMoves() {
-	for moveReq := range s.moveRequests {
-		moveResult := s.board.ValidateAndApplyMove__NOTTHREADSAFE(moveReq.Move)
-		if !moveResult.Valid {
-			moveReq.Client.SendInvalidMove(moveReq.Move.MoveToken)
-			continue
-		}
-		s.persistentBoard.ApplyMove(moveReq.Move, moveResult.Seqnum)
+	s.backgroundJobWg.Add(1)
+	defer s.backgroundJobWg.Done()
 
-		if moveResult.CapturedPiece.Piece.IsEmpty() {
-			moveReq.Client.SendValidMove(moveReq.Move.MoveToken, moveResult.Seqnum, 0)
-		} else {
-			moveReq.Client.SendValidMove(moveReq.Move.MoveToken, moveResult.Seqnum, moveResult.CapturedPiece.Piece.ID)
-		}
+	for {
+		select {
+		case <-s.backgroundJobCtx.Done():
+			log.Printf("processMoves: context done")
+			return
+		case moveReq := <-s.moveRequests:
+			moveResult := s.board.ValidateAndApplyMove__NOTTHREADSAFE(moveReq.Move)
+			if !moveResult.Valid {
+				moveReq.Client.SendInvalidMove(moveReq.Move.MoveToken)
+				continue
+			}
+			s.boardToDiskHandler.AddMove(&moveReq.Move)
 
-		// CR nroyalty: is there a way we can avoid the overhead of re-serializing a move
-		// for each client here? It's annoying that we might end up doing the same serialization
-		// for 100 different clients if they're looking at the same zones.
-		//
-		// CR nroyalty: I THINK this can't actually matter, but there's a bug here where
-		// you castle queenside and that results in us moving a rook that's on the edge
-		// of your vision, but the king isn't in your vision and so we don't tell you about it
-		// I think this is fine...but I need to think about it some more.
-		go func() {
-			s.minimapAggregator.UpdateForMoveResult(moveResult)
-			capturedPiece := moveResult.CapturedPiece
-			movedPieces := make([]*protocol.PieceDataForMove, moveResult.Length)
-			for i := 0; i < int(moveResult.Length); i++ {
-				piece := moveResult.MovedPieces[i].Piece
+			if moveResult.CapturedPiece.Piece.IsEmpty() {
+				moveReq.Client.SendValidMove(moveReq.Move.MoveToken, moveResult.Seqnum, 0)
+			} else {
+				moveReq.Client.SendValidMove(moveReq.Move.MoveToken, moveResult.Seqnum, moveResult.CapturedPiece.Piece.ID)
+			}
 
-				movedPieces[i] = &protocol.PieceDataForMove{
-					X:      uint32(moveResult.MovedPieces[i].ToX),
-					Y:      uint32(moveResult.MovedPieces[i].ToY),
-					Seqnum: moveResult.Seqnum,
-					Piece:  piece.ToProtocolAlloc(),
+			// CR nroyalty: is there a way we can avoid the overhead of re-serializing a move
+			// for each client here? It's annoying that we might end up doing the same serialization
+			// for 100 different clients if they're looking at the same zones.
+			//
+			// CR nroyalty: I THINK this can't actually matter, but there's a bug here where
+			// you castle queenside and that results in us moving a rook that's on the edge
+			// of your vision, but the king isn't in your vision and so we don't tell you about it
+			// I think this is fine...but I need to think about it some more.
+			go func() {
+				s.minimapAggregator.UpdateForMoveResult(moveResult)
+				capturedPiece := moveResult.CapturedPiece
+				movedPieces := make([]*protocol.PieceDataForMove, moveResult.Length)
+				for i := 0; i < int(moveResult.Length); i++ {
+					piece := moveResult.MovedPieces[i].Piece
+
+					movedPieces[i] = &protocol.PieceDataForMove{
+						X:      uint32(moveResult.MovedPieces[i].ToX),
+						Y:      uint32(moveResult.MovedPieces[i].ToY),
+						Seqnum: moveResult.Seqnum,
+						Piece:  piece.ToProtocolAlloc(),
+					}
 				}
-			}
 
-			var pieceCapture *protocol.PieceCapture = nil
-			if !capturedPiece.Piece.IsEmpty() {
-				s.recentCaptures.AddCapture(&moveResult.CapturedPiece)
-				pieceCapture = &protocol.PieceCapture{
-					CapturedPieceId: capturedPiece.Piece.ID,
-					Seqnum:          moveResult.Seqnum,
+				var pieceCapture *protocol.PieceCapture = nil
+				if !capturedPiece.Piece.IsEmpty() {
+					s.recentCaptures.AddCapture(&moveResult.CapturedPiece)
+					pieceCapture = &protocol.PieceCapture{
+						CapturedPieceId: capturedPiece.Piece.ID,
+						Seqnum:          moveResult.Seqnum,
+					}
 				}
+				affectedZones := s.clientManager.GetAffectedZones(moveReq.Move)
+				interestedClients := s.clientManager.GetClientsForZones(affectedZones)
+				for client := range interestedClients {
+					client.AddMovesToBuffer(movedPieces, pieceCapture)
+				}
+				s.clientManager.ReturnClientMap(interestedClients)
+			}()
+
+		case adoptionReq := <-s.adoptionRequests:
+			adoptionResult, err := s.board.Adopt(&adoptionReq)
+			if err != nil || adoptionResult == nil {
+				continue
 			}
-			affectedZones := s.clientManager.GetAffectedZones(moveReq.Move)
-			interestedClients := s.clientManager.GetClientsForZones(affectedZones)
-			for client := range interestedClients {
-				client.AddMovesToBuffer(movedPieces, pieceCapture)
+			s.boardToDiskHandler.AddAdoption(&adoptionReq)
+
+			go func() {
+				affectedZones := s.clientManager.AffectedZonesForAdoption(&adoptionReq)
+				interestedClients := s.clientManager.GetClientsForZones(affectedZones)
+				m := &protocol.ServerMessage{
+					Payload: &protocol.ServerMessage_Adoption{
+						Adoption: &protocol.ServerAdoption{
+							AdoptedIds: adoptionResult.AdoptedPieces,
+						},
+					},
+				}
+				message, err := proto.Marshal(m)
+				if err != nil {
+					log.Printf("Error marshalling adoption: %v", err)
+					return
+				}
+
+				for client := range interestedClients {
+					client.SendAdoption(message)
+				}
+				s.clientManager.ReturnClientMap(interestedClients)
+			}()
+
+		case bulkCaptureReq := <-s.bulkCaptureRequests:
+			bulkCaptureMsg, err := s.board.DoBulkCapture(&bulkCaptureReq)
+			if err != nil || bulkCaptureMsg == nil {
+				continue
 			}
-			s.clientManager.ReturnClientMap(interestedClients)
-		}()
+			s.boardToDiskHandler.AddBulkCapture(&bulkCaptureReq)
+
+			go func() {
+				m := &protocol.ServerMessage{
+					Payload: &protocol.ServerMessage_BulkCapture{
+						BulkCapture: bulkCaptureMsg,
+					},
+				}
+				message, err := proto.Marshal(m)
+				if err != nil {
+					log.Printf("Error marshalling bulk capture: %v", err)
+					return
+				}
+				affectedZones := s.clientManager.AffectedZonesForBulkCapture(&bulkCaptureReq)
+				interestedClients := s.clientManager.GetClientsForZones(affectedZones)
+				for client := range interestedClients {
+					client.SendBulkCapture(message)
+				}
+				s.clientManager.ReturnClientMap(interestedClients)
+			}()
+		}
 	}
 }
 
@@ -303,14 +466,17 @@ func (s *Server) DetermineColor(colorPref ColorPreference) bool {
 	return applyColorPref(colorPref)
 }
 
-var DEFAULT_COORD_ARRAY = [][]int{
-	{500, 500},
-	{2000, 2000},
-	{4500, 4500},
-	{3000, 1500},
-	{1000, 2000},
-	{2000, 1000},
-}
+// nroyalty: I *think* doing this is actually a bad idea, since these zones
+// would get cleared out quickly over time. Let's just rely on active client
+// positions (which we could also serve up as an endpoint?)
+// var DEFAULT_COORD_ARRAY = [][]int{
+// 	{500, 500},
+// 	{2000, 2000},
+// 	{4500, 4500},
+// 	{3000, 1500},
+// 	{1000, 2000},
+// 	{2000, 1000},
+// }
 
 const (
 	BOARD_EDGE_BUFFER = 20
@@ -333,18 +499,15 @@ func IncrOrDecrPosition(n uint16) uint16 {
 }
 
 func (s *Server) GetDefaultCoords() Position {
-	activeClientPositions := s.clientManager.GetSomeActiveClientPositions(100)
-
-	if len(activeClientPositions) == 0 {
-		idx := rand.Intn(len(DEFAULT_COORD_ARRAY))
-		return Position{X: uint16(DEFAULT_COORD_ARRAY[idx][0]), Y: uint16(DEFAULT_COORD_ARRAY[idx][1])}
+	if pos, ok := s.clientManager.GetRandomActiveClientPosition(); ok {
+		pos.X = IncrOrDecrPosition(pos.X)
+		pos.Y = IncrOrDecrPosition(pos.Y)
+		return pos
 	}
 
-	idx := rand.Intn(len(activeClientPositions))
-	pos := activeClientPositions[idx]
-	pos.X = IncrOrDecrPosition(pos.X)
-	pos.Y = IncrOrDecrPosition(pos.Y)
-	return pos
+	x := 500 + rand.Intn(BOARD_SIZE-1000)
+	y := 500 + rand.Intn(BOARD_SIZE-1000)
+	return Position{X: uint16(x), Y: uint16(y)}
 }
 
 func (s *Server) GetMaybeRequestedCoords(requestedXCoord int16, requestedYCoord int16) Position {
@@ -454,6 +617,11 @@ func (s *Server) DecrementCountForIp(ipString string) {
 }
 
 func (s *Server) ServeWs(w http.ResponseWriter, r *http.Request) {
+	if s.shutdownBegan.Load() {
+		http.Error(w, "Server is shutting down", http.StatusServiceUnavailable)
+		return
+	}
+
 	ipString, ipv6 := s.GetIPString(r)
 	limitResult := s.maybeAddNewIp(ipString, ipv6)
 	if limitResult == AddIpResultHardLimitExceeded {
@@ -498,7 +666,7 @@ func (s *Server) ServeWs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	softLimited := limitResult == AddIpResultSoftLimitExceeded
-	client := NewClient(conn, s, ipString, softLimited)
+	client := NewClient(conn, s, ipString, softLimited, s.clientWg, s.rootClientCtx)
 	pos := s.GetMaybeRequestedCoords(requestedXCoord, requestedYCoord)
 	playingWhite := s.DetermineColor(colorPref)
 	s.clientManager.RegisterClient(client, pos, playingWhite)
@@ -517,9 +685,9 @@ func (s *Server) ServeMinimap(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) ServeGlobalStats(w http.ResponseWriter, r *http.Request) {
-	s.httpLogger.Info().
-		Str("rpc", "ServeGlobalStats").
-		Send()
+	// s.httpLogger.Info().
+	// 	Str("rpc", "ServeGlobalStats").
+	// 	Send()
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "public, max-age=2, s-maxage=4")
 	s.currentStatsMutex.RLock()
@@ -528,9 +696,9 @@ func (s *Server) ServeGlobalStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) ServeRecentCaptures(w http.ResponseWriter, r *http.Request, white bool) {
-	s.httpLogger.Info().
-		Str("rpc", "ServeRecentCaptures").
-		Send()
+	// s.httpLogger.Info().
+	// 	Str("rpc", "ServeRecentCaptures").
+	// 	Send()
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "public, max-age=2, s-maxage=4")
 	s.recentCapturesMutex.RLock()
@@ -540,9 +708,85 @@ func (s *Server) ServeRecentCaptures(w http.ResponseWriter, r *http.Request, whi
 	} else {
 		w.Write(s.recentBlackCapturesResult)
 	}
+
+}
+
+// CR nroyalty: restrict internal API?
+func (s *Server) ServeAdoption(w http.ResponseWriter, r *http.Request) {
+	s.httpLogger.Info().
+		Str("rpc", "ServeAdoption").
+		Send()
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	type AdoptionRequest struct {
+		X         uint16 `json:"x"`
+		Y         uint16 `json:"y"`
+		OnlyColor string `json:"onlyColor"`
+	}
+
+	var req AdoptionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	oc := OnlyColorFromString(req.OnlyColor)
+
+	if req.X >= BOARD_SIZE || req.Y >= BOARD_SIZE {
+		http.Error(w, "Coordinates out of bounds", http.StatusBadRequest)
+		return
+	}
+
+	adoptionReq := NewAdoptionRequest(req.X, req.Y, oc)
+	s.adoptionRequests <- *adoptionReq
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) ServeBulkCapture(w http.ResponseWriter, r *http.Request) {
+	s.httpLogger.Info().
+		Str("rpc", "ServeBulkCapture").
+		Send()
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	type BulkCaptureRequest struct {
+		X         uint16 `json:"x"`
+		Y         uint16 `json:"y"`
+		OnlyColor string `json:"onlyColor"`
+	}
+
+	var req BulkCaptureRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.X >= BOARD_SIZE || req.Y >= BOARD_SIZE {
+		http.Error(w, "Coordinates out of bounds", http.StatusBadRequest)
+		return
+	}
+
+	oc := OnlyColorFromString(req.OnlyColor)
+
+	bulkCaptureReq := NewBulkCaptureRequest(req.X, req.Y, oc)
+	s.bulkCaptureRequests <- *bulkCaptureReq
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request, staticDir string) {
+	if s.shutdownBegan.Load() {
+		http.Error(w, "Server is shutting down", http.StatusServiceUnavailable)
+		return
+	}
+
 	if r.URL.Path == "/ws" {
 		s.ServeWs(w, r)
 		return
@@ -557,6 +801,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request, staticDir str
 		return
 	} else if r.URL.Path == "/api/recently-captured/black" {
 		s.ServeRecentCaptures(w, r, false)
+		return
+	} else if r.URL.Path == "/internal/adoption" {
+		s.ServeAdoption(w, r)
+		return
+	} else if r.URL.Path == "/internal/bulk-capture" {
+		s.ServeBulkCapture(w, r)
 		return
 	}
 

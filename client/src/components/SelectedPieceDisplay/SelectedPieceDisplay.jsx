@@ -11,8 +11,8 @@ import BoardControlsPanel from "../BoardControlsPanel/BoardControlsPanel";
 import { ArrowDownUp, Axe } from "lucide-react";
 
 const MAX_CAPTURE_MOVE_COUNT = 4000;
-const FAR_FROM_HOME_DISTANCE = 100;
-const PACIFIST_MOVE_COUNT = 150;
+const FAR_FROM_HOME_DISTANCE = 40;
+const PACIFIST_MOVE_COUNT = 100;
 const SELF_HATING_THRESHOLD = 10;
 
 const Middle = styled(BoardControlsPanel)`
@@ -76,7 +76,7 @@ const RoyaltyKillerText = styled(AchievementText)`
   color: var(--color-violet-400);
 `;
 
-const GoldSlayerText = styled(AchievementText)`
+const AdoptedText = styled(AchievementText)`
   color: var(--color-amber-400);
 `;
 
@@ -247,6 +247,13 @@ function SelectedPieceDisplay() {
     return <PromotedText>Promoted - {promotionRank}</PromotedText>;
   }, [selectedPiece]);
 
+  const adopted = React.useMemo(() => {
+    if (!selectedPiece) {
+      return null;
+    }
+    return selectedPiece.adopted ? <AdoptedText>Adopted</AdoptedText> : null;
+  }, [selectedPiece]);
+
   const captureAchievement = React.useMemo(() => {
     if (!selectedPiece) {
       return null;
@@ -254,7 +261,7 @@ function SelectedPieceDisplay() {
     if (selectedPiece.kingPawner && selectedPiece.queenPawner) {
       return <RoyaltyKillerText>Pawnipotent</RoyaltyKillerText>;
     } else if (selectedPiece.adoptedKiller) {
-      return <GoldSlayerText>Goldslayer</GoldSlayerText>;
+      return <AdoptedText>Goldslayer</AdoptedText>;
     } else if (selectedPiece.kingPawner) {
       return <RoyaltyKillerText>King Pwner</RoyaltyKillerText>;
     } else if (selectedPiece.queenPawner) {
@@ -318,6 +325,7 @@ function SelectedPieceDisplay() {
               <PieceId>{pieceId}</PieceId>
               <AchievementsWrapper>
                 {promoted}
+                {adopted}
                 {captureAchievement}
                 {farFromHome}
               </AchievementsWrapper>
