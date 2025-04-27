@@ -1,5 +1,7 @@
 #!/bin/bash
 
+## LLM SLOP
+
 # === Configuration ===
 
 # --- Main Box ---

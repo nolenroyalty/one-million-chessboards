@@ -1,5 +1,7 @@
 #!/bin/bash
 
+## LLM SLOP
+
 # === Script to be run on the secondary/backup server ===
 # - Compresses new 'moves' files using zstd.
 # - Keeps the latest 'keep_remote_boards' board files UNCOMPRESSED.
