@@ -16,9 +16,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// CR nroyalty: separate out metrics for persistent board (maybe just write a separate
-// persistent board implementation...)
-
 type Board struct {
 	sync.RWMutex
 	pieces                                    [BOARD_SIZE][BOARD_SIZE]uint64
@@ -409,7 +406,7 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 
 	// Can't move an empty piece
 	if EncodedIsEmpty(EncodedPiece(raw)) {
-		log.Printf("Invalid move: No piece at from position (expected id %d)", move.PieceID)
+		// log.Printf("Invalid move: No piece at from position (expected id %d)", move.PieceID)
 		return MoveResult{Valid: false}
 	}
 
@@ -424,7 +421,7 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 
 	// piece ID must match
 	if movedPiece.ID != move.PieceID {
-		log.Printf("Invalid move: Piece ID does not match")
+		// log.Printf("Invalid move: Piece ID does not match")
 		return MoveResult{Valid: false}
 	}
 
@@ -737,7 +734,7 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 			return MoveResult{Valid: true, MovedPieces: movedPieces, Length: 1, Seqnum: seqNum}
 		}
 	default:
-		log.Printf("Invalid move: Move type not supported")
+		// log.Printf("Invalid move: Move type not supported")
 		return MoveResult{Valid: false}
 	}
 }

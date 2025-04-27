@@ -347,10 +347,30 @@ func (btd *BoardToDiskHandler) GetLiveBoard() *Board {
 	return board
 }
 
-func (btd *BoardToDiskHandler) panicWithContext(context string) {
+func (req boardToDiskRequest) ToString() string {
+	switch {
+	case req.Move != nil:
+		return req.Move.ToString()
+	case req.AdoptionRequest != nil:
+		return req.AdoptionRequest.ToString()
+	case req.BulkCaptureRequest != nil:
+		return req.BulkCaptureRequest.ToString()
+	default:
+		return fmt.Sprintf("UNKNOWN REQ: %v", req)
+	}
+}
+
+func (btd *BoardToDiskHandler) panicWithContext(context string, req boardToDiskRequest) {
 	log.Printf("!!PANICKING IN PERSISTENT BOARD!!")
 	log.Printf("CURRENT SEQNUM: %d", btd.board.seqNum)
 	log.Printf("PANIC CONTEXT: %s", context)
+	btd.logger.Fatal().
+		Str("action", "btd_panic_with_context").
+		Str("context", context).
+		Str("req", req.ToString()).
+		Str("seqnum", fmt.Sprintf("%d", btd.board.seqNum)).
+		Str("total_moves", fmt.Sprintf("%d", btd.board.totalMoves.Load())).
+		Send()
 	panic(context)
 }
 
@@ -359,20 +379,20 @@ func (btd *BoardToDiskHandler) apply(req boardToDiskRequest) {
 	case req.Move != nil:
 		res := btd.board.ValidateAndApplyMove__NOTTHREADSAFE(*req.Move)
 		if !res.Valid {
-			context := fmt.Sprintf("Applied invalid move %v", *req.Move)
-			btd.panicWithContext(context)
+			context := fmt.Sprintf("Applied invalid move %s", req.Move.ToString())
+			btd.panicWithContext(context, req)
 		}
 	case req.AdoptionRequest != nil:
 		_, err := btd.board.Adopt(req.AdoptionRequest)
 		if err != nil {
-			context := fmt.Sprintf("Received invalid adoption req %v", req.AdoptionRequest)
-			btd.panicWithContext(context)
+			context := fmt.Sprintf("Received invalid adoption req %s", req.AdoptionRequest.ToString())
+			btd.panicWithContext(context, req)
 		}
 	case req.BulkCaptureRequest != nil:
 		_, err := btd.board.DoBulkCapture(req.BulkCaptureRequest)
 		if err != nil {
-			context := fmt.Sprintf("Received invalid bulk capture req %v", req.BulkCaptureRequest)
-			btd.panicWithContext(context)
+			context := fmt.Sprintf("Received invalid bulk capture req %s", req.BulkCaptureRequest.ToString())
+			btd.panicWithContext(context, req)
 		}
 	default:
 		log.Printf("Unrecognized req? %v", req)

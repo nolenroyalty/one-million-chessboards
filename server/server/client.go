@@ -23,7 +23,7 @@ import (
 
 var marshalOpt = proto.MarshalOptions{Deterministic: false}
 
-// CR nroyalty: large global rate-limiter
+// CR-someday nroyalty: large global rate-limiter
 
 const (
 	// CR nroyalty: MAKE SURE THIS IS NOT BELOW 60 AND MAYBE MAKE IT HIGHER
@@ -114,9 +114,6 @@ type Client struct {
 	clientCancel                                   context.CancelFunc
 }
 
-// CR nroyalty: think HARD about your send channel and how big it should be.
-// it needs to be much smaller than the 2048 we used for benchmarking purposes.
-// 64 might still be too large (?)
 func NewClient(
 	conn *websocket.Conn,
 	server *Server,
@@ -133,7 +130,6 @@ func NewClient(
 	clientCtx, clientCancel := context.WithCancel(rootClientCtx)
 
 	c := &Client{
-		// done:   make(chan struct{}),
 		conn:   conn,
 		server: server,
 		send_DO_NOT_DO_RAW_WRITES_OR_YOU_WILL_BE_FIRED: make(chan []byte, 32),
@@ -287,7 +283,7 @@ func (c *Client) ReadPump() {
 		c.clientWg.Done()
 	}()
 
-	c.conn.SetReadLimit(4096) // 4KB max message size
+	c.conn.SetReadLimit(256) // 256 bytes; client messages are small
 	c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 	c.conn.SetPongHandler(func(string) error {
 		c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
