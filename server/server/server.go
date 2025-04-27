@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math"
@@ -69,6 +70,13 @@ type Server struct {
 	httpLogger                zerolog.Logger
 	coreLogger                zerolog.Logger
 	limits                    *xsync.Map[string, *limitingBucket]
+	backgroundJobCtx          context.Context
+	backgroundJobCancel       context.CancelFunc
+	backgroundJobWg           *sync.WaitGroup
+	clientWg                  *sync.WaitGroup
+	rootClientCtx             context.Context
+	rootClientCancel          context.CancelFunc
+	shutdownBegan             atomic.Bool
 }
 
 func NewServer(stateDir string) *Server {
@@ -76,6 +84,12 @@ func NewServer(stateDir string) *Server {
 	if err != nil {
 		panic(fmt.Sprintf("Error getting btd: %s", err))
 	}
+	backgroundJobCtx, backgroundJobCancel := context.WithCancel(context.Background())
+	backgroundJobWg := &sync.WaitGroup{}
+
+	rootClientCtx, rootClientCancel := context.WithCancel(context.Background())
+	clientWg := &sync.WaitGroup{}
+
 	board := boardToDiskHandler.GetLiveBoard()
 	httpLogger := NewCoreLogger().With().Str("kind", "http").Logger()
 	s := &Server{
@@ -94,9 +108,16 @@ func NewServer(stateDir string) *Server {
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
 			CheckOrigin: func(r *http.Request) bool {
+				// CR nroyalty: fix??
 				return true // Allow all origins for now
 			},
 		},
+		backgroundJobCtx:    backgroundJobCtx,
+		backgroundJobCancel: backgroundJobCancel,
+		backgroundJobWg:     backgroundJobWg,
+		rootClientCtx:       rootClientCtx,
+		rootClientCancel:    rootClientCancel,
+		clientWg:            clientWg,
 	}
 	return s
 }
@@ -111,22 +132,44 @@ func (s *Server) Run() {
 	go s.boardToDiskHandler.RunForever()
 }
 
+func (s *Server) GracefulShutdown() {
+	if s.shutdownBegan.CompareAndSwap(false, true) {
+		log.Printf("Waiting for clients to finish")
+		s.rootClientCancel()
+		s.clientWg.Wait()
+		log.Printf("Clients finished")
+
+		log.Printf("Waiting for background jobs to finish")
+		s.backgroundJobCancel()
+		s.backgroundJobWg.Wait()
+		log.Printf("Background jobs finished, shutting down BTD")
+		s.boardToDiskHandler.GracefulShutdown()
+	}
+}
+
 func (s *Server) ClearOldLimits() {
+	s.backgroundJobWg.Add(1)
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
+	defer s.backgroundJobWg.Done()
 
-	for range ticker.C {
-		atLeastOneMinuteAgo := time.Now().Add(-1 * time.Minute).UnixNano()
-		s.limits.Range(func(key string, value *limitingBucket) bool {
-			if value.count.Load() > 0 {
+	for {
+		select {
+		case <-s.backgroundJobCtx.Done():
+			return
+		case <-ticker.C:
+			atLeastOneMinuteAgo := time.Now().Add(-1 * time.Minute).UnixNano()
+			s.limits.Range(func(key string, value *limitingBucket) bool {
+				if value.count.Load() > 0 {
+					return true
+				}
+
+				if value.lastActionTimeNs.Load() < atLeastOneMinuteAgo {
+					s.limits.Delete(key)
+				}
 				return true
-			}
-
-			if value.lastActionTimeNs.Load() < atLeastOneMinuteAgo {
-				s.limits.Delete(key)
-			}
-			return true
-		})
+			})
+		}
 	}
 }
 
@@ -156,9 +199,16 @@ func (s *Server) refreshRecentCapturesPeriodically() {
 	go func() {
 		ticker := time.NewTicker(CAPTURE_REFRESH_INTERVAL)
 		defer ticker.Stop()
+		s.backgroundJobWg.Add(1)
+		defer s.backgroundJobWg.Done()
 
-		for range ticker.C {
-			s.refreshRecentCapturesOnce()
+		for {
+			select {
+			case <-s.backgroundJobCtx.Done():
+				return
+			case <-ticker.C:
+				s.refreshRecentCapturesOnce()
+			}
 		}
 	}()
 }
@@ -166,9 +216,16 @@ func (s *Server) refreshRecentCapturesPeriodically() {
 func (s *Server) refreshMinimapPeriodically() {
 	ticker := time.NewTicker(MINIMAP_REFRESH_INTERVAL)
 	defer ticker.Stop()
+	s.backgroundJobWg.Add(1)
+	defer s.backgroundJobWg.Done()
 
-	for range ticker.C {
-		s.minimapAggregator.createAndStoreAggregation()
+	for {
+		select {
+		case <-s.backgroundJobCtx.Done():
+			return
+		case <-ticker.C:
+			s.minimapAggregator.createAndStoreAggregation()
+		}
 	}
 }
 
@@ -209,16 +266,29 @@ func (s *Server) refreshStatsPeriodically() {
 	go func() {
 		ticker := time.NewTicker(STATS_REFRESH_INTERVAL)
 		defer ticker.Stop()
+		s.backgroundJobWg.Add(1)
+		defer s.backgroundJobWg.Done()
 
-		for range ticker.C {
-			s.refreshStatsOnce()
+		for {
+			select {
+			case <-s.backgroundJobCtx.Done():
+				return
+			case <-ticker.C:
+				s.refreshStatsOnce()
+			}
 		}
 	}()
 }
 
 func (s *Server) processMoves() {
+	s.backgroundJobWg.Add(1)
+	defer s.backgroundJobWg.Done()
+
 	for {
 		select {
+		case <-s.backgroundJobCtx.Done():
+			log.Printf("processMoves: context done")
+			return
 		case moveReq := <-s.moveRequests:
 			moveResult := s.board.ValidateAndApplyMove__NOTTHREADSAFE(moveReq.Move)
 			if !moveResult.Valid {
@@ -521,6 +591,11 @@ func (s *Server) DecrementCountForIp(ipString string) {
 }
 
 func (s *Server) ServeWs(w http.ResponseWriter, r *http.Request) {
+	if s.shutdownBegan.Load() {
+		http.Error(w, "Server is shutting down", http.StatusServiceUnavailable)
+		return
+	}
+
 	ipString, ipv6 := s.GetIPString(r)
 	limitResult := s.maybeAddNewIp(ipString, ipv6)
 	if limitResult == AddIpResultHardLimitExceeded {
@@ -565,7 +640,7 @@ func (s *Server) ServeWs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	softLimited := limitResult == AddIpResultSoftLimitExceeded
-	client := NewClient(conn, s, ipString, softLimited)
+	client := NewClient(conn, s, ipString, softLimited, s.clientWg, s.rootClientCtx)
 	pos := s.GetMaybeRequestedCoords(requestedXCoord, requestedYCoord)
 	playingWhite := s.DetermineColor(colorPref)
 	s.clientManager.RegisterClient(client, pos, playingWhite)
@@ -584,9 +659,9 @@ func (s *Server) ServeMinimap(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) ServeGlobalStats(w http.ResponseWriter, r *http.Request) {
-	s.httpLogger.Info().
-		Str("rpc", "ServeGlobalStats").
-		Send()
+	// s.httpLogger.Info().
+	// 	Str("rpc", "ServeGlobalStats").
+	// 	Send()
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "public, max-age=2, s-maxage=4")
 	s.currentStatsMutex.RLock()
@@ -595,9 +670,9 @@ func (s *Server) ServeGlobalStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) ServeRecentCaptures(w http.ResponseWriter, r *http.Request, white bool) {
-	s.httpLogger.Info().
-		Str("rpc", "ServeRecentCaptures").
-		Send()
+	// s.httpLogger.Info().
+	// 	Str("rpc", "ServeRecentCaptures").
+	// 	Send()
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "public, max-age=2, s-maxage=4")
 	s.recentCapturesMutex.RLock()
@@ -681,6 +756,11 @@ func (s *Server) ServeBulkCapture(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request, staticDir string) {
+	if s.shutdownBegan.Load() {
+		http.Error(w, "Server is shutting down", http.StatusServiceUnavailable)
+		return
+	}
+
 	if r.URL.Path == "/ws" {
 		s.ServeWs(w, r)
 		return

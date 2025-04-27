@@ -2,6 +2,7 @@ package server
 
 import (
 	"bufio"
+	"context"
 	"encoding/binary"
 	"encoding/gob"
 	"flag"
@@ -13,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -99,6 +101,9 @@ type BoardToDiskHandler struct {
 	done                chan struct{}
 	requestsToSerialize []boardToDiskRequest
 	logger              zerolog.Logger
+	ctx                 context.Context
+	cancel              context.CancelFunc
+	wg                  *sync.WaitGroup
 }
 
 type SnapshotHeader struct {
@@ -293,6 +298,8 @@ func NewBoardToDiskHandler(stateDir string) (*BoardToDiskHandler, error) {
 	gob.Register(adoptionRequest{})
 	gob.Register(bulkCaptureRequest{})
 	gob.Register(boardToDiskRequest{})
+	ctx, cancel := context.WithCancel(context.Background())
+	wg := &sync.WaitGroup{}
 
 	btd := &BoardToDiskHandler{
 		stateDir:            stateDir,
@@ -301,6 +308,9 @@ func NewBoardToDiskHandler(stateDir string) (*BoardToDiskHandler, error) {
 		board:               NewBoard(false),
 		requestsToSerialize: make([]boardToDiskRequest, 0, MAX_MOVES_TO_SERIALIZE),
 		logger:              NewCoreLogger().With().Str("kind", "btd-handler").Logger(),
+		ctx:                 ctx,
+		cancel:              cancel,
+		wg:                  wg,
 	}
 	lastFile, err := btd.SortedSnapshotFilenames()
 	if err != nil {
@@ -446,12 +456,44 @@ func (btd *BoardToDiskHandler) maybeSerializeCurrentRequests(blocking bool) erro
 	}
 }
 
+func (btd *BoardToDiskHandler) drainRequests() {
+	for {
+		select {
+		case req := <-btd.requests:
+			btd.apply(req)
+			btd.requestsToSerialize = append(btd.requestsToSerialize, req)
+		default:
+			return
+		}
+	}
+}
+
+func (btd *BoardToDiskHandler) GracefulShutdown() {
+	log.Printf("BTD: Beginning graceful shutdown")
+	btd.cancel()
+	log.Printf("BTD: Waiting for jobs to finish")
+	btd.wg.Wait()
+	log.Printf("BTD: Jobs finished, flushing queue")
+	btd.drainRequests()
+	log.Printf("Queue flushed, serializing %d requests", len(btd.requestsToSerialize))
+	btd.maybeSerializeCurrentRequests(true)
+	log.Printf("BTD: Getting snapshot")
+	snap := btd.getSnapshot()
+	log.Printf("BTD: Saving snapshot")
+	btd.saveToFile(snap)
+	log.Printf("BTD: Shutdown complete")
+}
+
 func (btd *BoardToDiskHandler) RunForever() {
 	boardSerializationTicker := time.NewTicker(BOARD_SERIALIZATION_INTERVAL)
 	requestSerializationTicker := time.NewTicker(MOVE_SERIALIZATION_INTERVAL)
+	btd.wg.Add(1)
+	defer btd.wg.Done()
 
 	for {
 		select {
+		case <-btd.ctx.Done():
+			return
 		case req := <-btd.requests:
 			btd.apply(req)
 			btd.requestsToSerialize = append(btd.requestsToSerialize, req)

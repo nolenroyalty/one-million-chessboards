@@ -88,6 +88,7 @@ func sleepSimulatedLatency() {
 }
 
 type Client struct {
+	// done                                           chan struct{}
 	conn                                           *websocket.Conn
 	server                                         *Server
 	send_DO_NOT_DO_RAW_WRITES_OR_YOU_WILL_BE_FIRED chan []byte
@@ -96,7 +97,6 @@ type Client struct {
 	moveBuffer                                     []*protocol.PieceDataForMove
 	captureBuffer                                  []*protocol.PieceCapture
 	bufferMu                                       sync.Mutex
-	done                                           chan struct{}
 	isClosed                                       atomic.Bool
 	lastActionTime                                 atomic.Int64
 	playingWhite                                   atomic.Bool
@@ -109,26 +109,37 @@ type Client struct {
 	hardRejectionWindowNS                          atomic.Int64
 	rejectionCount                                 atomic.Int64
 	pendingSnapshot                                atomic.Bool
+	clientWg                                       *sync.WaitGroup
+	clientCtx                                      context.Context
+	clientCancel                                   context.CancelFunc
 }
 
 // CR nroyalty: think HARD about your send channel and how big it should be.
 // it needs to be much smaller than the 2048 we used for benchmarking purposes.
 // 64 might still be too large (?)
-func NewClient(conn *websocket.Conn, server *Server, ipString string, softLimited bool) *Client {
+func NewClient(
+	conn *websocket.Conn,
+	server *Server,
+	ipString string,
+	softLimited bool,
+	clientWg *sync.WaitGroup,
+	rootClientCtx context.Context,
+) *Client {
 
 	limits := getLimits(softLimited)
 
 	snapshotLimiter := rate.NewLimiter(rate.Limit(limits.snapshotsPerSecond), limits.snapshotsBurstLimit)
 	moveLimiter := rate.NewLimiter(rate.Limit(limits.movesPerSecond), limits.movesBurstLimit)
+	clientCtx, clientCancel := context.WithCancel(rootClientCtx)
 
 	c := &Client{
+		// done:   make(chan struct{}),
 		conn:   conn,
 		server: server,
 		send_DO_NOT_DO_RAW_WRITES_OR_YOU_WILL_BE_FIRED: make(chan []byte, 32),
 		position:              atomic.Value{},
 		moveBuffer:            make([]*protocol.PieceDataForMove, 0, MOVE_BUFFER_SIZE),
 		captureBuffer:         make([]*protocol.PieceCapture, 0, CAPTURE_BUFFER_SIZE),
-		done:                  make(chan struct{}),
 		isClosed:              atomic.Bool{},
 		bufferMu:              sync.Mutex{},
 		lastActionTime:        atomic.Int64{},
@@ -140,6 +151,9 @@ func NewClient(conn *websocket.Conn, server *Server, ipString string, softLimite
 		hardRejectionWindowNS: atomic.Int64{},
 		rejectionCount:        atomic.Int64{},
 		pendingSnapshot:       atomic.Bool{},
+		clientWg:              clientWg,
+		clientCtx:             clientCtx,
+		clientCancel:          clientCancel,
 	}
 	c.rpcLogger.Info().
 		Str("rpc", "NewClient").
@@ -185,7 +199,7 @@ func (c *Client) compressAndSend(raw []byte, onDrop string, copyIfNoCompress boo
 	select {
 	case c.send_DO_NOT_DO_RAW_WRITES_OR_YOU_WILL_BE_FIRED <- payload:
 		return
-	case <-c.done:
+	case <-c.clientCtx.Done():
 		return
 	default:
 		c.Close("Send full: " + onDrop)
@@ -267,8 +281,10 @@ func (c *Client) UpdatePositionAndMaybeSnapshot(pos Position) {
 }
 
 func (c *Client) ReadPump() {
+	c.clientWg.Add(1)
 	defer func() {
 		c.Close("ReadPump")
+		c.clientWg.Done()
 	}()
 
 	c.conn.SetReadLimit(4096) // 4KB max message size
@@ -287,7 +303,7 @@ func (c *Client) ReadPump() {
 		}
 		var msg protocol.ClientMessage
 		if err := proto.Unmarshal(message, &msg); err != nil {
-			log.Printf("Error unmarshalling message: %v", err)
+			// log.Printf("Error unmarshalling message: %v", err)
 			continue
 		}
 		c.handleProtoMessage(&msg)
@@ -397,8 +413,10 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 }
 
 func (c *Client) WritePump() {
+	c.clientWg.Add(1)
 	defer func() {
 		c.Close("WritePump")
+		c.clientWg.Done()
 	}()
 
 	pingTicker := time.NewTicker(time.Second * 10)
@@ -420,7 +438,7 @@ func (c *Client) WritePump() {
 			}
 		case <-pingTicker.C:
 			c.conn.WriteMessage(websocket.PingMessage, nil)
-		case <-c.done:
+		case <-c.clientCtx.Done():
 			return
 		}
 	}
@@ -428,7 +446,11 @@ func (c *Client) WritePump() {
 
 func (c *Client) SendPeriodicUpdates() {
 	ticker := time.NewTicker(PeriodicUpdateInterval)
-	defer ticker.Stop()
+	c.clientWg.Add(1)
+	defer func() {
+		c.clientWg.Done()
+		ticker.Stop()
+	}()
 
 	for {
 		select {
@@ -436,7 +458,7 @@ func (c *Client) SendPeriodicUpdates() {
 			// CR nroyalty: we could avoid sending the periodic snapshot if
 			// we've recently sent one due to them moving around.
 			c.SendStateSnapshot()
-		case <-c.done:
+		case <-c.clientCtx.Done():
 			return
 		}
 	}
@@ -444,13 +466,17 @@ func (c *Client) SendPeriodicUpdates() {
 
 func (c *Client) ProcessMoveUpdates() {
 	ticker := time.NewTicker(maxWaitBeforeSendingMoves)
-	defer ticker.Stop()
+	c.clientWg.Add(1)
+	defer func() {
+		c.clientWg.Done()
+		ticker.Stop()
+	}()
 
 	for {
 		select {
 		case <-ticker.C:
 			c.MaybeSendMoveUpdates()
-		case <-c.done:
+		case <-c.clientCtx.Done():
 			return
 		}
 	}
@@ -585,7 +611,8 @@ func (c *Client) Close(why string) {
 	if !c.isClosed.CompareAndSwap(false, true) {
 		return
 	}
-	close(c.done)
+	// log.Printf("Closing client %s: %s", c.ipString, why)
+	c.clientCancel()
 	c.server.DecrementCountForIp(c.ipString)
 	c.server.clientManager.UnregisterClient(c)
 	c.conn.Close()
