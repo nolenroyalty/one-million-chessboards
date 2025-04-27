@@ -24,9 +24,6 @@ func main() {
 	flag.Parse()
 
 	server.SetUDPAddress(*udpAddr)
-	// ctx, cancel := context.WithCancel(context.Background())
-	// defer cancel()
-	// var wg sync.WaitGroup
 	s := server.NewServer(*stateDir)
 
 	s.Run()
