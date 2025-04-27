@@ -7,7 +7,7 @@ import { decompress } from "fzstd";
 import useStartBot from "../../hooks/use-start-bot";
 import { chess } from "../../protoCompiled.js";
 import protobuf from "protobufjs";
-// CR nroyalty: replace with partysocket
+// CR-someday nroyalty: replace with partysocket
 
 function parseServerMessage(buf) {
   const u8 = new Uint8Array(buf);
@@ -124,7 +124,6 @@ function useWebsocket({
         websocketRef.current = null;
       }
 
-      // CR nroyalty: handle exceptions here lmao
       let ws;
       ws = new WebSocket(wsUrl);
       websocketRef.current = ws;
@@ -329,7 +328,7 @@ class CoordsDebouncer {
     if (this.recentRequests.length === 0) {
       this.enqueueRequest(0);
     } else {
-      const delay = this.recentRequests.length <= 2 ? 50 : 250;
+      const delay = this.recentRequests.length <= 2 ? 75 : 325;
       this.enqueueRequest(delay);
     }
   }
@@ -414,7 +413,7 @@ function WebsocketProvider({ children }) {
           moveToken,
         })
       ) {
-        // CR nroyalty: figure out what to do once we move to partysocket...
+        // CR-someday nroyalty: figure out what to do once we move to partysocket...
         let incrLocalMoves = true;
         let incrLocalCaptures = false;
         if (capturedPiece) {
@@ -440,8 +439,7 @@ function WebsocketProvider({ children }) {
     [pieceHandler, statsHandler]
   );
 
-  // CR nroyalty: delete this before rolling to prod...
-  useStartBot({ pieceHandler, submitMove });
+  useStartBot({ pieceHandler: pieceHandler, submitMove });
 
   const value = React.useMemo(
     () => ({ connected, submitMove }),

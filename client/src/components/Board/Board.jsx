@@ -45,7 +45,7 @@ const SizedInner = styled.div`
   width: var(--width);
   height: var(--height);
   overflow: hidden;
-  animation: ${fadeIn} 0.5s ease-in-out both;
+  animation: ${fadeIn} 0.6s ease-in-out both;
   position: relative;
   -webkit-touch-callout: none; /* Safari */
   -webkit-user-select: none; /* Chrome */

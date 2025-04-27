@@ -7,8 +7,6 @@ import {
 
 import { chess } from "./protoCompiled.js";
 
-// CR nroyalty: install long.js?
-
 const OACTION = {
   MOVE: "move",
   CAPTURE: "capture",
@@ -460,7 +458,7 @@ class OptimisticState {
         if (predictedState.state === OACTION.CAPTURE) {
           // nothing else to do
         } else if (predictedState.state === OACTION.MOVE) {
-          // CR nroyalty: complain if this is already set for another
+          // CR-someday nroyalty: complain if this is already set for another
           // piece?
           predictedLocToPieceId.set(
             pieceKey(predictedState.x, predictedState.y),
@@ -494,9 +492,9 @@ class PieceHandler {
 
     this.activeCapturesByPieceId = new Map(); // pieceId -> seqnum
 
-    // CR nroyalty: implement this...
-    this.cachedCombinedView = null;
-    this.isCombinedViewCacheValid = false;
+    // CR-someday nroyalty: implement this...
+    // this.cachedCombinedView = null;
+    // this.isCombinedViewCacheValid = false;
     this.connected = false;
   }
 
@@ -525,11 +523,6 @@ class PieceHandler {
         this.broadcastAnimations({ animations });
       }
     }
-  }
-
-  _invalidateCaches() {
-    this.isCombinedViewCacheValid = false;
-    this.cachedCombinedView = null;
   }
 
   getIncrMoveToken() {
@@ -590,7 +583,8 @@ class PieceHandler {
     const receivedAt = performance.now();
     let captureToUse = capturedPiece;
     if (capturedPiece) {
-      // CR nroyalty: do you want to use getPieceById here?
+      // nroyalty: not obvious that we should use getPieceById here instead of
+      // just using our raw piece state?
       const mostRecentCapturedPiece = this.getPieceById(capturedPiece.id);
       if (
         !mostRecentCapturedPiece ||
@@ -619,12 +613,6 @@ class PieceHandler {
     this.broadcastAnimations({ animations });
   }
 
-  // CR nroyalty; We should engineer a case where we simulate a
-  // capture but then the piece
-  // moves out of the way and we un-capture it. this requires some tricky
-  // manipulation of timing.
-  //
-  // Finally, this is probably a place where we need to write some tests.
   confirmOptimisticMove({ moveToken, asOfSeqnum, capturedPieceId }) {
     // this.optimisticStateHandler._debugDumpState("before");
     const { groundTruthUpdates } =
@@ -1065,7 +1053,7 @@ class PieceHandler {
 
     // No need to compute captures if this snapshot is far away from our last
     // one (we'll be missing lots of pieces regardless)
-    // CR nroyalty: we should make this a little smarter by asking "should we expect
+    // CR-someday nroyalty: we should make this a little smarter by asking "should we expect
     // the missing piece to exist in the new snapshot window"
     if (shouldComputeSimulatedChanges) {
       for (const [oldPieceId, oldPiece] of this.piecesById) {
@@ -1144,7 +1132,7 @@ class PieceHandler {
         // nothing to do here; this could happen if we've already receive an ack
         // for our move but haven't received the actual capture update yet
       } else if (!currentPiece) {
-        // CR nroyalty: soon - only add move if it's somewhat close to where
+        // CR-someday nroyalty: only add move if it's somewhat close to where
         // we're looking!
         this.piecesById.set(piece.id, piece);
         const animation = animateAppearance({ piece, receivedAt });
@@ -1262,7 +1250,6 @@ class PieceHandler {
     return piece;
   }
 
-  // CR nroyalty: remove this??
   getPiecesById() {
     return this.piecesById;
   }

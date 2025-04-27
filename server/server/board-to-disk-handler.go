@@ -122,8 +122,10 @@ type Snapshot struct {
 	PiecesAndCoords []PieceAndCoords
 }
 
-// CR nroyalty: we could pool this but we'd need to be careful to zero out
-// piecesAndCoords whenever we retrieve from the pool!
+// CR-someday nroyalty: we could pool this but we'd need to be careful to zero out
+// piecesAndCoords whenever we retrieve from the pool! Given that we do this
+// infrequently, it's probably not worth the complexity and I suspect it would
+// be gc'd anyway..
 func (btd *BoardToDiskHandler) getSnapshot() (snapshot *Snapshot) {
 	start := time.Now()
 	header := SnapshotHeader{
@@ -140,6 +142,7 @@ func (btd *BoardToDiskHandler) getSnapshot() (snapshot *Snapshot) {
 	probableSize -= int(header.WhitePiecesCaptured)
 	probableSize -= int(header.BlackPiecesCaptured)
 	if probableSize < 0 {
+		btd.logger.Error().Str("error_kind", "probable_size_below_0").Int("probable_size", probableSize).Send()
 		log.Printf("PROBABLE SIZE BELOW 0? %d", probableSize)
 		probableSize = 0
 	}
@@ -165,6 +168,7 @@ func (btd *BoardToDiskHandler) getSnapshot() (snapshot *Snapshot) {
 		}
 	}
 	if probableSize != actualSize {
+		btd.logger.Error().Str("error_kind", "probable_size_is_not_actual_size").Int("probable", probableSize).Int("actual", actualSize).Send()
 		log.Printf("PROBABLE SIZE IS NOT ACTUAL SIZE? probable %d actual %d", probableSize, actualSize)
 	}
 	snapshot.Header.PieceCount = uint32(actualSize)
@@ -395,7 +399,7 @@ func (btd *BoardToDiskHandler) apply(req boardToDiskRequest) {
 			btd.panicWithContext(context, req)
 		}
 	default:
-		log.Printf("Unrecognized req? %v", req)
+		btd.logger.Error().Str("error_kind", "unrecognized_req").Str("req", req.ToString()).Send()
 	}
 }
 
@@ -468,6 +472,7 @@ func (btd *BoardToDiskHandler) maybeSerializeCurrentRequests(blocking bool) erro
 		go func() {
 			err := writeRequestsToDisk(path, toWrite, firstSeqnum, lastSeqnum)
 			if err != nil {
+				btd.logger.Error().Str("error_kind", "writing_moves_to_disk").AnErr("err", err).Send()
 				log.Printf("ERROR WRITING MOVES %v", err)
 			}
 		}()

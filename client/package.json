@@ -6,7 +6,7 @@
     "predev": "rimraf .parcel-cache dist",
     "dev": "parcel public/index.html",
     "prebuild": "rimraf .parcel-cache dist",
-    "build": "parcel build public/index.html --no-source-maps",
+    "build": "parcel build public/index.html",
     "new-component": "new-component"
   },
   "keywords": [],

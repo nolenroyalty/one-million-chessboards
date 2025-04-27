@@ -108,8 +108,22 @@ func NewServer(stateDir string) *Server {
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
 			CheckOrigin: func(r *http.Request) bool {
-				// CR nroyalty: fix??
-				return true // Allow all origins for now
+				origin := r.Header.Get("Origin")
+				if origin == "" {
+					return true // Allow direct connections (like from curl)
+				}
+
+				// Allow localhost for development
+				if strings.HasPrefix(origin, "http://localhost:") || strings.HasPrefix(origin, "https://localhost:") {
+					return true
+				}
+
+				// Allow the production domain
+				if strings.HasPrefix(origin, "https://onemillionchessboards.com") {
+					return true
+				}
+
+				return false
 			},
 		},
 		backgroundJobCtx:    backgroundJobCtx,
@@ -329,7 +343,7 @@ func (s *Server) processMoves() {
 				moveReq.Client.SendValidMove(moveReq.Move.MoveToken, moveResult.Seqnum, moveResult.CapturedPiece.Piece.ID)
 			}
 
-			// CR nroyalty: is there a way we can avoid the overhead of re-serializing a move
+			// CR-someday nroyalty: is there a way we can avoid the overhead of re-serializing a move
 			// for each client here? It's annoying that we might end up doing the same serialization
 			// for 100 different clients if they're looking at the same zones.
 			//
@@ -810,7 +824,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request, staticDir str
 		return
 	}
 
-	// CR nroyalty: remove later
 	switch r.URL.Path {
 	case "/debug/pprof/":
 		pprof.Index(w, r)

@@ -1,7 +1,5 @@
 package server
 
-// CR nroyalty: remove log lines here before shipping to prod?
-
 import (
 	"fmt"
 	"log"
@@ -30,6 +28,7 @@ type Board struct {
 	blackKingsCaptured                        atomic.Uint32
 	mutexTimeLogger_USEHELPERS_YOUFUCK        zerolog.Logger
 	snapshotDurationLogger_USEHELPERS_YOUFUCK zerolog.Logger
+	generalLogger                             zerolog.Logger
 }
 
 type GameStats struct {
@@ -62,6 +61,7 @@ func NewBoard(doLogging bool) *Board {
 		},
 		mutexTimeLogger_USEHELPERS_YOUFUCK:        NewCoreLogger().With().Str("kind", "board").Str("metric", "mutex_time").Logger(),
 		snapshotDurationLogger_USEHELPERS_YOUFUCK: NewCoreLogger().With().Str("kind", "board").Str("metric", "snapshot_duration").Logger(),
+		generalLogger: NewCoreLogger().With().Str("kind", "board").Logger(),
 	}
 }
 
@@ -131,6 +131,10 @@ func (b *Board) crossedSquaresAreEmpty(fromX, fromY, toX, toY uint16) bool {
 
 	if dx == 0 && dy == 0 {
 		log.Printf("BUG: crossedSquaresAreEmpty: %d %d %d %d", fromX, fromY, toX, toY)
+		b.generalLogger.Error().Str("error_kind", "crossed_squares_are_empty").
+			Uint16("from_x", fromX).Uint16("from_y", fromY).
+			Uint16("to_x", toX).Uint16("to_y", toY).
+			Send()
 		return false
 	}
 
@@ -139,6 +143,10 @@ func (b *Board) crossedSquaresAreEmpty(fromX, fromY, toX, toY uint16) bool {
 	for x != int32(toX) || y != int32(toY) {
 		if x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE {
 			log.Printf("BUG: crossedSquaresAreEmpty out of bounds: %d %d %d %d", fromX, fromY, toX, toY)
+			b.generalLogger.Error().Str("error_kind", "crossed_squares_are_empty_out_of_bounds").
+				Uint16("from_x", fromX).Uint16("from_y", fromY).
+				Uint16("to_x", toX).Uint16("to_y", toY).
+				Send()
 			return false
 		}
 		raw := b.pieces[y][x]
@@ -272,6 +280,10 @@ func (b *Board) DoBulkCapture(bulkCaptureRequest *bulkCaptureRequest) (*protocol
 
 	if startingX >= BOARD_SIZE || startingY >= BOARD_SIZE || endingX >= BOARD_SIZE || endingY >= BOARD_SIZE {
 		log.Printf("BUG: ClearBoard: out of bounds: %d %d %d %d", startingX, startingY, endingX, endingY)
+		b.generalLogger.Error().Str("error_kind", "clear_board_out_of_bounds").
+			Uint16("starting_x", startingX).Uint16("starting_y", startingY).
+			Uint16("ending_x", endingX).Uint16("ending_y", endingY).
+			Send()
 		return nil, fmt.Errorf("out of bounds: %d %d %d %d", startingX, startingY, endingX, endingY)
 	}
 
@@ -335,6 +347,10 @@ func (b *Board) Adopt(adoptionRequest *adoptionRequest) (*AdoptionResult, error)
 
 	if startingX >= BOARD_SIZE || startingY >= BOARD_SIZE || endingX >= BOARD_SIZE || endingY >= BOARD_SIZE {
 		log.Printf("BUG: Adopt: out of bounds: %d %d %d %d", startingX, startingY, endingX, endingY)
+		b.generalLogger.Error().Str("error_kind", "adopt_out_of_bounds").
+			Uint16("starting_x", startingX).Uint16("starting_y", startingY).
+			Uint16("ending_x", endingX).Uint16("ending_y", endingY).
+			Send()
 		return nil, fmt.Errorf("out of bounds: %d %d %d %d", startingX, startingY, endingX, endingY)
 	}
 
@@ -753,8 +769,9 @@ func (b *Board) GetStats() GameStats {
 	}
 }
 
-// CR nroyalty: LRU cache for a very small period of time??
-// CR nroyalty: we could pass in a function that returns the current position
+// CR-someday nroyalty: LRU cache for a very small period of time?? Pretty annoying
+// to implement with how we've done things so far.
+// CR-someday nroyalty: we could pass in a function that returns the current position
 // and use that to figure out the client's position at lock-aquisition time,
 // not lock-request time. Not a huge deal in practice probably.
 func (b *Board) GetBoardSnapshot_RETURN_TO_POOL_AFTER_YOU_FUCK(pos Position) *protocol.ServerStateSnapshot {

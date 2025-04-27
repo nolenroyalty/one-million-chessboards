@@ -58,15 +58,6 @@ type EncodedPiece uint64
 
 const EmptyEncodedPiece = EncodedPiece(0)
 
-// CR nroyalty: when serializing this for protobuffs, we may just want to
-// encode each piece as two uint32s, one for piece id and one for metadata. It seems
-// like maybe protobuffs use a surprising amount of space for bools.
-//
-// If we encode starting location in PieceId we can get rid of double move here
-// by just checking movecount and starting location. It's not super clear to me
-// that this is worth it (maybe we want to encode the starting location for other
-// reasons, but the complexity of double-moved detection gets higher for minor
-// savings, since JustDoubleMoved is default false so we don't have to encode it often)
 const (
 	PieceIdShift                          = 0  // 2**25 = 33,554,432 > 32,000,001
 	PieceTypeShift                        = 25 // 4 bits (7 piece types)

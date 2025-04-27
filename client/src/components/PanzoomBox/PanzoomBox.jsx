@@ -90,7 +90,6 @@ function PanzoomBox() {
         lastPanzoom.current.firstYMove = false;
       }
       if (dx !== 0 || dy !== 0) {
-        // CR nroyalty: make sure not to pan off the edge!!!
         setCoords((coords) => ({
           x: coords.x + dx,
           y: coords.y + dy,

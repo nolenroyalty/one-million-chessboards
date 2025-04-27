@@ -1,9 +1,5 @@
 package server
 
-// CR nroyalty: figure out how to debounce snapshot requests to the degree that we can;
-// also make sure when we move to a read-lock approach that we use our latest position
-// after getting the lock, instead of the position from when we tried to take the lock.
-
 import (
 	"context"
 	"log"
@@ -26,11 +22,10 @@ var marshalOpt = proto.MarshalOptions{Deterministic: false}
 // CR-someday nroyalty: large global rate-limiter
 
 const (
-	// CR nroyalty: MAKE SURE THIS IS NOT BELOW 60 AND MAYBE MAKE IT HIGHER
-	PeriodicUpdateInterval = time.Second * 60
-	activityThreshold      = time.Second * 20
-	// CR nroyalty: remove before release
-	simulatedLatency          = 951 * time.Millisecond
+	PeriodicUpdateInterval = time.Second * 63
+	activityThreshold      = time.Second * 15
+
+	simulatedLatency          = 1551 * time.Millisecond
 	simulatedJitterMs         = 1
 	maxWaitBeforeSendingMoves = 225 * time.Millisecond
 
@@ -94,6 +89,7 @@ type Client struct {
 	send_DO_NOT_DO_RAW_WRITES_OR_YOU_WILL_BE_FIRED chan []byte
 	position                                       atomic.Value
 	lastSnapshotPosition                           atomic.Value
+	lastSnapshotTimeMS                             atomic.Int64
 	moveBuffer                                     []*protocol.PieceDataForMove
 	captureBuffer                                  []*protocol.PieceCapture
 	bufferMu                                       sync.Mutex
@@ -139,6 +135,7 @@ func NewClient(
 		isClosed:              atomic.Bool{},
 		bufferMu:              sync.Mutex{},
 		lastActionTime:        atomic.Int64{},
+		lastSnapshotTimeMS:    atomic.Int64{},
 		playingWhite:          atomic.Bool{},
 		rpcLogger:             NewRPCLogger(ipString),
 		ipString:              ipString,
@@ -249,6 +246,10 @@ func (c *Client) UpdatePositionAndMaybeSnapshot(pos Position) {
 	c.server.clientManager.UpdateClientPosition(c, pos)
 	if shouldSendSnapshot(c.lastSnapshotPosition.Load().(Position), pos) {
 		if c.pendingSnapshot.CompareAndSwap(false, true) {
+			c.rpcLogger.Info().
+				Str("rpc", "SendSnapshotForSubsscribe").
+				Send()
+
 			go func() {
 				ctx := context.Background()
 
@@ -259,7 +260,6 @@ func (c *Client) UpdatePositionAndMaybeSnapshot(pos Position) {
 					}
 
 					c.SendStateSnapshot()
-
 					c.pendingSnapshot.Store(false)
 
 					if !shouldSendSnapshot(c.lastSnapshotPosition.Load().(Position),
@@ -331,14 +331,12 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 
 		if !CoordInBoundsInt(fromX) || !CoordInBoundsInt(fromY) ||
 			!CoordInBoundsInt(toX) || !CoordInBoundsInt(toY) {
-			log.Printf("Invalid move: %v", p)
 			return
 		}
 
 		if moveType != protocol.MoveType_MOVE_TYPE_NORMAL &&
 			moveType != protocol.MoveType_MOVE_TYPE_CASTLE &&
 			moveType != protocol.MoveType_MOVE_TYPE_EN_PASSANT {
-			log.Printf("Invalid move type: %v", moveType)
 			return
 		}
 
@@ -391,9 +389,6 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 		if !CoordInBoundsInt(centerX) || !CoordInBoundsInt(centerY) {
 			return
 		}
-		c.rpcLogger.Info().
-			Str("rpc", "Subscribe").
-			Send()
 		c.BumpActive()
 		c.UpdatePositionAndMaybeSnapshot(Position{X: uint16(centerX), Y: uint16(centerY)})
 	case *protocol.ClientMessage_Ping:
@@ -408,8 +403,6 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 			return
 		}
 		c.compressAndSend(message, "app-ping", false)
-	default:
-		log.Printf("Unknown message type: %v", p)
 	}
 }
 
@@ -456,9 +449,11 @@ func (c *Client) SendPeriodicUpdates() {
 	for {
 		select {
 		case <-ticker.C:
-			// CR nroyalty: we could avoid sending the periodic snapshot if
-			// we've recently sent one due to them moving around.
-			c.SendStateSnapshot()
+			lastSnapshotTimeMS := time.UnixMilli(c.lastSnapshotTimeMS.Load())
+			since := time.Since(lastSnapshotTimeMS)
+			if lastSnapshotTimeMS.IsZero() || since > time.Second*5 {
+				c.SendStateSnapshot()
+			}
 		case <-c.clientCtx.Done():
 			return
 		}
@@ -518,6 +513,8 @@ func (c *Client) SendStateSnapshot() {
 	}
 
 	c.lastSnapshotPosition.Store(pos)
+	c.lastSnapshotTimeMS.Store(time.Now().UnixMilli())
+
 	c.compressAndSend(message, "SendStateSnapshot", false)
 }
 

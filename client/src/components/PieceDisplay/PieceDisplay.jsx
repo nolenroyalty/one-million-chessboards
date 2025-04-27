@@ -1,10 +1,9 @@
 import React from "react";
-import styled from "styled-components";
+import styled, { keyframes } from "styled-components";
 import HandlersContext from "../HandlersContext/HandlersContext";
 import CoordsContext from "../CoordsContext/CoordsContext";
 import SelectedPieceAndSquaresContext from "../SelectedPieceAndSquaresContext/SelectedPieceAndSquaresContext";
 import CurrentColorContext from "../CurrentColorProvider/CurrentColorProvider";
-import LogicallyLoadingContext from "../LogicallyLoadingContext/LogicallyLoadingContext";
 
 import { Axe } from "lucide-react";
 import {
@@ -49,6 +48,15 @@ const PieceImg = styled.img`
   /* filter: url(#colorRemap) url(#binaryRemap); */
 `;
 
+const fadeIn = keyframes`
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+`;
+
 const PieceButtonWrapper = styled.button`
   all: unset;
   cursor: var(--cursor);
@@ -62,13 +70,25 @@ const PieceButtonWrapper = styled.button`
   align-items: center;
   justify-content: center;
   opacity: var(--opacity);
-  transition: opacity 0.3s ease;
+  /* transition: opacity 0.3s ease; */
+  /* it'd be nice to have some delay here but it interacts weirdly with all
+  the other animation stuff we do */
+  transition: opacity 0.3s cubic-bezier(0.33, 1, 0.68, 1);
+
+  &[data-just-appeared="true"] {
+    /* transition: opacity 0.3s ease; */
+    animation: ${fadeIn} 0.3s ease;
+  }
 
   &[data-captured="true"] {
     pointer-events: none;
+    animation: unset;
     cursor: none;
-    transition: opacity 0.3s cubic-bezier(0.33, 1, 0.68, 1) 0.1s;
     opacity: 0;
+  }
+
+  &[data-hiding-all="true"] {
+    opacity: 0 !important;
   }
 
   & svg {
@@ -93,19 +113,19 @@ function _Piece({
   captured,
   moveable,
   captureCount,
+  justAppeared,
 }) {
   const style = React.useMemo(() => {
     const defaultCursor = moveable ? "pointer" : "default";
     return {
       "--size": `${size}px`,
       transform: translate,
-      "--opacity": opacity,
       "--pointer-events": hidden || captured ? "none" : "auto",
       "--cursor": hidden || captured ? "none" : defaultCursor,
       "--axe-hover-scale": moveable ? 1.2 : 1,
       "--axe-transform": moveable && selected ? "scale(1.2)" : "scale(1)",
     };
-  }, [size, translate, captured, opacity, hidden, moveable, selected]);
+  }, [size, translate, captured, hidden, moveable, selected]);
 
   const imgStyle = React.useMemo(() => {
     return {
@@ -164,7 +184,9 @@ function _Piece({
     <PieceButtonWrapper
       data-id={dataId}
       data-captured={captured}
+      data-just-appeared={justAppeared && !captured}
       disabled={captured}
+      data-hiding-all={opacity === 0}
       // it's important that we use an inline style here because it lets
       // us override that style from our animation handler and then automatically
       // remove that overridden style when we re-render the piece
@@ -227,11 +249,6 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
       height: boardSizeParams.squareHeight,
     });
   }, [coords, boardSizeParams]);
-  const { recentlyLogicallyLoading } = React.useContext(
-    LogicallyLoadingContext
-  );
-
-  opacity = recentlyLogicallyLoading ? 0 : opacity;
 
   const piecesRefsMap = React.useRef(new Map());
   const capturedPiecesByIdRef = React.useRef(new Map());
@@ -320,7 +337,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
   React.useEffect(() => {
     // it's annoying, but we need to update the visible set of pieces as we pan around the board
     // (and we also need to update our subscription, since it relies on our visibility knowledge)
-    // CR nroyalty: I'm nervous that when we unsubscribe and resubscribe we risk losing piece updates?
+    // CR-someday nroyalty: I'm nervous that when we unsubscribe and resubscribe we risk losing piece updates?
     // Figure out how that works (I guess it's not the end of the world - we'd just see a few jumps
     // or disappearances)
     //
@@ -355,7 +372,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
           const wasVisible = visiblePiecesAndIdsRef.current.has(movedPiece.id);
           const oldPiece = visiblePiecesAndIdsRef.current.get(movedPiece.id);
           if (oldPiece) {
-            // CR nroyalty: in the past, we mutated the old piece in the case that
+            // nroyalty: in the past, we mutated the old piece in the case that
             // we were moving it off screen. I'm not actually sure why we did this?
             // it creates bugs when we revert a move
             // Just in case, override move's fromX and fromY with the coords of the currently
@@ -397,7 +414,6 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
           //   if (wasVisible && (startedVisible || endedVisible)) {
           //     // Already rendered, move is visible, do animation
           //     const oldPiece = visiblePiecesAndIdsRef.current.get(move.pieceId);
-          //     // CR nroyalty: why do we mutate oldPiece here? Can we get rid of this?
           //     oldPiece.x = move.toX;
           //     oldPiece.y = move.toY;
           //     // This is critical - without this, the piece may disappear instead of
@@ -456,8 +472,8 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
           }
         });
 
-        visiblePiecesAndIdsRef.current = newVisiblePiecesAndIds;
         const now = performance.now();
+        visiblePiecesAndIdsRef.current = newVisiblePiecesAndIds;
 
         movesToAdd.forEach((move) => {
           clearSelectedPieceForId(move.piece.id);
@@ -499,7 +515,6 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
           }
         }
 
-        // CR nroyalty: exercise this code path
         appearancesToAdd.forEach((appearance) => {
           const fakeMove = {
             fromX: appearance.piece.x,
@@ -507,6 +522,10 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
             piece: appearance.piece,
             receivedAt: appearance.receivedAt,
           };
+          const p = newVisiblePiecesAndIds.get(appearance.piece.id);
+          if (p) {
+            p.appearanceTime = appearance.receivedAt;
+          }
 
           if (capturedPiecesByIdRef.current.has(appearance.piece.id)) {
             console.log(`un-deleting piece ${appearance.piece.id}`);
@@ -520,7 +539,6 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
         });
 
         if (doUpdate) {
-          console.log("do update");
           setForceUpdate((prev) => prev + 1);
         }
       },
@@ -682,6 +700,9 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
         moveable = false;
       }
 
+      const justAppeared =
+        piece.appearanceTime && piece.appearanceTime > now - 500;
+
       memoizedPieces.push({
         piece,
         imageSrc: imageForPieceType({
@@ -692,6 +713,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
         selected,
         captured,
         moveable,
+        justAppeared,
       });
     }
 
@@ -712,7 +734,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
   ]);
 
   return memoizedPieces.map(
-    ({ piece, imageSrc, translate, captured, moveable }) => {
+    ({ piece, imageSrc, translate, captured, moveable, justAppeared }) => {
       return (
         <Piece
           key={piece.id}
@@ -727,6 +749,7 @@ function PieceDisplay({ boardSizeParams, hidden, opacity }) {
           selected={piece.id === selectedPiece?.id}
           captured={captured}
           moveable={moveable}
+          justAppeared={justAppeared}
           captureCount={piece.captureCount}
         />
       );

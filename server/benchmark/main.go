@@ -119,8 +119,8 @@ func ParseFrame(buf []byte) (*protocol.ServerMessage, error) {
 	return &out, nil
 }
 
-// CR nroyalty: instead of randomly disconnecting, maybe we should just
-// resub to a new area?
+// nroyalty: we could make this randomly subscribe to a new area every 0.5s
+// which would simulate load better (?)
 func (c *MainCounter) randomlySubscribe(doReconnects bool) {
 	for {
 		ws, _, err := websocket.DefaultDialer.Dial(getUrl(), nil)

@@ -23,6 +23,10 @@ export function SelectedPieceAndSquaresContextProvider({ children }) {
 
   const setSelectedPiece = React.useCallback(
     (piece) => {
+      if (!piece || piece.type === undefined) {
+        console.warn("setting selected piece to null");
+        return;
+      }
       let moveableSquares;
       if (RESPECT_COLOR_REQUIREMENT) {
         if (piece.isWhite !== currentColor.playingWhite) {
