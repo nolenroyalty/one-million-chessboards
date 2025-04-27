@@ -509,8 +509,14 @@ func (c *Client) ProcessMoveUpdates() {
 	}
 }
 
+// why is this not in the stdlib lmfao
 func dint16(a, b uint16) int {
-	return int(math.Abs((float64(a) - float64(b))))
+	ai := int(a)
+	bi := int(b)
+	if ai < bi {
+		return bi - ai
+	}
+	return ai - bi
 }
 
 const interestThreshold = VIEW_RADIUS + 2
