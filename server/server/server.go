@@ -132,17 +132,35 @@ func (s *Server) Run() {
 	go s.boardToDiskHandler.RunForever()
 }
 
+// https://stackoverflow.com/questions/32840687/timeout-for-waitgroup-wait
+func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
+	c := make(chan struct{})
+	go func() {
+		defer close(c)
+		wg.Wait()
+	}()
+	select {
+	case <-c:
+		return false // completed normally
+	case <-time.After(timeout):
+		return true // timed out
+	}
+}
+
 func (s *Server) GracefulShutdown() {
 	if s.shutdownBegan.CompareAndSwap(false, true) {
-		log.Printf("Waiting for clients to finish")
+		log.Printf("GRACEFUL SHUTDOWN: Waiting for clients to finish")
 		s.rootClientCancel()
-		s.clientWg.Wait()
-		log.Printf("Clients finished")
+		if waitTimeout(s.clientWg, 5*time.Second) {
+			log.Printf("GRACEFUL SHUTDOWN: Clients did not finish in time, continuing")
+		} else {
+			log.Printf("GRACEFUL SHUTDOWN: Clients finished")
+		}
 
-		log.Printf("Waiting for background jobs to finish")
+		log.Printf("GRACEFUL SHUTDOWN: Waiting for background jobs to finish")
 		s.backgroundJobCancel()
 		s.backgroundJobWg.Wait()
-		log.Printf("Background jobs finished, shutting down BTD")
+		log.Printf("GRACEFUL SHUTDOWN: 	Background jobs finished, shutting down BTD")
 		s.boardToDiskHandler.GracefulShutdown()
 	}
 }
