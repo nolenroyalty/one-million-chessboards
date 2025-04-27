@@ -44,30 +44,6 @@ type GameStats struct {
 	Seqnum               uint64
 }
 
-func (b *Board) getCopy() {
-	t := time.NewTicker(4 * time.Second)
-	defer t.Stop()
-
-	for range t.C {
-		slice := make([]uint64, 0, BOARD_SIZE*BOARD_SIZE/2)
-		b.RLock()
-		now := time.Now()
-		// copy := b.pieces
-		for y := uint16(0); y < BOARD_SIZE; y++ {
-			for x := uint16(0); x < BOARD_SIZE; x++ {
-				raw := b.pieces[y][x]
-				if !EncodedIsEmpty(EncodedPiece(raw)) {
-					slice = append(slice, raw)
-				}
-			}
-		}
-		took := time.Since(now)
-		log.Printf("took %dms to copy board", took.Milliseconds())
-		log.Printf("%d %d", slice[0], slice[1])
-		b.RUnlock()
-	}
-}
-
 func NewBoard(doLogging bool) *Board {
 	return &Board{
 		nextID:              1,

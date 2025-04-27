@@ -166,10 +166,12 @@ func (s *Server) GracefulShutdown() {
 }
 
 func (s *Server) ClearOldLimits() {
-	s.backgroundJobWg.Add(1)
 	ticker := time.NewTicker(1 * time.Minute)
-	defer ticker.Stop()
-	defer s.backgroundJobWg.Done()
+	s.backgroundJobWg.Add(1)
+	defer func() {
+		ticker.Stop()
+		s.backgroundJobWg.Done()
+	}()
 
 	for {
 		select {
@@ -216,9 +218,11 @@ func (s *Server) refreshRecentCapturesPeriodically() {
 	s.refreshRecentCapturesOnce()
 	go func() {
 		ticker := time.NewTicker(CAPTURE_REFRESH_INTERVAL)
-		defer ticker.Stop()
 		s.backgroundJobWg.Add(1)
-		defer s.backgroundJobWg.Done()
+		defer func() {
+			ticker.Stop()
+			s.backgroundJobWg.Done()
+		}()
 
 		for {
 			select {
@@ -233,9 +237,11 @@ func (s *Server) refreshRecentCapturesPeriodically() {
 
 func (s *Server) refreshMinimapPeriodically() {
 	ticker := time.NewTicker(MINIMAP_REFRESH_INTERVAL)
-	defer ticker.Stop()
 	s.backgroundJobWg.Add(1)
-	defer s.backgroundJobWg.Done()
+	defer func() {
+		ticker.Stop()
+		s.backgroundJobWg.Done()
+	}()
 
 	for {
 		select {
@@ -283,9 +289,11 @@ func (s *Server) refreshStatsPeriodically() {
 	s.refreshStatsOnce()
 	go func() {
 		ticker := time.NewTicker(STATS_REFRESH_INTERVAL)
-		defer ticker.Stop()
 		s.backgroundJobWg.Add(1)
-		defer s.backgroundJobWg.Done()
+		defer func() {
+			ticker.Stop()
+			s.backgroundJobWg.Done()
+		}()
 
 		for {
 			select {
