@@ -318,6 +318,11 @@ class OptimisticState {
     }
   }
 
+  pieceIsOptimisticallyTracked(pieceId) {
+    const actions = this.actionsByPieceId.get(pieceId) || [];
+    return actions.length !== 0;
+  }
+
   processConfirmation({ moveToken }) {
     const confirmedActions = this.actionsByToken.get(moveToken) || [];
     if (confirmedActions.length === 0) {
@@ -649,7 +654,18 @@ class PieceHandler {
         const ourPiece = this.piecesById.get(update.pieceId);
         if (ourPiece) {
           if (ourPiece.seqnum > asOfSeqnum) {
-            if (ourPiece.x !== update.x || ourPiece.y !== update.y) {
+            // ground truth state is newer than this update
+            if (
+              this.optimisticStateHandler.pieceIsOptimisticallyTracked(
+                update.pieceId
+              )
+            ) {
+              // we made multiple optimistic moves for the piece, one was confirmed,
+              // we still have more - we'll reconcile this in the future
+              console.log(
+                `not moving piece ${update.pieceId} because we still have simulated state for it`
+              );
+            } else if (ourPiece.x !== update.x || ourPiece.y !== update.y) {
               // We have a newer state for this piece and should make that
               // visible to the client.
               animations.push(
@@ -664,6 +680,7 @@ class PieceHandler {
               // we have newer state for this piece but it's consistent
             }
           } else {
+            // update ground truth, no need for new animations
             ourPiece.x = update.x;
             ourPiece.y = update.y;
             ourPiece.moveCount++;

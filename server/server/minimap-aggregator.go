@@ -170,8 +170,7 @@ func (m *MinimapAggregator) UpdateForMoveResult(moveResult MoveResult) {
 	if !moveResult.CapturedPiece.Piece.IsEmpty() {
 		needsUpdate = true
 	} else {
-		for i := range moveResult.Length {
-			movedPiece := moveResult.MovedPieces[i]
+		for _, movedPiece := range moveResult.MovedPieces {
 			fromCoords := getAggregatorCoords(movedPiece.FromX, movedPiece.FromY)
 			toCoords := getAggregatorCoords(movedPiece.ToX, movedPiece.ToY)
 			if fromCoords != toCoords {
@@ -188,8 +187,7 @@ func (m *MinimapAggregator) UpdateForMoveResult(moveResult MoveResult) {
 	m.Lock()
 	defer m.Unlock()
 
-	for i := range moveResult.Length {
-		movedPiece := moveResult.MovedPieces[i]
+	for _, movedPiece := range moveResult.MovedPieces {
 		fromCoords := getAggregatorCoords(movedPiece.FromX, movedPiece.FromY)
 		toCoords := getAggregatorCoords(movedPiece.ToX, movedPiece.ToY)
 		if fromCoords != toCoords {

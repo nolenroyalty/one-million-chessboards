@@ -20,11 +20,20 @@ import (
 // and their max half view radius is 35 or 36 depending on how you count.
 //
 // if we get weird reports of missing moves we can investigate further?
+//
+// Thinking about this the next morning, while we can clearly stick to 40x40 zones
+// and never not send a move based on where the client is currently looking, if
+// the client is on the edge of a zone the snapshot that they receive will exceed
+// past their zone (they get a snapshot of pieces on the far side but don't see
+// if they move)
+//
+// Maybe we set this to 50 and then like...add a check inside the client that
+// decides whether they should actually forward the move on. This seems reasonable.
 
 const (
 	BOARD_SIZE                  = 8000
 	SINGLE_BOARD_SIZE           = 8
-	ZONE_SIZE                   = 40
+	ZONE_SIZE                   = 50
 	ZONE_COUNT                  = BOARD_SIZE / ZONE_SIZE
 	TOTAL_ZONES                 = ZONE_COUNT * ZONE_COUNT
 	VIEW_RADIUS                 = 47

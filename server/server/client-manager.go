@@ -84,7 +84,14 @@ func (cm *ClientManager) UnregisterClient(client *Client) {
 	delete(cm.currentZonesForClient, client)
 }
 
-func (cm *ClientManager) UpdateClientPosition(client *Client, pos Position) {
+func (cm *ClientManager) UpdateClientPosition(client *Client, pos Position, oldPos Position) {
+	// no need to take the lock if the client is just scrolling around in their current zone
+	fromZone := GetZoneCoord(oldPos.X, oldPos.Y)
+	toZone := GetZoneCoord(pos.X, pos.Y)
+	if fromZone == toZone {
+		return
+	}
+
 	newZones := GetRelevantZones(pos)
 
 	cm.Lock()

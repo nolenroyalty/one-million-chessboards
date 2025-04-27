@@ -108,8 +108,7 @@ type MovedPieceResult struct {
 // MoveResult represents the outcome of a move validation
 type MoveResult struct {
 	Valid         bool
-	MovedPieces   [2]MovedPieceResult
-	Length        uint16
+	MovedPieces   []MovedPieceResult
 	CapturedPiece CaptureResult
 	Seqnum        uint64
 }
@@ -461,6 +460,7 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 		if dy != 0 {
 			return MoveResult{Valid: false}
 		}
+
 		// Must have a piece in the correct position
 		rookFromX := int32(move.FromX)
 		rookFromY := uint16(move.FromY)
@@ -542,9 +542,9 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 			ToX:   rookToX,
 			ToY:   rookToY,
 		}
-		movedPieces := [2]MovedPieceResult{kingMoveResult, rookMoveResult}
 
-		return MoveResult{Valid: true, MovedPieces: movedPieces, Length: 2, Seqnum: seqNum}
+		movedPieces := []MovedPieceResult{kingMoveResult, rookMoveResult}
+		return MoveResult{Valid: true, MovedPieces: movedPieces, Seqnum: seqNum}
 
 	case protocol.MoveType_MOVE_TYPE_EN_PASSANT:
 		// Must be a pawn
@@ -627,9 +627,9 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 			ToX:   move.ToX,
 			ToY:   move.ToY,
 		}
-		movedPieces := [2]MovedPieceResult{movedPieceResult}
+		movedPieces := []MovedPieceResult{movedPieceResult}
 
-		return MoveResult{Valid: true, MovedPieces: movedPieces, Length: 1,
+		return MoveResult{Valid: true, MovedPieces: movedPieces,
 			CapturedPiece: CaptureResult{
 				Piece: capturedPiece,
 				X:     capturedX,
@@ -734,11 +734,10 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 			ToX:   move.ToX,
 			ToY:   move.ToY,
 		}
-		movedPieces := [2]MovedPieceResult{movedPieceResult}
+		movedPieces := []MovedPieceResult{movedPieceResult}
 
 		if !capturedPiece.IsEmpty() {
 			return MoveResult{Valid: true, MovedPieces: movedPieces,
-				Length: 1,
 				CapturedPiece: CaptureResult{
 					Piece: capturedPiece,
 					X:     move.ToX,
@@ -747,7 +746,7 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 				Seqnum: seqNum,
 			}
 		} else {
-			return MoveResult{Valid: true, MovedPieces: movedPieces, Length: 1, Seqnum: seqNum}
+			return MoveResult{Valid: true, MovedPieces: movedPieces, Seqnum: seqNum}
 		}
 	default:
 		// log.Printf("Invalid move: Move type not supported")

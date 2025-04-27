@@ -42,6 +42,15 @@ const (
 
 	MOVE_REJECTION_RATE_LIMITING_WINDOW         = 5 * time.Second
 	MAX_MOVE_REJECTION_MESSAGES_IF_RATE_LIMITED = 5
+
+	MAX_MOVE_REJECTIONS_SENT_PER_SECOND_IF_RATE_LIMITED       = 1.5
+	MAX_MOVE_REJECTIONS_SENT_PER_SECOND_IF_RATE_LIMITED_BURST = 3
+
+	// I don't think there's a way a human can even hit the
+	// soft limit using the web client, but hopefully this gives
+	// us a little protection from bots
+	MAX_RECEIVED_MESSAGES_PER_SECOND      = 22
+	MAX_RECEIVED_MESSAGES_PER_SECOND_SOFT = 12
 )
 
 type limits struct {
@@ -49,6 +58,7 @@ type limits struct {
 	snapshotsBurstLimit int
 	movesPerSecond      int
 	movesBurstLimit     int
+	messagesPerSecond   int
 }
 
 func getLimits(soft bool) limits {
@@ -58,6 +68,7 @@ func getLimits(soft bool) limits {
 			snapshotsBurstLimit: SNAPSHOT_BURST_LIMIT_SOFT,
 			movesPerSecond:      MAX_MOVES_PER_SECOND_SOFT,
 			movesBurstLimit:     MOVE_BURST_LIMIT_SOFT,
+			messagesPerSecond:   MAX_RECEIVED_MESSAGES_PER_SECOND_SOFT,
 		}
 	}
 	return limits{
@@ -65,6 +76,7 @@ func getLimits(soft bool) limits {
 		snapshotsBurstLimit: SNAPSHOT_BURST_LIMIT,
 		movesPerSecond:      MAX_MOVES_PER_SECOND,
 		movesBurstLimit:     MOVE_BURST_LIMIT,
+		messagesPerSecond:   MAX_RECEIVED_MESSAGES_PER_SECOND,
 	}
 }
 
@@ -83,7 +95,6 @@ func sleepSimulatedLatency() {
 }
 
 type Client struct {
-	// done                                           chan struct{}
 	conn                                           *websocket.Conn
 	server                                         *Server
 	send_DO_NOT_DO_RAW_WRITES_OR_YOU_WILL_BE_FIRED chan []byte
@@ -102,8 +113,8 @@ type Client struct {
 	ipString                                       string
 	snapshotLimiter                                *rate.Limiter
 	moveLimiter                                    *rate.Limiter
-	hardRejectionWindowNS                          atomic.Int64
-	rejectionCount                                 atomic.Int64
+	moveRejectionOnRateLimitLimiter                *rate.Limiter
+	receivedMessagesLimiter                        *rate.Limiter
 	pendingSnapshot                                atomic.Bool
 	clientWg                                       *sync.WaitGroup
 	clientCtx                                      context.Context
@@ -123,38 +134,47 @@ func NewClient(
 
 	snapshotLimiter := rate.NewLimiter(rate.Limit(limits.snapshotsPerSecond), limits.snapshotsBurstLimit)
 	moveLimiter := rate.NewLimiter(rate.Limit(limits.movesPerSecond), limits.movesBurstLimit)
+	receivedMessagesLimiter := rate.NewLimiter(rate.Limit(limits.messagesPerSecond), limits.messagesPerSecond)
+
+	moveRejectionOnRateLimitLimiter := rate.NewLimiter(rate.Limit(MAX_MOVE_REJECTIONS_SENT_PER_SECOND_IF_RATE_LIMITED), MAX_MOVE_REJECTIONS_SENT_PER_SECOND_IF_RATE_LIMITED_BURST)
+
 	clientCtx, clientCancel := context.WithCancel(rootClientCtx)
+	rpcLogger := NewRPCLogger(ipString)
+
+	if softLimited {
+		// consume some of our burst immediately if we're soft limiting
+		receivedMessagesLimiter.AllowN(time.Now(), limits.messagesPerSecond/3)
+		rpcLogger = rpcLogger.With().Bool("soft_limited", true).Logger()
+	}
 
 	c := &Client{
 		conn:   conn,
 		server: server,
 		send_DO_NOT_DO_RAW_WRITES_OR_YOU_WILL_BE_FIRED: make(chan []byte, 32),
-		position:              atomic.Value{},
-		moveBuffer:            make([]*protocol.PieceDataForMove, 0, MOVE_BUFFER_SIZE),
-		captureBuffer:         make([]*protocol.PieceCapture, 0, CAPTURE_BUFFER_SIZE),
-		isClosed:              atomic.Bool{},
-		bufferMu:              sync.Mutex{},
-		lastActionTime:        atomic.Int64{},
-		lastSnapshotTimeMS:    atomic.Int64{},
-		playingWhite:          atomic.Bool{},
-		rpcLogger:             NewRPCLogger(ipString),
-		ipString:              ipString,
-		snapshotLimiter:       snapshotLimiter,
-		moveLimiter:           moveLimiter,
-		hardRejectionWindowNS: atomic.Int64{},
-		rejectionCount:        atomic.Int64{},
-		pendingSnapshot:       atomic.Bool{},
-		clientWg:              clientWg,
-		clientCtx:             clientCtx,
-		clientCancel:          clientCancel,
+		position:                        atomic.Value{},
+		moveBuffer:                      make([]*protocol.PieceDataForMove, 0, MOVE_BUFFER_SIZE),
+		captureBuffer:                   make([]*protocol.PieceCapture, 0, CAPTURE_BUFFER_SIZE),
+		isClosed:                        atomic.Bool{},
+		bufferMu:                        sync.Mutex{},
+		lastActionTime:                  atomic.Int64{},
+		lastSnapshotTimeMS:              atomic.Int64{},
+		playingWhite:                    atomic.Bool{},
+		rpcLogger:                       rpcLogger,
+		ipString:                        ipString,
+		snapshotLimiter:                 snapshotLimiter,
+		moveLimiter:                     moveLimiter,
+		receivedMessagesLimiter:         receivedMessagesLimiter,
+		moveRejectionOnRateLimitLimiter: moveRejectionOnRateLimitLimiter,
+		pendingSnapshot:                 atomic.Bool{},
+		clientWg:                        clientWg,
+		clientCtx:                       clientCtx,
+		clientCancel:                    clientCancel,
 	}
 	c.rpcLogger.Info().
 		Str("rpc", "NewClient").
 		Send()
 	c.isClosed.Store(false)
 	c.pendingSnapshot.Store(false)
-	c.hardRejectionWindowNS.Store(0)
-	c.rejectionCount.Store(0)
 	c.lastActionTime.Store(time.Now().Unix())
 	c.position.Store(Position{X: 0, Y: 0})
 	c.lastSnapshotPosition.Store(Position{X: 0, Y: 0})
@@ -241,9 +261,19 @@ func shouldSendSnapshot(lastSnapshotPosition Position, currentPosition Position)
 	return dx > float64(SNAPSHOT_THRESHOLD) || dy > float64(SNAPSHOT_THRESHOLD)
 }
 
+// nroyalty: you could imagine this causing trouble for us if tons of people
+// are scrolling around a whole lot or otherwise spamming us. we could rate limit
+// position updates independent of snapshot-sending just to avoid load on our server
+//
+// pretty easy to profile this by just spamming subscribe requests from a bunch of clients?
+//
+// I think we take care of this by just locking the number of messages a client can
+// send to us (at a pretty high level). Humans shouldn't be able to hit that limit,
+// but this should stop someone from burning our mutex with subscribes I think.
 func (c *Client) UpdatePositionAndMaybeSnapshot(pos Position) {
+	oldPosition := c.position.Load().(Position)
 	c.position.Store(pos)
-	c.server.clientManager.UpdateClientPosition(c, pos)
+	c.server.clientManager.UpdateClientPosition(c, pos, oldPosition)
 	if shouldSendSnapshot(c.lastSnapshotPosition.Load().(Position), pos) {
 		if c.pendingSnapshot.CompareAndSwap(false, true) {
 			c.rpcLogger.Info().
@@ -279,8 +309,8 @@ func (c *Client) UpdatePositionAndMaybeSnapshot(pos Position) {
 func (c *Client) ReadPump() {
 	c.clientWg.Add(1)
 	defer func() {
-		c.Close("ReadPump")
 		c.clientWg.Done()
+		c.Close("ReadPump")
 	}()
 
 	c.conn.SetReadLimit(256) // 256 bytes; client messages are small
@@ -297,6 +327,13 @@ func (c *Client) ReadPump() {
 			// log.Printf("Error reading message: %v", err)
 			break
 		}
+
+		if !c.receivedMessagesLimiter.Allow() {
+			c.rpcLogger.Info().
+				Str("disc", "max_messages_received").Send()
+			return
+		}
+
 		var msg protocol.ClientMessage
 		if err := proto.Unmarshal(message, &msg); err != nil {
 			// log.Printf("Error unmarshalling message: %v", err)
@@ -343,15 +380,9 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 		c.BumpActive()
 
 		if !c.moveLimiter.Allow() {
-			now := time.Now()
-			endOfWindow := now.Add(-1 * MOVE_REJECTION_RATE_LIMITING_WINDOW).UnixNano()
-			window := c.hardRejectionWindowNS.Load()
-			if window < endOfWindow {
-				c.hardRejectionWindowNS.Store(now.UnixNano())
-				c.rejectionCount.Store(0)
-			}
-			count := c.rejectionCount.Add(1)
-			if count > MAX_MOVE_REJECTION_MESSAGES_IF_RATE_LIMITED {
+			// if a client is spamming us with moves we don't need to spam them back with rejections
+			// they'll figure it out
+			if !c.moveRejectionOnRateLimitLimiter.Allow() {
 				return
 			} else {
 				c.rpcLogger.Info().
@@ -409,8 +440,8 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 func (c *Client) WritePump() {
 	c.clientWg.Add(1)
 	defer func() {
-		c.Close("WritePump")
 		c.clientWg.Done()
+		c.Close("WritePump")
 	}()
 
 	pingTicker := time.NewTicker(time.Second * 10)
@@ -476,6 +507,24 @@ func (c *Client) ProcessMoveUpdates() {
 			return
 		}
 	}
+}
+
+func dint16(a, b uint16) int {
+	return int(math.Abs((float64(a) - float64(b))))
+}
+
+const interestThreshold = VIEW_RADIUS + 2
+
+func (c *Client) IsInterestedInMove(move Move) bool {
+	currentPos := c.position.Load().(Position)
+
+	dxf, dyf := dint16(move.FromX, currentPos.X), dint16(move.FromY, currentPos.Y)
+	dxt, dyt := dint16(move.ToX, currentPos.X), dint16(move.ToY, currentPos.Y)
+	if (dxf <= interestThreshold && dyf <= interestThreshold) ||
+		(dxt <= interestThreshold && dyt <= interestThreshold) {
+		return true
+	}
+	return false
 }
 
 func (c *Client) AddMovesToBuffer(moves []*protocol.PieceDataForMove, capture *protocol.PieceCapture) {
@@ -553,8 +602,6 @@ func (c *Client) MaybeSendMoveUpdates() {
 		return
 	}
 
-	// if we don't compress, we should copy the buffer because we
-	// may reuse it for the next send
 	c.compressAndSend(buf, "SendMoveUpdates", true)
 }
 

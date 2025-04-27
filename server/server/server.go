@@ -354,19 +354,27 @@ func (s *Server) processMoves() {
 			//
 			// nroyalty: lol I found a funny client rendering bug (or set of bugs) as a result
 			// of testing this, but I failed to actually test it. Let's not worry about it.
+			//
+			// Ok I think this doesn't matter in practice regardless but since our zones
+			// are slightly bigger than our snapshots it super doesn't matter
 			go func() {
+				numMoved := len(moveResult.MovedPieces)
+				if numMoved < 1 {
+					log.Printf("IMPOSSIBLE? moveResult length < 1")
+					return
+				}
 				s.minimapAggregator.UpdateForMoveResult(moveResult)
 				capturedPiece := moveResult.CapturedPiece
-				movedPieces := make([]*protocol.PieceDataForMove, moveResult.Length)
-				for i := 0; i < int(moveResult.Length); i++ {
-					piece := moveResult.MovedPieces[i].Piece
+				movedPiecesProto := make([]*protocol.PieceDataForMove, 0, numMoved)
+				for _, movedPiece := range moveResult.MovedPieces {
+					piece := movedPiece.Piece
 
-					movedPieces[i] = &protocol.PieceDataForMove{
-						X:      uint32(moveResult.MovedPieces[i].ToX),
-						Y:      uint32(moveResult.MovedPieces[i].ToY),
+					movedPiecesProto = append(movedPiecesProto, &protocol.PieceDataForMove{
+						X:      uint32(movedPiece.ToX),
+						Y:      uint32(movedPiece.ToY),
 						Seqnum: moveResult.Seqnum,
 						Piece:  piece.ToProtocolAlloc(),
-					}
+					})
 				}
 
 				var pieceCapture *protocol.PieceCapture = nil
@@ -379,8 +387,22 @@ func (s *Server) processMoves() {
 				}
 				affectedZones := s.clientManager.GetAffectedZones(moveReq.Move)
 				interestedClients := s.clientManager.GetClientsForZones(affectedZones)
+				// Each zone is 50x50 and a client is typically in 9 of them, so we
+				// offer them each move in a 150x150 zone that is not necessarily centered
+				// exactly on where they are. Depending on their position within their
+				// central zone, plenty of moves aren't going to be relevant to them
+				// (outside of their current snapshot window)
+				//
+				// I suppose it depends on access patterns in some way, but I think
+				// in practice checking before sending a move to a client is just gonna
+				// be faster than slamming out every move, given that I think we should
+				// drop a reasonable amount of moves with this check.
+				//
+				// potential bug around castle notification again here?
 				for client := range interestedClients {
-					client.AddMovesToBuffer(movedPieces, pieceCapture)
+					if client.IsInterestedInMove(moveReq.Move) {
+						client.AddMovesToBuffer(movedPiecesProto, pieceCapture)
+					}
 				}
 				s.clientManager.ReturnClientMap(interestedClients)
 			}()
@@ -521,6 +543,7 @@ func (s *Server) GetDefaultCoords() Position {
 		pos.Y = IncrOrDecrPosition(pos.Y)
 		return pos
 	}
+	// CR nroyalty: use random capture location instead?
 
 	x := 500 + rand.Intn(BOARD_SIZE-1000)
 	y := 500 + rand.Intn(BOARD_SIZE-1000)

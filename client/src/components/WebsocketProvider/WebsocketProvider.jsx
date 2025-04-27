@@ -328,7 +328,7 @@ class CoordsDebouncer {
     if (this.recentRequests.length === 0) {
       this.enqueueRequest(0);
     } else {
-      const delay = this.recentRequests.length <= 2 ? 75 : 325;
+      const delay = this.recentRequests.length <= 2 ? 75 : 350;
       this.enqueueRequest(delay);
     }
   }
@@ -439,7 +439,7 @@ function WebsocketProvider({ children }) {
     [pieceHandler, statsHandler]
   );
 
-  useStartBot({ pieceHandler: pieceHandler, submitMove });
+  //   useStartBot({ pieceHandler: pieceHandler, submitMove });
 
   const value = React.useMemo(
     () => ({ connected, submitMove }),
