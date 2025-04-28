@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"math"
 	"one-million-chessboards/protocol"
 )
 
@@ -71,7 +70,7 @@ func (move *Move) BoundsCheck() bool {
 }
 
 func (move *Move) ExceedsMaxMoveDistance() bool {
-	dx := int32(move.ToX) - int32(move.FromX)
-	dy := int32(move.ToY) - int32(move.FromY)
-	return math.Abs(float64(dx)) > MAX_MOVE_DISTANCE || math.Abs(float64(dy)) > MAX_MOVE_DISTANCE
+	dx := AbsDiffUint16(move.ToX, move.FromX)
+	dy := AbsDiffUint16(move.ToY, move.FromY)
+	return dx > MAX_MOVE_DISTANCE || dy > MAX_MOVE_DISTANCE
 }

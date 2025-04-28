@@ -3,7 +3,6 @@ package server
 import (
 	"fmt"
 	"log"
-	"math"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -161,13 +160,15 @@ func (b *Board) crossedSquaresAreEmpty(fromX, fromY, toX, toY uint16) bool {
 
 func (b *Board) satisfiesPawnMoveRules(movedPiece Piece, capturedPiece Piece, move Move) bool {
 	dy := int32(move.ToY) - int32(move.FromY)
-	absDy := int32(math.Abs(float64(dy)))
+	absDy := AbsInt32(dy)
+
 	// at most 2 squares vertically
 	if absDy != 1 && absDy != 2 {
 		return false
 	}
 	dx := int32(move.ToX) - int32(move.FromX)
-	absDx := int32(math.Abs(float64(dx)))
+	absDx := AbsInt32(dx)
+
 	// at most 1 square horizontally
 	if absDx != 0 && absDx != 1 {
 		return false
@@ -195,8 +196,8 @@ func (b *Board) satisfiesPawnMoveRules(movedPiece Piece, capturedPiece Piece, mo
 func (b *Board) satisfiesKnightMoveRules(move Move) bool {
 	dx := int32(move.ToX) - int32(move.FromX)
 	dy := int32(move.ToY) - int32(move.FromY)
-	absDx := int32(math.Abs(float64(dx)))
-	absDy := int32(math.Abs(float64(dy)))
+	absDx := AbsInt32(dx)
+	absDy := AbsInt32(dy)
 	if absDx == 2 && absDy == 1 || absDx == 1 && absDy == 2 {
 		return true
 	}
@@ -204,8 +205,8 @@ func (b *Board) satisfiesKnightMoveRules(move Move) bool {
 }
 
 func (b *Board) satisfiesBishopMoveRules_aux(move Move) bool {
-	absDx := int32(math.Abs(float64(move.ToX) - float64(move.FromX)))
-	absDy := int32(math.Abs(float64(move.ToY) - float64(move.FromY)))
+	absDx := AbsDiffUint16(move.ToX, move.FromX)
+	absDy := AbsDiffUint16(move.ToY, move.FromY)
 	return absDx == absDy
 }
 
@@ -232,10 +233,8 @@ func (b *Board) satisfiesQueenMoveRules(move Move) bool {
 }
 
 func (b *Board) satisfiesKingMoveRules(move Move) bool {
-	dx := int32(move.ToX) - int32(move.FromX)
-	dy := int32(move.ToY) - int32(move.FromY)
-	absDx := int32(math.Abs(float64(dx)))
-	absDy := int32(math.Abs(float64(dy)))
+	absDx := AbsDiffUint16(move.ToX, move.FromX)
+	absDy := AbsDiffUint16(move.ToY, move.FromY)
 	if absDx > 1 || absDy > 1 {
 		return false
 	}

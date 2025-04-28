@@ -7,6 +7,29 @@ import (
 	"os"
 )
 
+// WHY IS THIS NOT IN THE STDLIB
+func AbsInt32(a int32) int32 {
+	if a < 0 {
+		return -a
+	}
+	return a
+}
+
+func AbsInt(a int) int {
+	if a < 0 {
+		return -a
+	}
+	return a
+}
+
+func AbsDiffInt(a, b int) int {
+	return AbsInt(a - b)
+}
+
+func AbsDiffUint16(a, b uint16) int {
+	return AbsDiffInt(int(a), int(b))
+}
+
 func WriteFileAtomic(finalPath string, writeData func(writer io.Writer) error) error {
 	tmpPath := finalPath + ".tmp"
 	tempFile, err := os.Create(tmpPath)

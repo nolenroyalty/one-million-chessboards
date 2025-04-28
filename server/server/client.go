@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"log"
-	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -256,9 +255,9 @@ func (c *Client) BumpActive() {
 const SNAPSHOT_THRESHOLD = VIEW_RADIUS - MAX_CLIENT_HALF_VIEW_RADIUS
 
 func shouldSendSnapshot(lastSnapshotPosition Position, currentPosition Position) bool {
-	dx := math.Abs(float64(lastSnapshotPosition.X) - float64(currentPosition.X))
-	dy := math.Abs(float64(lastSnapshotPosition.Y) - float64(currentPosition.Y))
-	return dx > float64(SNAPSHOT_THRESHOLD) || dy > float64(SNAPSHOT_THRESHOLD)
+	dx := AbsDiffUint16(lastSnapshotPosition.X, currentPosition.X)
+	dy := AbsDiffUint16(lastSnapshotPosition.Y, currentPosition.Y)
+	return dx > SNAPSHOT_THRESHOLD || dy > SNAPSHOT_THRESHOLD
 }
 
 // nroyalty: you could imagine this causing trouble for us if tons of people
@@ -341,10 +340,6 @@ func (c *Client) ReadPump() {
 		}
 		c.handleProtoMessage(&msg)
 	}
-}
-
-func CoordInBounds(coord float64) bool {
-	return coord >= 0 && uint16(coord) < BOARD_SIZE
 }
 
 func CoordInBoundsInt(coord uint32) bool {
