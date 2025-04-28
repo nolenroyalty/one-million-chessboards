@@ -292,7 +292,7 @@ func (s *Server) refreshStatsOnce() {
 	}
 
 	boardStats := s.board.GetStats()
-	winner := "n"
+	winner := ""
 	noWhiteKings := boardStats.WhiteKingsRemaining == 0
 	noBlackKings := boardStats.BlackKingsRemaining == 0
 	onlyWhiteKings := boardStats.WhitePiecesRemaining == boardStats.WhiteKingsRemaining

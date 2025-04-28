@@ -13,6 +13,10 @@ import { CurrentColorProvider } from "../CurrentColorProvider/CurrentColorProvid
 import WebsocketProvider from "../WebsocketProvider/WebsocketProvider";
 import { GameOverContextProvider } from "../GameOverContext/GameOverContext";
 
+// CR nroyalty: bump up max-width a bit
+// CR nroyalty: lower the max-height a bit. test on your desktop
+// CR nroyalty: maybe bump the max size of each square a little bit too? play around a
+// little bit
 const Main = styled.main`
   display: flex;
   flex-direction: column;

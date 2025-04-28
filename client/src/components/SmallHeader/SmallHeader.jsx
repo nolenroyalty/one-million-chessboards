@@ -87,6 +87,7 @@ const GameOverDiv = styled.div`
   z-index: 100;
   border: 1px solid var(--border-color);
   border-top: none;
+  opacity: var(--opacity);
 
   @media (${QUERY.VERY_SMALL}) {
     width: 100%;
@@ -119,6 +120,10 @@ function MaybeShowGameOver({ gameOver }) {
   const [hideGameOver, setHideGameOver] = React.useState(false);
 
   let translateY = gameOver.over && !hideGameOver ? "0%" : "-115%";
+  let opacity = 0;
+  if (gameOver.over) {
+    opacity = 1;
+  }
   let backgroundColor;
   let textColor;
   let borderColor;
@@ -131,12 +136,13 @@ function MaybeShowGameOver({ gameOver }) {
     textColor = "var(--color-neutral-800)";
     borderColor = "var(--color-neutral-950)";
   }
+
   let headerText = "";
   if (gameOver.winner === "black") {
     headerText = "👑 Black wins! 👑";
   } else if (gameOver.winner === "white") {
     headerText = "👑 White wins! 👑";
-  } else {
+  } else if (gameOver.winner === "draw") {
     headerText = "The game was a DRAW?!?";
   }
 
@@ -147,11 +153,12 @@ function MaybeShowGameOver({ gameOver }) {
         "--background-color": backgroundColor,
         "--text-color": textColor,
         "--border-color": borderColor,
+        "--opacity": opacity,
       }}
     >
-      <GameOverDivHeader>{headerText}</GameOverDivHeader>
-      {gameOver.winner !== "n" && (
+      {gameOver.over && (
         <>
+          <GameOverDivHeader>{headerText}</GameOverDivHeader>
           <GameOverDivBody>
             Thank you for playing the first game of One Million Chessboards. I
             hope this was fun.

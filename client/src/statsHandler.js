@@ -58,20 +58,19 @@ class StatsHandler {
         throw new Error(`HTTP error! status: ${res.status}`);
       }
       const stats = await res.json();
-      if (stats.winner && stats.winner !== "n" && this.winner === null) {
+      if (stats.winner && stats.winner !== "" && this.winner === null) {
         console.log("Game over! Winner: ", stats.winner);
         this.winner = stats.winner;
         this.setGameOver({ over: true, winner: stats.winner });
-      } else if (this.winner !== null && stats.winner === "n") {
+      } else if (this.winner !== null && stats.winner === "") {
         console.log("Game-un-over??");
         this.winner = null;
         this.setGameOver({ over: false, winner: "" });
       } else if (
         this.winner !== null &&
-        stats.winner !== "n" &&
+        stats.winner !== "" &&
         this.winner !== stats.winner
       ) {
-        console.log("winner changed! ", this.winner, " -> ", stats.winner);
         this.winner = stats.winner;
         this.setGameOver({ over: true, winner: stats.winner });
       }
