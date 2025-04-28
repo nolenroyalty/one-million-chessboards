@@ -351,10 +351,6 @@ func CoordInBoundsInt(coord uint32) bool {
 func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 	switch p := msg.Payload.(type) {
 	case *protocol.ClientMessage_Move:
-		if c.server.gameOver.Load() {
-			return
-		}
-
 		pieceID := p.Move.PieceId
 		fromX := p.Move.FromX
 		fromY := p.Move.FromY
@@ -362,6 +358,18 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 		toY := p.Move.ToY
 		moveType := p.Move.MoveType
 		moveToken := p.Move.MoveToken
+
+		if c.server.gameOver.Load() {
+			if !c.moveRejectionOnRateLimitLimiter.Allow() {
+				return
+			} else {
+				c.rpcLogger.Info().
+					Str("rpc", "MoveAfterGameOver").
+					Send()
+				c.SendInvalidMove(moveToken)
+				return
+			}
+		}
 
 		c.rpcLogger.Info().
 			Str("rpc", "MovePiece").

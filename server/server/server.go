@@ -318,7 +318,7 @@ func (s *Server) refreshStatsOnce() {
 		s.processMovesCancel()
 		go func() {
 			for req := range s.moveRequests {
-				_ = req
+				req.Client.SendInvalidMove(req.Move.MoveToken)
 			}
 		}()
 	}
