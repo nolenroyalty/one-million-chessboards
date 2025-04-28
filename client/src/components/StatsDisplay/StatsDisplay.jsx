@@ -151,13 +151,13 @@ function TextLines({ stats }) {
         label="Pieces"
         blackValue={stats.blackPiecesRemaining}
         whiteValue={stats.whitePiecesRemaining}
-        maxValue={(stats.whitePiecesRemaining + stats.blackPiecesRemaining) / 2}
+        maxValue={16000000}
       />
       <WhiteBlackDisplay
         label="Kings"
         blackValue={stats.blackKingsRemaining}
         whiteValue={stats.whiteKingsRemaining}
-        maxValue={(stats.whiteKingsRemaining + stats.blackKingsRemaining) / 2}
+        maxValue={1000000}
       />
     </TextLinesWrapper>
   );

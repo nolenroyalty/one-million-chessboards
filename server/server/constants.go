@@ -45,6 +45,7 @@ const (
 	MINIMAP_REFRESH_INTERVAL    = time.Second * 10
 	STATS_REFRESH_INTERVAL      = time.Second * 1
 	CAPTURE_REFRESH_INTERVAL    = time.Second * 1
+	TOTAL_KINGS_PER_SIDE        = 1000000
 )
 
 var GLOBAL_zstdPool = sync.Pool{

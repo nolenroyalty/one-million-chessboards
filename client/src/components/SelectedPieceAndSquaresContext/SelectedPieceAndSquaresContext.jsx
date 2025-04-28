@@ -3,6 +3,7 @@ import HandlersContext from "../HandlersContext/HandlersContext";
 import ShowLargeBoardContext from "../ShowLargeBoardContext/ShowLargeBoardContext";
 import CurrentColorContext from "../CurrentColorProvider/CurrentColorProvider";
 import { RESPECT_COLOR_REQUIREMENT } from "../../constants";
+import GameOverContext from "../GameOverContext/GameOverContext";
 const SelectedPieceAndSquaresContext = React.createContext();
 
 export function SelectedPieceAndSquaresContextProvider({ children }) {
@@ -13,6 +14,7 @@ export function SelectedPieceAndSquaresContextProvider({ children }) {
   });
   const { showLargeBoard } = React.useContext(ShowLargeBoardContext);
   const { currentColor } = React.useContext(CurrentColorContext);
+  const { gameOver } = React.useContext(GameOverContext);
 
   const clearSelectedPiece = React.useCallback(() => {
     setSelectedPieceAndSquares({
@@ -28,7 +30,9 @@ export function SelectedPieceAndSquaresContextProvider({ children }) {
         return;
       }
       let moveableSquares;
-      if (RESPECT_COLOR_REQUIREMENT) {
+      if (gameOver.over) {
+        moveableSquares = new Map();
+      } else if (RESPECT_COLOR_REQUIREMENT) {
         if (piece.isWhite !== currentColor.playingWhite) {
           moveableSquares = new Map();
         } else {
@@ -42,7 +46,7 @@ export function SelectedPieceAndSquaresContextProvider({ children }) {
         moveableSquares,
       });
     },
-    [pieceHandler, currentColor.playingWhite]
+    [pieceHandler, currentColor.playingWhite, gameOver.over]
   );
 
   const clearSelectedPieceForId = React.useCallback((id) => {
@@ -89,7 +93,7 @@ export function SelectedPieceAndSquaresContextProvider({ children }) {
       ? selectedPieceAndSquares.selectedPiece?.isWhite ===
         currentColor.playingWhite
       : true;
-    if (haveSelectedPiece && colorMatches) {
+    if (haveSelectedPiece && colorMatches && !gameOver.over) {
       intervalId = setInterval(refreshMoveableSquares, 800);
     } else {
       clearInterval(intervalId);
@@ -99,6 +103,7 @@ export function SelectedPieceAndSquaresContextProvider({ children }) {
     pieceHandler,
     selectedPieceAndSquares.selectedPiece,
     currentColor.playingWhite,
+    gameOver.over,
   ]);
 
   const value = React.useMemo(

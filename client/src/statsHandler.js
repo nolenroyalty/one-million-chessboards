@@ -6,7 +6,8 @@ const BASE_STATS_REFRESH_INTERVAL = 1900;
 const INTERVAL_VARIANCE = 600;
 
 class StatsHandler {
-  constructor() {
+  constructor({ setGameOver }) {
+    this.setGameOver = setGameOver;
     this.totalMoves = 0;
     this.whitePiecesRemaining = 0;
     this.blackPiecesRemaining = 0;
@@ -16,6 +17,7 @@ class StatsHandler {
     this.moveSeqnumsToApply = [];
     this.capturesToApply = [];
     this.seqnum = 0;
+    this.winner = null;
     try {
       const yourMoves = localStorage.getItem(YOUR_MOVES_KEY);
       this.yourMoves = yourMoves ? parseInt(yourMoves) : 0;
@@ -56,6 +58,23 @@ class StatsHandler {
         throw new Error(`HTTP error! status: ${res.status}`);
       }
       const stats = await res.json();
+      if (stats.winner && stats.winner !== "n" && this.winner === null) {
+        console.log("Game over! Winner: ", stats.winner);
+        this.winner = stats.winner;
+        this.setGameOver({ over: true, winner: stats.winner });
+      } else if (this.winner !== null && stats.winner === "n") {
+        console.log("Game-un-over??");
+        this.winner = null;
+        this.setGameOver({ over: false, winner: "" });
+      } else if (
+        this.winner !== null &&
+        stats.winner !== "n" &&
+        this.winner !== stats.winner
+      ) {
+        console.log("winner changed! ", this.winner, " -> ", stats.winner);
+        this.winner = stats.winner;
+        this.setGameOver({ over: true, winner: stats.winner });
+      }
       this.setGlobalStats(stats);
       this.lastWasError = false;
     } catch (e) {

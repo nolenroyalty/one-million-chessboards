@@ -280,10 +280,8 @@ func (c *Client) UpdatePositionAndMaybeSnapshot(pos Position) {
 				Send()
 
 			go func() {
-				ctx := context.Background()
-
 				for {
-					if err := c.snapshotLimiter.Wait(ctx); err != nil {
+					if err := c.snapshotLimiter.Wait(c.clientCtx); err != nil {
 						c.pendingSnapshot.Store(false)
 						return
 					}
@@ -330,13 +328,17 @@ func (c *Client) ReadPump() {
 		if !c.receivedMessagesLimiter.Allow() {
 			c.rpcLogger.Info().
 				Str("disc", "max_messages_received").Send()
-			return
+			break
 		}
 
 		var msg protocol.ClientMessage
 		if err := proto.Unmarshal(message, &msg); err != nil {
 			// log.Printf("Error unmarshalling message: %v", err)
 			continue
+		}
+
+		if c.clientCtx.Err() != nil {
+			break
 		}
 		c.handleProtoMessage(&msg)
 	}
@@ -349,6 +351,10 @@ func CoordInBoundsInt(coord uint32) bool {
 func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 	switch p := msg.Payload.(type) {
 	case *protocol.ClientMessage_Move:
+		if c.server.gameOver.Load() {
+			return
+		}
+
 		pieceID := p.Move.PieceId
 		fromX := p.Move.FromX
 		fromY := p.Move.FromY
@@ -408,6 +414,8 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 		case c.server.moveRequests <- req:
 		case <-c.clientCtx.Done():
 			return
+		case <-c.server.processMovesCtx.Done():
+			return
 		}
 	case *protocol.ClientMessage_Subscribe:
 		centerX := p.Subscribe.CenterX
@@ -452,7 +460,7 @@ func (c *Client) WritePump() {
 				return
 			}
 
-			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			c.conn.SetWriteDeadline(time.Now().Add(30 * time.Second))
 			if err := c.conn.WriteMessage(websocket.BinaryMessage, message); err != nil {
 				return
 			}

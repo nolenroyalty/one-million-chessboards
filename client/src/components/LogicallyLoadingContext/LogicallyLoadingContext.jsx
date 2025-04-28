@@ -53,6 +53,7 @@ function LogicallyLoadingProvider({ boardSizeParams, children }) {
     return deltaX > xThreshold || deltaY > yThreshold;
   }, [lastSnapshotCoords, coords, showLargeBoard, boardSizeParams]);
 
+  // nroyalty: I don't think we need this anymore...
   React.useEffect(() => {
     if (isLogicallyLoading) {
       if (recentlyLogicallyLoadingTimeoutRef.current) {
