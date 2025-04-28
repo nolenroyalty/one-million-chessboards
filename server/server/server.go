@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"math"
@@ -25,6 +26,7 @@ import (
 )
 
 var json = jsoniter.ConfigCompatibleWithStandardLibrary
+var internalPass = flag.String("internal-pass", "TEST", "dumb pw for internal APIs (does not really matter tbh)")
 
 type ColorPreference int
 
@@ -769,6 +771,7 @@ func (s *Server) ServeAdoption(w http.ResponseWriter, r *http.Request) {
 		X         uint16 `json:"x"`
 		Y         uint16 `json:"y"`
 		OnlyColor string `json:"onlyColor"`
+		Pass      string `json:"pass"`
 	}
 
 	var req AdoptionRequest
@@ -780,6 +783,11 @@ func (s *Server) ServeAdoption(w http.ResponseWriter, r *http.Request) {
 
 	if req.X >= BOARD_SIZE || req.Y >= BOARD_SIZE {
 		http.Error(w, "Coordinates out of bounds", http.StatusBadRequest)
+		return
+	}
+
+	if req.Pass != *internalPass {
+		http.Error(w, "no", http.StatusNotFound)
 		return
 	}
 
@@ -803,6 +811,7 @@ func (s *Server) ServeBulkCapture(w http.ResponseWriter, r *http.Request) {
 		X         uint16 `json:"x"`
 		Y         uint16 `json:"y"`
 		OnlyColor string `json:"onlyColor"`
+		Pass      string `json:"pass"`
 	}
 
 	var req BulkCaptureRequest
@@ -813,6 +822,11 @@ func (s *Server) ServeBulkCapture(w http.ResponseWriter, r *http.Request) {
 
 	if req.X >= BOARD_SIZE || req.Y >= BOARD_SIZE {
 		http.Error(w, "Coordinates out of bounds", http.StatusBadRequest)
+		return
+	}
+
+	if req.Pass != *internalPass {
+		http.Error(w, "no", http.StatusNotFound)
 		return
 	}
 
