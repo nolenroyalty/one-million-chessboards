@@ -444,8 +444,6 @@ function WebsocketProvider({ children }) {
     [pieceHandler, statsHandler]
   );
 
-  //   useStartBot({ pieceHandler: pieceHandler, submitMove });
-
   const value = React.useMemo(
     () => ({ connected, submitMove }),
     [connected, submitMove]

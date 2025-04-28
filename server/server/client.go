@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sync"
 	"sync/atomic"
@@ -28,16 +29,16 @@ const (
 	simulatedJitterMs         = 1
 	maxWaitBeforeSendingMoves = 225 * time.Millisecond
 
-	MAX_SNAPSHOTS_PER_SECOND = 3
-	SNAPSHOT_BURST_LIMIT     = 6
+	MAX_SNAPSHOTS_PER_SECOND = 3 * TESTING_MULTIPLIER_CHANGE_YOU_LITTLE_SHIT
+	SNAPSHOT_BURST_LIMIT     = 6 * TESTING_MULTIPLIER_CHANGE_YOU_LITTLE_SHIT
 
-	MAX_SNAPSHOTS_PER_SECOND_SOFT = 2
-	SNAPSHOT_BURST_LIMIT_SOFT     = 4
+	MAX_SNAPSHOTS_PER_SECOND_SOFT = 2 * TESTING_MULTIPLIER_CHANGE_YOU_LITTLE_SHIT
+	SNAPSHOT_BURST_LIMIT_SOFT     = 4 * TESTING_MULTIPLIER_CHANGE_YOU_LITTLE_SHIT
 
-	MAX_MOVES_PER_SECOND      = 4
-	MOVE_BURST_LIMIT          = 6
-	MAX_MOVES_PER_SECOND_SOFT = 2
-	MOVE_BURST_LIMIT_SOFT     = 3
+	MAX_MOVES_PER_SECOND      = 4 * TESTING_MULTIPLIER_CHANGE_YOU_LITTLE_SHIT
+	MOVE_BURST_LIMIT          = 6 * TESTING_MULTIPLIER_CHANGE_YOU_LITTLE_SHIT
+	MAX_MOVES_PER_SECOND_SOFT = 2 * TESTING_MULTIPLIER_CHANGE_YOU_LITTLE_SHIT
+	MOVE_BURST_LIMIT_SOFT     = 3 * TESTING_MULTIPLIER_CHANGE_YOU_LITTLE_SHIT
 
 	MOVE_REJECTION_RATE_LIMITING_WINDOW         = 5 * time.Second
 	MAX_MOVE_REJECTION_MESSAGES_IF_RATE_LIMITED = 5
@@ -48,8 +49,8 @@ const (
 	// I don't think there's a way a human can even hit the
 	// soft limit using the web client, but hopefully this gives
 	// us a little protection from bots
-	MAX_RECEIVED_MESSAGES_PER_SECOND      = 22
-	MAX_RECEIVED_MESSAGES_PER_SECOND_SOFT = 12
+	MAX_RECEIVED_MESSAGES_PER_SECOND      = 22 * TESTING_MULTIPLIER_CHANGE_YOU_LITTLE_SHIT
+	MAX_RECEIVED_MESSAGES_PER_SECOND_SOFT = 12 * TESTING_MULTIPLIER_CHANGE_YOU_LITTLE_SHIT
 )
 
 type limits struct {
@@ -276,7 +277,8 @@ func (c *Client) UpdatePositionAndMaybeSnapshot(pos Position) {
 	if shouldSendSnapshot(c.lastSnapshotPosition.Load().(Position), pos) {
 		if c.pendingSnapshot.CompareAndSwap(false, true) {
 			c.rpcLogger.Info().
-				Str("rpc", "SendSnapshotForSubsscribe").
+				Str("rpc", "SendSnapshotForSubscribe").
+				Str("pos", fmt.Sprintf("%d, %d", pos.X, pos.Y)).
 				Send()
 
 			go func() {
@@ -371,10 +373,6 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 			}
 		}
 
-		c.rpcLogger.Info().
-			Str("rpc", "MovePiece").
-			Send()
-
 		if !CoordInBoundsInt(fromX) || !CoordInBoundsInt(fromY) ||
 			!CoordInBoundsInt(toX) || !CoordInBoundsInt(toY) {
 			return
@@ -401,6 +399,12 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 				return
 			}
 		}
+
+		c.rpcLogger.Info().
+			Str("rpc", "MovePiece").
+			Str("from", fmt.Sprintf("%d, %d", fromX, fromY)).
+			Str("to", fmt.Sprintf("%d, %d", toX, toY)).
+			Send()
 
 		move := Move{
 			PieceID:              pieceID,

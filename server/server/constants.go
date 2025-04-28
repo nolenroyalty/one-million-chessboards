@@ -46,6 +46,9 @@ const (
 	STATS_REFRESH_INTERVAL      = time.Second * 1
 	CAPTURE_REFRESH_INTERVAL    = time.Second * 1
 	TOTAL_KINGS_PER_SIDE        = 1000000
+
+	// CHANGE ME LOL
+	TESTING_MULTIPLIER_CHANGE_YOU_LITTLE_SHIT = 1
 )
 
 var GLOBAL_zstdPool = sync.Pool{

@@ -32,7 +32,7 @@ var decPool = sync.Pool{
 const (
 	localURL = "ws://localhost:8080/ws"
 	prodURL  = "wss://onemillionchessboards.com/ws"
-	useProd  = false
+	useProd  = true
 )
 
 func getUrl() string {
@@ -119,12 +119,24 @@ func ParseFrame(buf []byte) (*protocol.ServerMessage, error) {
 	return &out, nil
 }
 
-// nroyalty: we could make this randomly subscribe to a new area every 0.5s
-// which would simulate load better (?)
+func (c *MainCounter) resubRandomly(ws *websocket.Conn) {
+	ticker := time.NewTicker(time.Second * 1)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			sleepTime := time.Duration(rand.Intn(500)) * time.Millisecond
+			time.Sleep(sleepTime)
+			cx := 500 + rand.Intn(7000)
+			cy := 500 + rand.Intn(7000)
+			writeSubscribe(ws, cx, cy)
+		}
+	}
+}
+
 func (c *MainCounter) randomlySubscribe(doReconnects bool) {
 	for {
 		ws, _, err := websocket.DefaultDialer.Dial(getUrl(), nil)
-		done := make(chan struct{})
 
 		if err != nil {
 			time.Sleep(time.Millisecond * 300)
@@ -132,47 +144,37 @@ func (c *MainCounter) randomlySubscribe(doReconnects bool) {
 		}
 
 		if doReconnects {
-			sleepTimeJitter := time.Duration(rand.Intn(3000)) * time.Millisecond
-			sleepTime := (time.Second * 1) + sleepTimeJitter
-
 			go func() {
-				time.Sleep(sleepTime)
-				ws.Close()
-				done <- struct{}{}
+				c.resubRandomly(ws)
 			}()
 		}
 
 		for {
-			select {
-			case <-done:
+			_, message, err := ws.ReadMessage()
+			if err != nil {
 				goto restart
-			default:
-				_, message, err := ws.ReadMessage()
-				if err != nil {
-					goto restart
-				}
-				c.receivedBytes.Add(int64(len(message)))
-				parsed, err := ParseFrame(message)
+			}
+			c.receivedBytes.Add(int64(len(message)))
+			parsed, err := ParseFrame(message)
 
-				if err != nil {
-					goto restart
-				}
-				switch p := parsed.Payload.(type) {
-				case *protocol.ServerMessage_InitialState:
-					c.numberOfSnapshots.Add(1)
-					// position := parsed["position"].(map[string]any)
-					// x := int(position["x"].(float64))
-					// y := int(position["y"].(float64))
-					// log.Printf("Initial position: %d, %d", x, y)
-				case *protocol.ServerMessage_MovesAndCaptures:
-					c.numberOfMoveUpdates.Add(1)
-					numberOfMoves := len(p.MovesAndCaptures.Moves)
-					c.numberOfMoves.Add(int64(numberOfMoves))
-					numberOfCaptures := len(p.MovesAndCaptures.Captures)
-					c.numberOfCaptures.Add(int64(numberOfCaptures))
-				case *protocol.ServerMessage_Snapshot:
-					c.numberOfSnapshots.Add(1)
-				}
+			if err != nil {
+				goto restart
+			}
+			switch p := parsed.Payload.(type) {
+			case *protocol.ServerMessage_InitialState:
+				c.numberOfSnapshots.Add(1)
+				// position := parsed["position"].(map[string]any)
+				// x := int(position["x"].(float64))
+				// y := int(position["y"].(float64))
+				// log.Printf("Initial position: %d, %d", x, y)
+			case *protocol.ServerMessage_MovesAndCaptures:
+				c.numberOfMoveUpdates.Add(1)
+				numberOfMoves := len(p.MovesAndCaptures.Moves)
+				c.numberOfMoves.Add(int64(numberOfMoves))
+				numberOfCaptures := len(p.MovesAndCaptures.Captures)
+				c.numberOfCaptures.Add(int64(numberOfCaptures))
+			case *protocol.ServerMessage_Snapshot:
+				c.numberOfSnapshots.Add(1)
 			}
 		}
 	restart:
@@ -346,7 +348,7 @@ func (c *MainCounter) runRandomMover(boardX int) {
 	rm.subscribe()
 	for i := 0; i < NUMBER_OF_MOVES; i++ {
 		rm.movePawn()
-		time.Sleep(6 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
