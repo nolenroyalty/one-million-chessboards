@@ -13,21 +13,20 @@ import { CurrentColorProvider } from "../CurrentColorProvider/CurrentColorProvid
 import WebsocketProvider from "../WebsocketProvider/WebsocketProvider";
 import { GameOverContextProvider } from "../GameOverContext/GameOverContext";
 
-// CR nroyalty: bump up max-width a bit
-// CR nroyalty: lower the max-height a bit. test on your desktop
-// CR nroyalty: maybe bump the max size of each square a little bit too? play around a
-// little bit
 const Main = styled.main`
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  --max-outer-width: 1000px;
   max-width: var(--max-outer-width);
+  --max-height: 1200px;
+
   margin: 0 auto;
   background-color: var(--color-neutral-950);
   height: 100svh;
   gap: 0.125rem;
-  max-height: 1500px;
+  max-height: var(--max-height);
   --main-side-padding: 0.5rem;
   padding: 0 var(--main-side-padding);
   border-left: 1px solid var(--color-sky-700);
@@ -37,10 +36,16 @@ const Main = styled.main`
     border-right: none;
   }
 
-  @media (min-height: 1510px) {
+  @media (min-height: 1210px) {
     border-bottom: 1px solid var(--color-sky-700);
     padding-bottom: 0.5rem;
     border-radius: 0 0 0.25rem 0.25rem;
+    --max-outer-width: 1200px;
+
+    @media (max-width: 1200px) {
+      border-left: none;
+      border-right: none;
+    }
   }
   /* box-shadow:
     2px 0 8px var(--color-neutral-800),

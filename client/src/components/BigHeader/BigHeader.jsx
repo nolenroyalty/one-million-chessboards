@@ -34,12 +34,19 @@ const Wrapper = styled.header`
     linear-gradient(#0c4a6e55 0.8px, transparent 0.8px),
     linear-gradient(to right, #0c4a6e55 0.8px, #0a0a0a 0.8px);
   background-size: 16px 16px;
-  width: calc(min(100%, 1000px));
+  width: calc(min(100%, var(--max-outer-width)));
   border-left: 1px solid var(--color-sky-700);
   border-right: 1px solid var(--color-sky-700);
   @media (max-width: 1000px) {
     border-left: none;
     border-right: none;
+  }
+
+  @media (min-height: 1210px) {
+    @media (max-width: 1200px) {
+      border-left: none;
+      border-right: none;
+    }
   }
 `;
 
