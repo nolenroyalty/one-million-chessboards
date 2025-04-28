@@ -36,31 +36,43 @@ class StatsHandler {
 
     this.subscribers = [];
     this.pollLoopTimeout = null;
+    this.lastWasError = false;
   }
 
-  runPollLoop() {
+  async runPollLoop() {
     let error = false;
-    fetch("/api/global-game-stats", { cache: "no-store" })
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
-        return res.json();
-      })
-      .then((stats) => {
-        this.setGlobalStats(stats);
-      })
-      .catch((error) => {
-        console.error("Error fetching global game stats:", error);
-        error = true;
-      });
+    const ac = new AbortController();
+    const kill = setTimeout(() => ac.abort(), 5000);
+    if (this.pollLoopTimeout) {
+      clearTimeout(this.pollLoopTimeout);
+    }
 
-    const interval = intervalWithJitter({
-      baseInterval: BASE_STATS_REFRESH_INTERVAL,
-      jitter: INTERVAL_VARIANCE,
-      error,
-    });
-    this.pollLoopTimeout = setTimeout(() => this.runPollLoop(), interval);
+    try {
+      const res = await fetch("/api/global-game-stats", {
+        cache: "no-store",
+        signal: ac.signal,
+      });
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      const stats = await res.json();
+      this.setGlobalStats(stats);
+      this.lastWasError = false;
+    } catch (e) {
+      if (!this.lastWasError) {
+        console.error("Error fetching global game stats:", e);
+      }
+      this.lastWasError = true;
+      error = true;
+    } finally {
+      clearTimeout(kill);
+      const interval = intervalWithJitter({
+        baseInterval: BASE_STATS_REFRESH_INTERVAL,
+        jitter: INTERVAL_VARIANCE,
+        error,
+      });
+      this.pollLoopTimeout = setTimeout(() => this.runPollLoop(), interval);
+    }
   }
 
   stopPollLoop() {

@@ -28,37 +28,47 @@ class MinimapHandler {
     this.state = { initialized: false, aggregations: [] };
     this.subscribers = [];
     this.pollLoopTimeout = null;
+    this.lastWasError = false;
   }
 
-  runPollLoop() {
+  async runPollLoop() {
     let error = false;
-    fetch("/api/minimap")
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
-        return res.arrayBuffer();
-      })
-      .then((buf) => {
-        const data = parseJson(buf);
-        if (!data) {
-          throw new Error("Failed to decode minimap data");
-        }
-        this.setState({
-          initialized: true,
-          aggregations: data.aggregations,
-        });
-      })
-      .catch((error) => {
-        console.error("Error fetching minimap data:", error);
-        error = true;
+    const ac = new AbortController();
+    const kill = setTimeout(() => ac.abort(), 5000);
+    if (this.pollLoopTimeout) {
+      clearTimeout(this.pollLoopTimeout);
+    }
+
+    try {
+      const res = await fetch("/api/minimap", { signal: ac.signal });
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      const buf = await res.arrayBuffer();
+      const data = parseJson(buf);
+      if (!data) {
+        throw new Error("Failed to decode minimap data");
+      }
+      this.lastWasError = false;
+      this.setState({
+        initialized: true,
+        aggregations: data.aggregations,
       });
-    const interval = intervalWithJitter({
-      baseInterval: MINIMAP_REFRESH_INTERVAL,
-      jitter: MINIMAP_REFRESH_INTERVAL_JITTER,
-      error,
-    });
-    this.pollLoopTimeout = setTimeout(() => this.runPollLoop(), interval);
+    } catch (e) {
+      if (!this.lastWasError) {
+        console.error("Error fetching minimap data:", error);
+      }
+      this.lastWasError = true;
+      error = true;
+    } finally {
+      clearTimeout(kill);
+      const interval = intervalWithJitter({
+        baseInterval: MINIMAP_REFRESH_INTERVAL,
+        jitter: MINIMAP_REFRESH_INTERVAL_JITTER,
+        error,
+      });
+      this.pollLoopTimeout = setTimeout(() => this.runPollLoop(), interval);
+    }
   }
 
   stopPollLoop() {

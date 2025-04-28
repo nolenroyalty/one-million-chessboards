@@ -4,9 +4,9 @@ import CurrentColorContext from "../CurrentColorProvider/CurrentColorProvider";
 import { computeInitialArguments, isZstd } from "../../utils";
 import CoordsContext from "../CoordsContext/CoordsContext";
 import { decompress } from "fzstd";
-import useStartBot from "../../hooks/use-start-bot";
 import { chess } from "../../protoCompiled.js";
 import protobuf from "protobufjs";
+import { intervalWithJitter } from "../../utils";
 // CR-someday nroyalty: replace with partysocket
 
 function parseServerMessage(buf) {
@@ -89,7 +89,7 @@ function useWebsocket({
     let reconnectTimeout = null;
     let connected = false;
     let connecting = false;
-    let pongInterval = null;
+    let pongTimeout = null;
     let killed = false;
 
     function connect() {
@@ -189,6 +189,18 @@ function useWebsocket({
         }
       };
 
+      function runPongLoop(ws) {
+        const timeout = intervalWithJitter({
+          baseInterval: 12000,
+          jitter: 3000,
+          error: false,
+        });
+        pongTimeout = setTimeout(() => {
+          protoSendPing({ ws });
+          runPongLoop();
+        }, timeout);
+      }
+
       ws.onopen = () => {
         console.log("websocket opened");
         if (killed) {
@@ -198,14 +210,7 @@ function useWebsocket({
         connected = true;
         setConnected(true);
         failedReconnections.current = 0;
-
-        pongInterval = setInterval(() => {
-          if (killed) {
-            return;
-          }
-          protoSendPing({ ws });
-          // CR nroyalty: reduce frequency and add jitter
-        }, 10000);
+        runPongLoop(ws);
       };
 
       ws.onerror = (event) => {
@@ -221,7 +226,7 @@ function useWebsocket({
           return;
         }
         console.log("Disconnected from server");
-        clearInterval(pongInterval);
+        clearTimeout(pongTimeout);
         websocketRef.current = null;
         connected = false;
         connecting = false;
@@ -266,8 +271,8 @@ function useWebsocket({
       if (reconnectTimeout) {
         clearTimeout(reconnectTimeout);
       }
-      if (pongInterval) {
-        clearInterval(pongInterval);
+      if (pongTimeout) {
+        clearTimeout(pongTimeout);
       }
       if (ws) {
         ws.close();

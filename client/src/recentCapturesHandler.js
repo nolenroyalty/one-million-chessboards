@@ -8,6 +8,7 @@ class RecentCapturesHandler {
     this.pollLoopTimeout = null;
     this.playingWhite = null;
     this.subscribers = [];
+    this.lastWasError = false;
   }
 
   setColorAndRunPollLoop({ playingWhite }) {
@@ -18,37 +19,45 @@ class RecentCapturesHandler {
     this.runPollLoop();
   }
 
-  runPollLoop() {
+  async runPollLoop() {
     if (this.playingWhite === null) {
       return;
     }
+    let error = false;
+    const ac = new AbortController();
+    const kill = setTimeout(() => ac.abort(), 5000);
     if (this.pollLoopTimeout) {
       clearTimeout(this.pollLoopTimeout);
     }
-    let error = false;
-    fetch(`/api/recently-captured/${this.playingWhite ? "white" : "black"}`, {
-      cache: "no-store",
-    })
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
-        return res.json();
-      })
-      .then((data) => {
-        this.recentCaptures = data.captures;
-        this.broadcast();
-      })
-      .catch((error) => {
-        console.error("Error fetching recently captured pieces:", error);
-        error = true;
+
+    try {
+      const url = `/api/recently-captured/${this.playingWhite ? "white" : "black"}`;
+      const res = await fetch(url, {
+        cache: "no-store",
+        signal: ac.signal,
       });
-    const interval = intervalWithJitter({
-      baseInterval: BASE_STATS_REFRESH_INTERVAL,
-      jitter: INTERVAL_VARIANCE,
-      error,
-    });
-    this.pollLoopTimeout = setTimeout(() => this.runPollLoop(), interval);
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      const data = await res.json();
+      this.recentCaptures = data.captures;
+      this.broadcast();
+      this.lastWasError = false;
+    } catch (e) {
+      if (!this.lastWasError) {
+        console.error("Error fetching recently captured pieces:", error);
+      }
+      this.lastWasError = true;
+      error = true;
+    } finally {
+      clearTimeout(kill);
+      const interval = intervalWithJitter({
+        baseInterval: BASE_STATS_REFRESH_INTERVAL,
+        jitter: INTERVAL_VARIANCE,
+        error,
+      });
+      this.pollLoopTimeout = setTimeout(() => this.runPollLoop(), interval);
+    }
   }
 
   getRecentCaptures() {
