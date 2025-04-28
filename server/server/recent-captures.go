@@ -1,6 +1,7 @@
 package server
 
 import (
+	"math/rand"
 	"sync"
 	"time"
 )
@@ -17,10 +18,10 @@ type RecentCaptures struct {
 	sync.RWMutex
 	whiteCaptureLocations [RING_BUFFER_SIZE]PositionAndTime
 	blackCaptureLocations [RING_BUFFER_SIZE]PositionAndTime
-	whiteCaptureIdx       uint32
-	blackCaptureIdx       uint32
-	whiteLength           uint32
-	blackLength           uint32
+	whiteCaptureIdx       int
+	blackCaptureIdx       int
+	whiteLength           int
+	blackLength           int
 }
 
 func NewRecentCaptures() *RecentCaptures {
@@ -68,12 +69,34 @@ func (s *RecentCaptures) getRecentCapturesByColor(white bool) []Position {
 
 	now := time.Now()
 	ret := []Position{}
-	for i := uint32(0); i < length; i++ {
+	for i := 0; i < length; i++ {
 		if now.Sub(targetBuffer[i].Time) <= CAPTURE_EXPIRATION_TIME {
 			ret = append(ret, targetBuffer[i].Position)
 		}
 	}
 	return ret
+}
+
+// Random capture not filtered by time
+// Just a nice way to seed players if there's no active player to pin them to
+func (s *RecentCaptures) RandomCapture(playingWhite bool) (pos Position, found bool) {
+	s.RLock()
+	defer s.RUnlock()
+
+	length := s.blackLength
+	targetBuffer := s.blackCaptureLocations
+	if playingWhite {
+		length = s.whiteLength
+		targetBuffer = s.whiteCaptureLocations
+	}
+	if length > 0 {
+		found = true
+		idx := rand.Intn(int(length))
+		pos = targetBuffer[idx].Position
+	} else {
+		found = false
+	}
+	return
 }
 
 type RecentCapturesResult struct {

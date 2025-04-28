@@ -537,26 +537,29 @@ func IncrOrDecrPosition(n uint16) uint16 {
 	return n
 }
 
-func (s *Server) GetDefaultCoords() Position {
+func (s *Server) GetDefaultCoords(playingWhite bool) Position {
 	if pos, ok := s.clientManager.GetRandomActiveClientPosition(); ok {
 		pos.X = IncrOrDecrPosition(pos.X)
 		pos.Y = IncrOrDecrPosition(pos.Y)
 		return pos
 	}
-	// CR nroyalty: use random capture location instead?
+
+	if pos, ok := s.recentCaptures.RandomCapture(playingWhite); ok {
+		return pos
+	}
 
 	x := 500 + rand.Intn(BOARD_SIZE-1000)
 	y := 500 + rand.Intn(BOARD_SIZE-1000)
 	return Position{X: uint16(x), Y: uint16(y)}
 }
 
-func (s *Server) GetMaybeRequestedCoords(requestedXCoord int16, requestedYCoord int16) Position {
+func (s *Server) GetMaybeRequestedCoords(requestedXCoord, requestedYCoord int16, playingWhite bool) Position {
 	if requestedXCoord == -1 || requestedYCoord == -1 {
-		ret := s.GetDefaultCoords()
+		ret := s.GetDefaultCoords(playingWhite)
 		return ret
 	}
 	if requestedXCoord < 0 || requestedXCoord >= BOARD_SIZE || requestedYCoord < 0 || requestedYCoord >= BOARD_SIZE {
-		ret := s.GetDefaultCoords()
+		ret := s.GetDefaultCoords(playingWhite)
 		return ret
 	}
 	return Position{X: uint16(requestedXCoord), Y: uint16(requestedYCoord)}
@@ -707,8 +710,8 @@ func (s *Server) ServeWs(w http.ResponseWriter, r *http.Request) {
 
 	softLimited := limitResult == AddIpResultSoftLimitExceeded
 	client := NewClient(conn, s, ipString, softLimited, s.clientWg, s.rootClientCtx)
-	pos := s.GetMaybeRequestedCoords(requestedXCoord, requestedYCoord)
 	playingWhite := s.DetermineColor(colorPref)
+	pos := s.GetMaybeRequestedCoords(requestedXCoord, requestedYCoord, playingWhite)
 	s.clientManager.RegisterClient(client, pos, playingWhite)
 	go client.Run(playingWhite, pos)
 }
