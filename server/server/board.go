@@ -104,12 +104,12 @@ type MovedPieceResult struct {
 	ToY   uint16
 }
 
-// MoveResult represents the outcome of a move validation
 type MoveResult struct {
 	Valid         bool
 	MovedPieces   []MovedPieceResult
 	CapturedPiece CaptureResult
 	Seqnum        uint64
+	WinningMove   bool
 }
 
 func (b *Board) crossedSquaresAreEmpty(fromX, fromY, toX, toY uint16) bool {
@@ -679,6 +679,7 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 			}
 		}
 		movedPiece.IncrementMoveCount()
+		winningMove := false
 
 		if !capturedPiece.IsEmpty() {
 			movedPiece.IncrementCaptureCount()
@@ -695,9 +696,15 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 			}
 			if capturedPiece.Type == King {
 				if capturedPiece.IsWhite {
-					b.whiteKingsCaptured.Add(1)
+					count := b.whiteKingsCaptured.Add(1)
+					if count == TOTAL_KINGS_PER_SIDE {
+						winningMove = true
+					}
 				} else {
-					b.blackKingsCaptured.Add(1)
+					count := b.blackKingsCaptured.Add(1)
+					if count == TOTAL_KINGS_PER_SIDE {
+						winningMove = true
+					}
 				}
 				movedPiece.KingKiller = true
 				if movedPiece.Type == Pawn {
@@ -742,10 +749,16 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 					X:     move.ToX,
 					Y:     move.ToY,
 				},
-				Seqnum: seqNum,
+				Seqnum:      seqNum,
+				WinningMove: winningMove,
 			}
 		} else {
-			return MoveResult{Valid: true, MovedPieces: movedPieces, Seqnum: seqNum}
+			return MoveResult{
+				Valid:       true,
+				MovedPieces: movedPieces,
+				Seqnum:      seqNum,
+				WinningMove: winningMove,
+			}
 		}
 	default:
 		// log.Printf("Invalid move: Move type not supported")
@@ -759,8 +772,8 @@ func (b *Board) GetStats() GameStats {
 	b.RUnlock()
 	return GameStats{
 		TotalMoves:           b.totalMoves.Load(),
-		WhitePiecesRemaining: 32000000 - b.whitePiecesCaptured.Load(),
-		BlackPiecesRemaining: 32000000 - b.blackPiecesCaptured.Load(),
+		WhitePiecesRemaining: 16000000 - b.whitePiecesCaptured.Load(),
+		BlackPiecesRemaining: 16000000 - b.blackPiecesCaptured.Load(),
 		WhiteKingsRemaining:  1000000 - b.whiteKingsCaptured.Load(),
 		BlackKingsRemaining:  1000000 - b.blackKingsCaptured.Load(),
 		Seqnum:               seqnum,
@@ -811,8 +824,8 @@ func (b *Board) GetBoardSnapshot_RETURN_TO_POOL_AFTER_YOU_FUCK(pos Position) *pr
 
 	// estimate that the slice is half-full?
 	pieceStates := make([]*protocol.PieceDataForSnapshot, 0, (width*height)/2)
-	startingDx := int8(int16(minX) - int16(pos.X))
-	startingDy := int8(int16(minY) - int16(pos.Y))
+	startingDx := int16(minX) - int16(pos.X)
+	startingDy := int16(minY) - int16(pos.Y)
 	for y := uint16(0); y < height; y++ {
 		for x := uint16(0); x < width; x++ {
 			raw := pieces[y][x]
@@ -822,8 +835,8 @@ func (b *Board) GetBoardSnapshot_RETURN_TO_POOL_AFTER_YOU_FUCK(pos Position) *pr
 			}
 			piece := PieceOfEncodedPiece(encodedPiece)
 			pieceStates = append(pieceStates, piece.ToProtocolForSnapshot(
-				int32(startingDx+int8(x)),
-				int32(startingDy+int8(y))))
+				int32(startingDx+int16(x)),
+				int32(startingDy+int16(y))))
 		}
 	}
 
@@ -878,6 +891,8 @@ func (b *Board) createPiece(pieceType protocol.PieceType, isWhite bool) Piece {
 }
 
 const ACTUALLY_RANDOMIZE = false
+const ONLY_A_FEW_BOARDS = false
+const ONLY_A_FEW_BOARDS_COUNT = 1
 
 func (b *Board) InitializeRandom() {
 	b.Lock()
@@ -893,12 +908,22 @@ func (b *Board) InitializeRandom() {
 				random := rand.Intn(1500)
 				includeWhite = random > dy
 				includeBlack = random > dx
+			} else if ONLY_A_FEW_BOARDS {
+				good := dx < ONLY_A_FEW_BOARDS_COUNT && dy == 0
+				includeWhite = good
+				includeBlack = good
 			}
 			if includeWhite {
 				b.setupPiecesForColor(startX+uint16(dx), startY+uint16(dy), true)
+			} else {
+				b.whitePiecesCaptured.Add(16)
+				b.whiteKingsCaptured.Add(1)
 			}
 			if includeBlack {
 				b.setupPiecesForColor(startX+uint16(dx), startY+uint16(dy), false)
+			} else {
+				b.blackPiecesCaptured.Add(16)
+				b.blackKingsCaptured.Add(1)
 			}
 		}
 	}

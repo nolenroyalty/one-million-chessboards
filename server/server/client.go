@@ -280,10 +280,8 @@ func (c *Client) UpdatePositionAndMaybeSnapshot(pos Position) {
 				Send()
 
 			go func() {
-				ctx := context.Background()
-
 				for {
-					if err := c.snapshotLimiter.Wait(ctx); err != nil {
+					if err := c.snapshotLimiter.Wait(c.clientCtx); err != nil {
 						c.pendingSnapshot.Store(false)
 						return
 					}
@@ -330,13 +328,17 @@ func (c *Client) ReadPump() {
 		if !c.receivedMessagesLimiter.Allow() {
 			c.rpcLogger.Info().
 				Str("disc", "max_messages_received").Send()
-			return
+			break
 		}
 
 		var msg protocol.ClientMessage
 		if err := proto.Unmarshal(message, &msg); err != nil {
 			// log.Printf("Error unmarshalling message: %v", err)
 			continue
+		}
+
+		if c.clientCtx.Err() != nil {
+			break
 		}
 		c.handleProtoMessage(&msg)
 	}
@@ -356,6 +358,18 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 		toY := p.Move.ToY
 		moveType := p.Move.MoveType
 		moveToken := p.Move.MoveToken
+
+		if c.server.gameOver.Load() {
+			if !c.moveRejectionOnRateLimitLimiter.Allow() {
+				return
+			} else {
+				c.rpcLogger.Info().
+					Str("rpc", "MoveAfterGameOver").
+					Send()
+				c.SendInvalidMove(moveToken)
+				return
+			}
+		}
 
 		c.rpcLogger.Info().
 			Str("rpc", "MovePiece").
@@ -408,6 +422,8 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 		case c.server.moveRequests <- req:
 		case <-c.clientCtx.Done():
 			return
+		case <-c.server.processMovesCtx.Done():
+			return
 		}
 	case *protocol.ClientMessage_Subscribe:
 		centerX := p.Subscribe.CenterX
@@ -452,7 +468,7 @@ func (c *Client) WritePump() {
 				return
 			}
 
-			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			c.conn.SetWriteDeadline(time.Now().Add(30 * time.Second))
 			if err := c.conn.WriteMessage(websocket.BinaryMessage, message); err != nil {
 				return
 			}

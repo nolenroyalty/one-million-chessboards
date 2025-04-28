@@ -11,7 +11,12 @@ import { ShowLargeBoardContextProvider } from "../ShowLargeBoardContext/ShowLarg
 import { SelectedPieceAndSquaresContextProvider } from "../SelectedPieceAndSquaresContext/SelectedPieceAndSquaresContext";
 import { CurrentColorProvider } from "../CurrentColorProvider/CurrentColorProvider";
 import WebsocketProvider from "../WebsocketProvider/WebsocketProvider";
+import { GameOverContextProvider } from "../GameOverContext/GameOverContext";
 
+// CR nroyalty: bump up max-width a bit
+// CR nroyalty: lower the max-height a bit. test on your desktop
+// CR nroyalty: maybe bump the max size of each square a little bit too? play around a
+// little bit
 const Main = styled.main`
   display: flex;
   flex-direction: column;
@@ -55,25 +60,27 @@ const Main = styled.main`
 
 function App() {
   return (
-    <HandlersContextProvider>
-      <CoordsContextProvider>
-        <CurrentColorProvider>
-          <WebsocketProvider>
-            <ShowLargeBoardContextProvider>
-              <SelectedPieceAndSquaresContextProvider>
-                <Main>
-                  <SmallHeader />
-                  <BigHeader />
-                  {/* <ChessPieceColorer /> */}
-                  <Board />
-                  <BoardControls />
-                </Main>
-              </SelectedPieceAndSquaresContextProvider>
-            </ShowLargeBoardContextProvider>
-          </WebsocketProvider>
-        </CurrentColorProvider>
-      </CoordsContextProvider>
-    </HandlersContextProvider>
+    <GameOverContextProvider>
+      <HandlersContextProvider>
+        <CoordsContextProvider>
+          <CurrentColorProvider>
+            <WebsocketProvider>
+              <ShowLargeBoardContextProvider>
+                <SelectedPieceAndSquaresContextProvider>
+                  <Main>
+                    <SmallHeader />
+                    <BigHeader />
+                    {/* <ChessPieceColorer /> */}
+                    <Board />
+                    <BoardControls />
+                  </Main>
+                </SelectedPieceAndSquaresContextProvider>
+              </ShowLargeBoardContextProvider>
+            </WebsocketProvider>
+          </CurrentColorProvider>
+        </CoordsContextProvider>
+      </HandlersContextProvider>
+    </GameOverContextProvider>
   );
 }
 

@@ -197,7 +197,7 @@ function useWebsocket({
         });
         pongTimeout = setTimeout(() => {
           protoSendPing({ ws });
-          runPongLoop();
+          runPongLoop(ws);
         }, timeout);
       }
 

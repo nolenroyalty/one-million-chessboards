@@ -75,10 +75,13 @@ type Server struct {
 	backgroundJobCtx          context.Context
 	backgroundJobCancel       context.CancelFunc
 	backgroundJobWg           *sync.WaitGroup
+	processMovesCtx           context.Context
+	processMovesCancel        context.CancelFunc
 	clientWg                  *sync.WaitGroup
 	rootClientCtx             context.Context
 	rootClientCancel          context.CancelFunc
 	shutdownBegan             atomic.Bool
+	gameOver                  atomic.Bool
 }
 
 func NewServer(stateDir string) *Server {
@@ -91,6 +94,8 @@ func NewServer(stateDir string) *Server {
 
 	rootClientCtx, rootClientCancel := context.WithCancel(context.Background())
 	clientWg := &sync.WaitGroup{}
+
+	processMovesCtx, processMovesCancel := context.WithCancel(backgroundJobCtx)
 
 	board := boardToDiskHandler.GetLiveBoard()
 	httpLogger := NewCoreLogger().With().Str("kind", "http").Logger()
@@ -131,10 +136,14 @@ func NewServer(stateDir string) *Server {
 		backgroundJobCtx:    backgroundJobCtx,
 		backgroundJobCancel: backgroundJobCancel,
 		backgroundJobWg:     backgroundJobWg,
+		processMovesCtx:     processMovesCtx,
+		processMovesCancel:  processMovesCancel,
 		rootClientCtx:       rootClientCtx,
 		rootClientCancel:    rootClientCancel,
 		clientWg:            clientWg,
+		gameOver:            atomic.Bool{},
 	}
+	s.gameOver.Store(false)
 	return s
 }
 
@@ -279,8 +288,41 @@ func (s *Server) refreshStatsOnce() {
 		BlackKingsRemaining  uint32 `json:"blackKingsRemaining"`
 		ConnectedUsers       uint32 `json:"connectedUsers"`
 		Seqnum               uint64 `json:"seqnum"`
+		Winner               string `json:"winner"`
 	}
+
 	boardStats := s.board.GetStats()
+	winner := ""
+	noWhiteKings := boardStats.WhiteKingsRemaining == 0
+	noBlackKings := boardStats.BlackKingsRemaining == 0
+	onlyWhiteKings := boardStats.WhitePiecesRemaining == boardStats.WhiteKingsRemaining
+	onlyBlackKings := boardStats.BlackPiecesRemaining == boardStats.BlackKingsRemaining
+
+	gameOver := false
+	if noWhiteKings && noBlackKings {
+		gameOver = true
+		winner = "draw"
+	} else if noWhiteKings {
+		gameOver = true
+		winner = "black"
+	} else if noBlackKings {
+		gameOver = true
+		winner = "white"
+	} else if onlyWhiteKings && onlyBlackKings {
+		gameOver = true
+		winner = "draw"
+	}
+
+	if gameOver && s.gameOver.CompareAndSwap(false, true) {
+		log.Printf("Detected game over from refreshStatsOnce - winner: %s", winner)
+		s.processMovesCancel()
+		go func() {
+			for req := range s.moveRequests {
+				req.Client.SendInvalidMove(req.Move.MoveToken)
+			}
+		}()
+	}
+
 	allStats := StatsUpdate{
 		Type:                 "globalStats",
 		TotalMoves:           boardStats.TotalMoves,
@@ -290,7 +332,9 @@ func (s *Server) refreshStatsOnce() {
 		BlackKingsRemaining:  boardStats.BlackKingsRemaining,
 		ConnectedUsers:       uint32(s.clientManager.GetClientCount()),
 		Seqnum:               boardStats.Seqnum,
+		Winner:               winner,
 	}
+
 	serialized, err := json.Marshal(allStats)
 	if err != nil {
 		log.Printf("Error marshalling stats: %v", err)
@@ -328,15 +372,27 @@ func (s *Server) processMoves() {
 
 	for {
 		select {
-		case <-s.backgroundJobCtx.Done():
+		case <-s.processMovesCtx.Done():
 			log.Printf("processMoves: context done")
 			return
 		case moveReq := <-s.moveRequests:
+			if s.processMovesCtx.Err() != nil {
+				log.Printf("processMoves: context done")
+				return
+			}
+
 			moveResult := s.board.ValidateAndApplyMove__NOTTHREADSAFE(moveReq.Move)
 			if !moveResult.Valid {
 				moveReq.Client.SendInvalidMove(moveReq.Move.MoveToken)
 				continue
 			}
+
+			if moveResult.WinningMove {
+				log.Printf("Received the winning move!")
+				s.gameOver.Store(true)
+				s.processMovesCancel()
+			}
+
 			s.boardToDiskHandler.AddMove(&moveReq.Move)
 
 			if moveResult.CapturedPiece.Piece.IsEmpty() {
@@ -734,7 +790,7 @@ func (s *Server) ServeGlobalStats(w http.ResponseWriter, r *http.Request) {
 	// 	Str("rpc", "ServeGlobalStats").
 	// 	Send()
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=2, s-maxage=4")
+	w.Header().Set("Cache-Control", "public, max-age=2, s-maxage=3")
 	s.currentStatsMutex.RLock()
 	defer s.currentStatsMutex.RUnlock()
 	w.Write(s.currentStats)
@@ -745,7 +801,7 @@ func (s *Server) ServeRecentCaptures(w http.ResponseWriter, r *http.Request, whi
 	// 	Str("rpc", "ServeRecentCaptures").
 	// 	Send()
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=2, s-maxage=4")
+	w.Header().Set("Cache-Control", "public, max-age=2, s-maxage=3")
 	s.recentCapturesMutex.RLock()
 	defer s.recentCapturesMutex.RUnlock()
 	if white {
@@ -756,7 +812,6 @@ func (s *Server) ServeRecentCaptures(w http.ResponseWriter, r *http.Request, whi
 
 }
 
-// CR nroyalty: restrict internal API?
 func (s *Server) ServeAdoption(w http.ResponseWriter, r *http.Request) {
 	s.httpLogger.Info().
 		Str("rpc", "ServeAdoption").
@@ -779,15 +834,15 @@ func (s *Server) ServeAdoption(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
+	if req.Pass != *internalPass {
+		http.Error(w, "no", http.StatusNotFound)
+		return
+	}
+
 	oc := OnlyColorFromString(req.OnlyColor)
 
 	if req.X >= BOARD_SIZE || req.Y >= BOARD_SIZE {
 		http.Error(w, "Coordinates out of bounds", http.StatusBadRequest)
-		return
-	}
-
-	if req.Pass != *internalPass {
-		http.Error(w, "no", http.StatusNotFound)
 		return
 	}
 
@@ -819,14 +874,13 @@ func (s *Server) ServeBulkCapture(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-
-	if req.X >= BOARD_SIZE || req.Y >= BOARD_SIZE {
-		http.Error(w, "Coordinates out of bounds", http.StatusBadRequest)
+	if req.Pass != *internalPass {
+		http.Error(w, "no", http.StatusNotFound)
 		return
 	}
 
-	if req.Pass != *internalPass {
-		http.Error(w, "no", http.StatusNotFound)
+	if req.X >= BOARD_SIZE || req.Y >= BOARD_SIZE {
+		http.Error(w, "Coordinates out of bounds", http.StatusBadRequest)
 		return
 	}
 
