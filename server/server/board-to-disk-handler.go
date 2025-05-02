@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"one-million-chessboards/protocol"
 	"os"
 	"path/filepath"
 	"slices"
@@ -450,6 +451,85 @@ func ReadAndPrintRequestsFromFile(filename string) error {
 			s = fmt.Sprintf("UNKNOWN REQ: %v", req)
 		}
 		fmt.Println(s)
+	}
+	return nil
+}
+
+type PieceWithCount struct {
+	Piece Piece
+	Count uint16
+}
+
+type PieceWithLocation struct {
+	Piece Piece
+	X     uint16
+	Y     uint16
+}
+
+func PrintLivePieceStats(stateDir string) error {
+	btd, err := NewBoardToDiskHandler(stateDir)
+	if err != nil {
+		return err
+	}
+	mostCaptures := make(map[protocol.PieceType]PieceWithCount)
+	mostMoves := make(map[protocol.PieceType]PieceWithCount)
+	selfHatingPieces := make([]PieceWithLocation, 0, 0)
+	fmt.Printf("Board size: %d\n", BOARD_SIZE)
+	for y := uint16(0); y < BOARD_SIZE; y++ {
+		for x := uint16(0); x < BOARD_SIZE; x++ {
+			piece := btd.board.pieces[y][x]
+			pieceData := PieceOfEncodedPiece(EncodedPiece(piece))
+			if pieceData.IsEmpty() {
+				continue
+			}
+			captureData, exists := mostCaptures[pieceData.Type]
+			if !exists {
+				captureData = PieceWithCount{
+					Piece: pieceData,
+					Count: pieceData.CaptureCount,
+				}
+				mostCaptures[pieceData.Type] = captureData
+			} else if pieceData.CaptureCount > captureData.Count {
+				captureData = PieceWithCount{
+					Piece: pieceData,
+					Count: pieceData.CaptureCount,
+				}
+				mostCaptures[pieceData.Type] = captureData
+			}
+			movesData, exists := mostMoves[pieceData.Type]
+			if !exists {
+				movesData = PieceWithCount{
+					Piece: pieceData,
+					Count: pieceData.MoveCount,
+				}
+				mostMoves[pieceData.Type] = movesData
+			} else if pieceData.MoveCount > movesData.Count {
+				movesData = PieceWithCount{
+					Piece: pieceData,
+					Count: pieceData.MoveCount,
+				}
+				mostMoves[pieceData.Type] = movesData
+			}
+			captureCount := pieceData.CaptureCount
+			if captureCount >= 10 && !pieceData.HasCapturedPieceTypeOtherThanOwn {
+				selfHatingPieces = append(selfHatingPieces, PieceWithLocation{
+					Piece: pieceData,
+					X:     x,
+					Y:     y,
+				})
+			}
+		}
+	}
+	fmt.Printf("Most moves: %d\n", len(mostMoves))
+	fmt.Printf("Most captures: %d\n", len(mostCaptures))
+	for _, moveData := range mostMoves {
+		fmt.Printf("Piece: %s, ID: %d, Moves: %d\n", moveData.Piece.Type, moveData.Piece.ID, moveData.Count)
+	}
+	for _, captureData := range mostCaptures {
+		fmt.Printf("Piece: %s, ID: %d, Captures: %d\n", captureData.Piece.Type, captureData.Piece.ID, captureData.Count)
+	}
+	for _, piece := range selfHatingPieces {
+		fmt.Printf("Self-hating piece: %s (%d, %d), ID: %d, Captures: %d\n", piece.Piece.Type, piece.X, piece.Y, piece.Piece.ID, piece.Piece.CaptureCount)
 	}
 	return nil
 }
