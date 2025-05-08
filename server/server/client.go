@@ -49,8 +49,8 @@ const (
 	// I don't think there's a way a human can even hit the
 	// soft limit using the web client, but hopefully this gives
 	// us a little protection from bots
-	MAX_RECEIVED_MESSAGES_PER_SECOND      = 22 * TESTING_MULTIPLIER_CHANGE_YOU_LITTLE_SHIT
-	MAX_RECEIVED_MESSAGES_PER_SECOND_SOFT = 12 * TESTING_MULTIPLIER_CHANGE_YOU_LITTLE_SHIT
+	MAX_RECEIVED_MESSAGES_PER_SECOND      = 15 * TESTING_MULTIPLIER_CHANGE_YOU_LITTLE_SHIT
+	MAX_RECEIVED_MESSAGES_PER_SECOND_SOFT = 10 * TESTING_MULTIPLIER_CHANGE_YOU_LITTLE_SHIT
 )
 
 type limits struct {
