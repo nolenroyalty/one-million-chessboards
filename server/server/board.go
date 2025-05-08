@@ -652,9 +652,12 @@ func (b *Board) ValidateAndApplyMove__NOTTHREADSAFE(move Move) MoveResult {
 			endBoardX := move.ToX / 8
 			endBoardY := move.ToY / 8
 
-			// captures must be on the same sub-board
+			// captures must be on the same board unless the target
+			// has already moved
 			if startBoardX != endBoardX || startBoardY != endBoardY {
-				return MoveResult{Valid: false}
+				if capturedPiece.MoveCount == 0 {
+					return MoveResult{Valid: false}
+				}
 			}
 		}
 

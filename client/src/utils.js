@@ -176,7 +176,9 @@ function capturable({ pieces, weAreWhite, fromX, fromY, toX, toY }) {
     return { isCapturable: false, capturedPiece: null };
   }
   if (spansTwoBoards({ fromX, fromY, toX, toY })) {
-    return { isCapturable: false, capturedPiece: null };
+    if (capturedPiece.moveCount === 0) {
+      return { isCapturable: false, capturedPiece: null };
+    }
   }
   return { isCapturable: true, capturedPiece };
 }
@@ -200,7 +202,9 @@ function enPassantable({ pieces, weAreWhite, fromX, fromY, toX, toY, dy }) {
     return { isEnPassantable: false, capturedPiece: null };
   }
   if (spansTwoBoards({ fromX, fromY, toX, toY })) {
-    return { isEnPassantable: false, capturedPiece: null };
+    if (piece.moveCount === 0) {
+      return { isEnPassantable: false, capturedPiece: null };
+    }
   }
   if (pieces.has(pieceKey(toX, toY + dy))) {
     return { isEnPassantable: false, capturedPiece: null };
