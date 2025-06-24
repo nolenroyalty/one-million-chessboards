@@ -12,6 +12,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/klauspost/compress/zstd"
+	"github.com/puzpuzpuz/xsync/v4"
 	"github.com/rs/zerolog"
 	"golang.org/x/time/rate"
 	"google.golang.org/protobuf/proto"
@@ -94,6 +95,67 @@ func sleepSimulatedLatency() {
 	time.Sleep(getSimulatedLatency())
 }
 
+type piecesMovedAndCaptured struct {
+	allPieceTypesMoved    *xsync.Map[protocol.PieceType, bool]
+	allPieceTypesCaptured *xsync.Map[protocol.PieceType, bool]
+	totalMoves            atomic.Uint64
+}
+type MoveMetadata struct {
+	PieceType         protocol.PieceType
+	CapturedPieceType protocol.PieceType
+	DidCapture        bool
+	Internal          bool
+}
+
+var globalIpBotSuspicionMap = xsync.NewMap[string, *piecesMovedAndCaptured]()
+
+func maybeAddIp(ip string) *piecesMovedAndCaptured {
+	bucket, _ := globalIpBotSuspicionMap.LoadOrCompute(ip, func() (*piecesMovedAndCaptured, bool) {
+		ret := &piecesMovedAndCaptured{
+			allPieceTypesMoved:    xsync.NewMap[protocol.PieceType, bool](),
+			allPieceTypesCaptured: xsync.NewMap[protocol.PieceType, bool](),
+			totalMoves:            atomic.Uint64{},
+		}
+		ret.totalMoves.Store(0)
+		return ret, false
+	})
+
+	return bucket
+}
+
+func updateBotStateForMetadata(ip string, metadata MoveMetadata) {
+	botState := maybeAddIp(ip)
+	botState.allPieceTypesMoved.Store(metadata.PieceType, true)
+	if metadata.DidCapture {
+		botState.allPieceTypesCaptured.Store(metadata.CapturedPieceType, true)
+	}
+	botState.totalMoves.Add(1)
+}
+
+// someone wrote an anoying bot that just captures kings, this is a simple heuristic
+// to catch that.
+func suspectBotActivity(ip string) bool {
+	botState := maybeAddIp(ip)
+	if botState.totalMoves.Load() < 35 {
+		return false
+	}
+	kindsMoved := 0
+	kindsCaptured := 0
+	botState.allPieceTypesMoved.Range(func(key protocol.PieceType, value bool) bool {
+		if value {
+			kindsMoved++
+		}
+		return true
+	})
+	botState.allPieceTypesCaptured.Range(func(key protocol.PieceType, value bool) bool {
+		if value {
+			kindsCaptured++
+		}
+		return true
+	})
+	return kindsMoved == 1 && kindsCaptured == 1
+}
+
 type Client struct {
 	conn                                           *websocket.Conn
 	server                                         *Server
@@ -119,6 +181,9 @@ type Client struct {
 	clientWg                                       *sync.WaitGroup
 	clientCtx                                      context.Context
 	clientCancel                                   context.CancelFunc
+	totalMoves                                     atomic.Uint64
+	allPieceTypesMoved                             map[protocol.PieceType]bool
+	allPieceTypesCaptured                          map[protocol.PieceType]bool
 }
 
 func NewClient(
@@ -169,6 +234,9 @@ func NewClient(
 		clientWg:                        clientWg,
 		clientCtx:                       clientCtx,
 		clientCancel:                    clientCancel,
+		totalMoves:                      atomic.Uint64{},
+		allPieceTypesMoved:              make(map[protocol.PieceType]bool),
+		allPieceTypesCaptured:           make(map[protocol.PieceType]bool),
 	}
 	c.rpcLogger.Info().
 		Str("rpc", "NewClient").
@@ -385,6 +453,31 @@ func (c *Client) handleProtoMessage(msg *protocol.ClientMessage) {
 		}
 
 		c.BumpActive()
+
+		if c.server.isIPBanned(c.ipString) {
+			c.rpcLogger.Info().
+				Str("rpc", "DoIPBan").
+				Str("from", fmt.Sprintf("%d, %d", fromX, fromY)).
+				Str("to", fmt.Sprintf("%d, %d", toX, toY)).
+				Send()
+			c.SendValidMove(moveToken, 999999999, MoveMetadata{Internal: true}, 0)
+			return
+		}
+
+		if suspectBotActivity(c.ipString) {
+			if !c.moveRejectionOnRateLimitLimiter.Allow() {
+				return
+			} else {
+				c.rpcLogger.Info().
+					Str("rpc", "RejectBotActivity").
+					Str("from", fmt.Sprintf("%d, %d", fromX, fromY)).
+					Str("to", fmt.Sprintf("%d, %d", toX, toY)).
+					Send()
+			}
+			// pretend that the move happened so they don't realize what's going on
+			c.SendValidMove(moveToken, 9999999999, MoveMetadata{Internal: true}, 0)
+			return
+		}
 
 		if !c.moveLimiter.Allow() {
 			// if a client is spamming us with moves we don't need to spam them back with rejections
@@ -646,7 +739,13 @@ func (c *Client) SendInvalidMove(moveToken uint32) {
 	c.compressAndSend(message, "SendInvalidMove", false)
 }
 
-func (c *Client) SendValidMove(moveToken uint32, asOfSeqnum uint64, capturedPieceId uint32) {
+func (c *Client) SendValidMove(moveToken uint32,
+	asOfSeqnum uint64,
+	metadata MoveMetadata,
+	capturedPieceId uint32) {
+	if !metadata.Internal {
+		updateBotStateForMetadata(c.ipString, metadata)
+	}
 	m := &protocol.ServerMessage{
 		Payload: &protocol.ServerMessage_ValidMove{
 			ValidMove: &protocol.ServerValidMove{
