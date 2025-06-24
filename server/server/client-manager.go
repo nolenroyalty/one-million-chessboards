@@ -180,6 +180,7 @@ func (cm *ClientManager) GetRandomActiveClientPosition() (Position, bool) {
 	defer cm.RUnlock()
 
 	// Reservoir sampling with k=1
+	// Thank you to https://samwho.dev/reservoir-sampling/ for teaching me this!
 	var selectedClient *Client
 	activeCount := 0
 	totalCount := 0
