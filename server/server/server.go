@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"one-million-chessboards/protocol"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,6 +28,7 @@ import (
 
 var json = jsoniter.ConfigCompatibleWithStandardLibrary
 var internalPass = flag.String("internal-pass", "TEST", "dumb pw for internal APIs (does not really matter tbh)")
+var bannedIPsConfig = flag.String("banned-ips", "", "Path to JSON file containing banned IPs")
 
 type ColorPreference int
 
@@ -43,7 +45,7 @@ type limitingBucket struct {
 }
 
 const (
-	SOFT_MAX_CONNECTIONS_PER_IP   = 35 * TESTING_MULTIPLIER_CHANGE_YOU_LITTLE_SHIT
+	SOFT_MAX_CONNECTIONS_PER_IP   = 20 * TESTING_MULTIPLIER_CHANGE_YOU_LITTLE_SHIT
 	SOFT_MAX_CONNECTIONS_PER_IPV6 = 15 * TESTING_MULTIPLIER_CHANGE_YOU_LITTLE_SHIT
 	HARD_MAX_CONNECTIONS_PER_IP   = SOFT_MAX_CONNECTIONS_PER_IP * 4
 	HARD_MAX_CONNECTIONS_PER_IPV6 = SOFT_MAX_CONNECTIONS_PER_IPV6 * 4
@@ -82,6 +84,8 @@ type Server struct {
 	rootClientCancel          context.CancelFunc
 	shutdownBegan             atomic.Bool
 	gameOver                  atomic.Bool
+	bannedIpsMutex            sync.RWMutex
+	bannedIps                 map[string]bool
 }
 
 func NewServer(stateDir string) *Server {
@@ -155,6 +159,70 @@ func (s *Server) Run() {
 	s.refreshStatsPeriodically()
 	s.refreshRecentCapturesPeriodically()
 	go s.boardToDiskHandler.RunForever()
+	go s.refreshBannedIPsPeriodically()
+}
+
+func (s *Server) loadBannedIPOnce() {
+	if *bannedIPsConfig == "" {
+		return
+	}
+
+	jsonFile, err := os.Open(*bannedIPsConfig)
+	if err != nil {
+		log.Printf("Error opening banned IPs file: %v", err)
+		return
+	}
+
+	type BannedIPs struct {
+		IPs []string `json:"ips"`
+	}
+
+	var bannedIPs BannedIPs
+	err = json.NewDecoder(jsonFile).Decode(&bannedIPs)
+	if err != nil {
+		log.Printf("Error decoding banned IPs file: %v", err)
+		return
+	}
+
+	s.bannedIpsMutex.Lock()
+	defer s.bannedIpsMutex.Unlock()
+	s.bannedIps = make(map[string]bool)
+	for _, ip := range bannedIPs.IPs {
+		s.bannedIps[ip] = true
+	}
+
+	log.Printf("Loaded %d banned IPs", len(s.bannedIps))
+}
+
+func (s *Server) refreshBannedIPsPeriodically() {
+	if *bannedIPsConfig == "" {
+		return
+	}
+
+	ticker := time.NewTicker(1 * time.Minute)
+	s.backgroundJobWg.Add(1)
+	defer func() {
+		s.backgroundJobWg.Done()
+		ticker.Stop()
+	}()
+
+	s.loadBannedIPOnce()
+
+	for {
+		select {
+		case <-s.backgroundJobCtx.Done():
+			return
+		case <-ticker.C:
+			s.loadBannedIPOnce()
+		}
+	}
+}
+
+func (s *Server) isIPBanned(ipString string) bool {
+	s.bannedIpsMutex.RLock()
+	defer s.bannedIpsMutex.RUnlock()
+	_, ok := s.bannedIps[ipString]
+	return ok
 }
 
 // https://stackoverflow.com/questions/32840687/timeout-for-waitgroup-wait
@@ -396,9 +464,30 @@ func (s *Server) processMoves() {
 			s.boardToDiskHandler.AddMove(&moveReq.Move)
 
 			if moveResult.CapturedPiece.Piece.IsEmpty() {
-				moveReq.Client.SendValidMove(moveReq.Move.MoveToken, moveResult.Seqnum, 0)
+				moveMetadata := MoveMetadata{
+					DidCapture: false,
+					Internal:   false,
+				}
+				if len(moveResult.MovedPieces) > 0 {
+					moveMetadata.PieceType = moveResult.MovedPieces[0].Piece.Type
+				}
+				moveReq.Client.SendValidMove(moveReq.Move.MoveToken,
+					moveResult.Seqnum,
+					moveMetadata,
+					0)
 			} else {
-				moveReq.Client.SendValidMove(moveReq.Move.MoveToken, moveResult.Seqnum, moveResult.CapturedPiece.Piece.ID)
+				moveMetadata := MoveMetadata{
+					DidCapture:        true,
+					Internal:          false,
+					CapturedPieceType: moveResult.CapturedPiece.Piece.Type,
+				}
+				if len(moveResult.MovedPieces) > 0 {
+					moveMetadata.PieceType = moveResult.MovedPieces[0].Piece.Type
+				}
+				moveReq.Client.SendValidMove(moveReq.Move.MoveToken,
+					moveResult.Seqnum,
+					moveMetadata,
+					moveResult.CapturedPiece.Piece.ID)
 			}
 
 			// CR-someday nroyalty: is there a way we can avoid the overhead of re-serializing a move
