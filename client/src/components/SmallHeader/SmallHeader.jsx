@@ -195,7 +195,7 @@ function SmallHeader() {
     <Wrapper>
       <MaybeShowDisconnected gameOver={gameOver} />
       <MaybeShowGameOver gameOver={gameOver} />
-      <Title href="/">One Million Chessboards</Title>
+      <Title href="/">One Million Chessboards v1.1</Title>
     </Wrapper>
   );
 }
