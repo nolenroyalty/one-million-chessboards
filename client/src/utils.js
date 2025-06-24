@@ -177,6 +177,8 @@ function capturable({ pieces, weAreWhite, fromX, fromY, toX, toY }) {
   }
   if (spansTwoBoards({ fromX, fromY, toX, toY })) {
     if (capturedPiece.moveCount === 0) {
+      // Don't allow cross-board captures of pieces that haven't moved yet.
+      // This is a tweak of our original ruleset, and probably a mistake?
       return { isCapturable: false, capturedPiece: null };
     }
   }
