@@ -1,0 +1,15 @@
+# /etc/systemd/system/vector.service
+[Unit]
+Description=Vector log router
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+Group=ubuntu
+ExecStart=/home/ubuntu/.vector/bin/vector --config /home/ubuntu/.vector/config/vector.toml
+WorkingDirectory=/mnt/volume_nyc3_01/vector
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

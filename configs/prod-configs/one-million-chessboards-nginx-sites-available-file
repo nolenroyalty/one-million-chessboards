@@ -1,0 +1,86 @@
+server {
+    listen 80;
+    server_name onemillionchessboards.com;
+    return 301 https://$host$request_uri; # Redirect HTTP to HTTPS
+}
+
+upstream backend {
+    server 127.0.0.1:8080;
+    keepalive 64;
+}
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;  # Upgrade header present → say “Connection: upgrade”
+    ''      close;    # No Upgrade header     → say “Connection: close”
+}
+
+server {
+    listen 443 ssl;
+    server_name onemillionchessboards.com;
+
+    # SSL configuration
+    ssl_certificate /etc/ssl/certs/cloudflare_origin.crt;
+    ssl_certificate_key /etc/ssl/private/cloudflare_origin.key;
+
+    # Security headers (optional but recommended)
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+    add_header X-Frame-Options SAMEORIGIN always;
+
+    access_log /var/log/nginx/access.log cloudflare_combined;
+
+    # location ~* \.(png|svg|ico|woff|ttf)$ {
+    #          expires 6h;
+    #          add_header Cache-Control "public, max-age=21600, immutable"; # 6 hours = 21600 seconds
+    #  }
+
+     # location ~* \.(css|js)$ {
+     #         expires 6h;
+     #         add_header Cache-Control "public, max-age=21600, immutable"; # 6 hours = 21600 seconds
+     # }
+
+
+    location / {
+	    root /var/www/one-million-chessboards;
+	    index index.html;
+    }
+
+    # Proxy WebSocket connections
+    location /ws {
+	    proxy_pass http://backend;
+	    proxy_http_version 1.1;
+	    proxy_set_header Upgrade $http_upgrade;
+	    proxy_set_header Connection $connection_upgrade;
+	    proxy_set_header Host $host;
+
+	    proxy_read_timeout 3600s;
+	    send_timeout 30s;
+	    proxy_send_timeout 30s;
+
+	    proxy_buffering off;
+    }
+
+    location /api/minimap {
+	    proxy_pass http://backend;
+	    proxy_set_header Host $host;
+	    proxy_set_header X-Real-IP $remote_addr;
+	    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+	    proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /api/global-game-stats {
+	    proxy_pass http://backend;
+	    proxy_set_header Host $host;
+	    proxy_set_header X-Real-IP $remote_addr;
+	    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+	    proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location ~ ^/api/recently-captured/(black|white)$ {
+	    proxy_pass http://backend;
+	    proxy_set_header Host $host;
+	    proxy_set_header X-Real-IP $remote_addr;
+	    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+	    proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+

@@ -1,0 +1,3 @@
+nginx ran on the prod box
+
+vector and loki ran on a separate metrics box with a designated disk for metrics + other backups
